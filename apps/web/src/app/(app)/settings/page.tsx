@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
-import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, getTransferPinStatus, setTransferPin, changeTransferPin, testOrganiserPush } from '@/lib/api';
+import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, getTransferPinStatus, setTransferPin, changeTransferPin } from '@/lib/api';
 import { PushToggle } from '@/components/pwa';
 import { subscribeOrganiserPush } from '@/lib/api';
 import { PageHeader } from '@/components/brand';
@@ -153,7 +153,7 @@ export default function SettingsPage() {
       <PageHeader eyebrow="Your account" title="Settings" subtitle="Profile, password and security" />
 
       <div className="mb-4">
-        <PushToggle save={subscribeOrganiserPush} test={testOrganiserPush} />
+        <PushToggle save={subscribeOrganiserPush} />
         <p className="text-[11px] text-gray-500 mt-1.5 px-1">Get a ping on this device when money lands, a game fills up or a transfer needs matching.</p>
       </div>
 

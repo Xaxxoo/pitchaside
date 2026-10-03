@@ -675,10 +675,6 @@ export function subscribeOrganiserPush(sub: PushSubscriptionJSON) {
   return http.post('/push/subscribe', sub);
 }
 
-export function testOrganiserPush() {
-  return http.post<{ delivered: number; missed: number }>('/push/test');
-}
-
 // ── Post-match voting, ratings & league table ──
 
 export type VoteCategory = 'potm' | 'pace' | 'shooting' | 'passing' | 'defending' | 'keeper';

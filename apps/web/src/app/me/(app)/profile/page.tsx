@@ -7,7 +7,7 @@ import { PlayerCardHero, Section } from '@/components/player-ui';
 import { usePlayerProfile } from '@/components/player-shell';
 import { PlayerAccountSettings } from '@/components/player-account';
 import { KitLine } from '@/components/illustrations';
-import { logoutPlayer, subscribePlayerPush, testPlayerPush } from '@/lib/player';
+import { logoutPlayer, subscribePlayerPush } from '@/lib/player';
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -102,7 +102,7 @@ export default function PlayerProfilePage() {
       <Section title="App">
         <div className="space-y-2">
           <InstallCard />
-          <PushToggle save={subscribePlayerPush} test={testPlayerPush} />
+          <PushToggle save={subscribePlayerPush} />
           <button
             onClick={async () => {
               await logoutPlayer();

@@ -350,9 +350,6 @@ export function subscribePlayerPush(sub: PushSubscriptionJSON) {
   return request('POST', '/me/push', sub);
 }
 
-export function testPlayerPush() {
-  return request<{ delivered: number; missed: number }>('POST', '/me/push/test');
-}
 
 export function unsubscribePlayerPush(endpoint: string) {
   return request('DELETE', '/me/push', { endpoint });
