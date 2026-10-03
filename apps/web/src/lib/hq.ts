@@ -225,6 +225,8 @@ export const hq = {
     http.get<PaginatedResponse<HqPlayer>>(`/admin/platform/players${qs(p)}`),
   money: (p: { page?: number; status?: string }) => http.get<HqMoney>(`/admin/platform/money${qs(p)}`),
   messages: (p: { page?: number; status?: string }) => http.get<HqMessages>(`/admin/platform/messages${qs(p)}`),
+  broadcastPush: (input: { title: string; body: string; url?: string }) =>
+    http.post<{ audience: number; delivered: number; missed: number }>('/admin/platform/notifications/push', input),
   activity: (p: { page?: number; limit?: number }) =>
     http.get<PaginatedResponse<HqActivity>>(`/admin/platform/activity${qs(p)}`),
 };

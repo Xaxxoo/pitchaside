@@ -119,6 +119,14 @@ export class NotificationsService implements OnModuleInit {
     row.userId = owner.userId ?? (null as unknown as string);
     row.personKey = owner.personKey ?? (null as unknown as string);
     await this.subsRepo.save(row);
+    if (!existing) {
+      await this.push([row], {
+        title: 'Welcome to PitchAside ⚽',
+        body: 'Welcome aboard! Keep an eye out for your upcoming games, RSVPs and votes.',
+        url: owner.personKey ? '/me' : '/settings',
+        kind: 'welcome_push',
+      });
+    }
     return { subscribed: true };
   }
 
@@ -153,6 +161,33 @@ export class NotificationsService implements OnModuleInit {
       kind: 'test_push',
     });
     return { delivered, missed: Math.max(0, subs.length - delivered) };
+  }
+
+  /** Broadcast a promotion to every device that has enabled PitchAside push. */
+  async broadcastPush(input: { title: string; body: string; url?: string }) {
+    const subs = await this.subsRepo.find();
+    const notice = {
+      title: input.title,
+      body: input.body,
+      url: input.url || '/',
+      kind: 'promotion',
+    } as const;
+    const delivered = await this.push(subs, notice);
+
+    await this.messagesRepo.save(
+      this.messagesRepo.create({
+        organizationId: null as unknown as string,
+        playerId: null as unknown as string,
+        channel: 'push',
+        to: 'All push-enabled devices',
+        kind: notice.kind,
+        body: `${notice.title}\n${notice.body}`,
+        status: delivered > 0 ? 'sent' : 'no_device',
+        provider: 'web-push',
+      }),
+    );
+
+    return { audience: subs.length, delivered, missed: Math.max(0, subs.length - delivered) };
   }
 
   private async push(subs: PushSubscriptionEntity[], notice: Pick<Notice, 'title' | 'body' | 'url' | 'kind'>) {

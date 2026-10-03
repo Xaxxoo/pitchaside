@@ -32,6 +32,11 @@ const fallbackNotes = {
 export default function HqNotificationsPage() {
   const [status, setStatus] = useState(() => filters.find((f) => f.value === initialParam('status'))?.value ?? '');
   const [page, setPage] = useState(1);
+  const [title, setTitle] = useState('Welcome to PitchAside ⚽');
+  const [body, setBody] = useState('Welcome aboard! Keep an eye out for your upcoming games, RSVPs and votes.');
+  const [url, setUrl] = useState('/');
+  const [sending, setSending] = useState(false);
+  const [broadcastResult, setBroadcastResult] = useState<string | null>(null);
 
   const { data, error, loading } = useLoad(() => hq.messages({ page, status }), [page, status]);
 
@@ -41,6 +46,21 @@ export default function HqNotificationsPage() {
   const pushTotal = week((r) => r.channel === 'push');
   const failed = week((r) => r.status === 'failed');
   const texts = week((r) => r.channel !== 'push');
+
+  async function sendPromotion(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!window.confirm('Send this promotion to every device with PitchAside notifications enabled?')) return;
+    setSending(true);
+    setBroadcastResult(null);
+    try {
+      const result = await hq.broadcastPush({ title: title.trim(), body: body.trim(), url: url.trim() || '/' });
+      setBroadcastResult(`Sent to ${result.delivered} of ${result.audience} subscribed device${result.audience === 1 ? '' : 's'}.`);
+    } catch (err: any) {
+      setBroadcastResult(err.message || 'Could not send the promotion.');
+    } finally {
+      setSending(false);
+    }
+  }
 
   return (
     <>
@@ -63,6 +83,55 @@ export default function HqNotificationsPage() {
           )
         }
       />
+
+      <section className="mb-6 rounded-3xl bg-ink text-white p-5 sm:p-6">
+        <div className="mb-4">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-volt-300">Broadcast</p>
+          <h2 className="text-xl font-extrabold mt-1">Send a promotion</h2>
+          <p className="text-sm text-white/60 mt-1">Every device that has enabled PitchAside notifications will receive it.</p>
+        </div>
+        <form onSubmit={sendPromotion} className="space-y-3">
+          <input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={80}
+            required
+            aria-label="Notification title"
+            placeholder="Title"
+            className="w-full rounded-xl bg-white/10 border border-white/15 px-3.5 py-3 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-volt-300"
+          />
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            maxLength={500}
+            required
+            rows={3}
+            aria-label="Notification message"
+            placeholder="Message"
+            className="w-full rounded-xl bg-white/10 border border-white/15 px-3.5 py-3 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-volt-300 resize-y"
+          />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <input
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              maxLength={200}
+              pattern="^/(?!/).*"
+              required
+              aria-label="Notification link"
+              placeholder="Link, e.g. /"
+              className="min-w-0 flex-1 rounded-xl bg-white/10 border border-white/15 px-3.5 py-3 text-sm text-white placeholder:text-white/35 focus:outline-none focus:border-volt-300"
+            />
+            <button
+              type="submit"
+              disabled={sending}
+              className="rounded-xl bg-volt-400 text-ink px-5 py-3 text-sm font-extrabold disabled:opacity-50"
+            >
+              {sending ? 'Sending…' : 'Send to everyone'}
+            </button>
+          </div>
+        </form>
+        {broadcastResult && <p className="text-xs text-white/70 mt-3" aria-live="polite">{broadcastResult}</p>}
+      </section>
 
       {error ? (
         <LoadError message={error} />
