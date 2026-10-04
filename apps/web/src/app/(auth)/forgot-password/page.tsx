@@ -19,7 +19,7 @@ export default function ForgotPasswordPage() {
       await http.post('/auth/forgot-password', { email });
       setSent(true);
     } catch (err: any) {
-      toast.error(err.message || 'Something went wrong');
+      toast.error(err.message || 'Could not send reset email. Please try again.');
     } finally {
       setSubmitting(false);
     }

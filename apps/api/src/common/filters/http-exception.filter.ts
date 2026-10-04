@@ -4,11 +4,14 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
+  private readonly logger = new Logger('ExceptionFilter');
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -27,6 +30,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
         message = obj.message || message;
         error = obj.error || exception.name;
       }
+    } else if (exception instanceof Error) {
+      this.logger.error(`Unhandled: ${exception.message}`, exception.stack);
+    }
+
+    // Replace raw throttler class name with a human-readable message
+    if (status === HttpStatus.TOO_MANY_REQUESTS) {
+      message = 'Too many requests — please wait a moment and try again.';
     }
 
     const body: Record<string, any> = {

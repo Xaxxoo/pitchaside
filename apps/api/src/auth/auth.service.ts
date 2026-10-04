@@ -1,8 +1,10 @@
 import {
   Injectable,
+  Logger,
   UnauthorizedException,
   ConflictException,
   BadRequestException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -26,6 +28,8 @@ import { LoginDto } from './dto/login.dto';
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private usersService: UsersService,
     private orgsService: OrganizationsService,
@@ -96,12 +100,19 @@ export class AuthService {
     // Always return success to avoid email enumeration
     if (!user) return { message: 'If that email exists, a reset link has been sent.' };
 
-    const token = await this.usersService.createResetToken(user.id);
-    await this.mailService.sendPasswordReset(
-      user.email,
-      user.firstName,
-      token,
-    );
+    try {
+      const token = await this.usersService.createResetToken(user.id);
+      await this.mailService.sendPasswordReset(
+        user.email,
+        user.firstName,
+        token,
+      );
+    } catch (err: any) {
+      this.logger.error(`Password reset email failed for ${email}: ${err.message}`);
+      throw new ServiceUnavailableException(
+        "We couldn't send the reset email right now. Please try again in a minute.",
+      );
+    }
 
     return { message: 'If that email exists, a reset link has been sent.' };
   }

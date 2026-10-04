@@ -77,7 +77,7 @@ function ResetPasswordForm() {
       await http.post('/auth/reset-password', { token, newPassword: password });
       setDone(true);
     } catch (err: any) {
-      toast.error(err.message || 'Reset failed. The link may have expired.');
+      toast.error(err.message || 'Reset failed. Please request a new link.');
     } finally {
       setSubmitting(false);
     }
