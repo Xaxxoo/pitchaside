@@ -17,8 +17,24 @@ const body = DM_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.pitchaside.com'),
   title: 'PitchAside',
   description: 'Payment tracking for 5-aside football groups',
+  // The card shown when a link to the site is shared in WhatsApp, X, LinkedIn, iMessage, etc. (public/og.png, 1200 × 630).
+  openGraph: {
+    title: 'PitchAside — Less admin. More ball.',
+    description: 'Payment tracking for 5-a-side groups. See who’s paid, who owes and who’s playing.',
+    url: '/',
+    siteName: 'PitchAside',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'PitchAside — Less admin. More ball.' }],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'PitchAside — Less admin. More ball.',
+    description: 'Payment tracking for 5-a-side groups.',
+    images: ['/og.png'],
+  },
   manifest: '/manifest.webmanifest',
   applicationName: 'PitchAside',
   appleWebApp: { capable: true, title: 'PitchAside', statusBarStyle: 'black-translucent' },
