@@ -22,10 +22,11 @@ export class UsersService {
   }
 
   findByEmail(email: string) {
-    return this.usersRepo.findOne({
-      where: { email },
-      relations: ['organization'],
-    });
+    return this.usersRepo
+      .createQueryBuilder('user')
+      .leftJoinAndSelect('user.organization', 'organization')
+      .where('LOWER(user.email) = LOWER(:email)', { email })
+      .getOne();
   }
 
   findById(id: string) {

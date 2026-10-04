@@ -98,17 +98,25 @@ export class AuthService {
   async forgotPassword(email: string) {
     const user = await this.usersService.findByEmail(email);
     // Always return success to avoid email enumeration
-    if (!user) return { message: 'If that email exists, a reset link has been sent.' };
+    if (!user) {
+      this.logger.warn(`Password reset requested for unknown email: ${email}`);
+      return { message: 'If that email exists, a reset link has been sent.' };
+    }
+
+    this.logger.log(`Password reset: found user ${user.id} (${user.email})`);
 
     try {
       const token = await this.usersService.createResetToken(user.id);
+      this.logger.log(`Password reset: token created for user ${user.id}`);
+
       await this.mailService.sendPasswordReset(
         user.email,
         user.firstName,
         token,
       );
+      this.logger.log(`Password reset: email sent to ${user.email}`);
     } catch (err: any) {
-      this.logger.error(`Password reset email failed for ${email}: ${err.message}`);
+      this.logger.error(`Password reset failed for ${email}: ${err.message}`, err.stack);
       throw new ServiceUnavailableException(
         "We couldn't send the reset email right now. Please try again in a minute.",
       );
