@@ -45,14 +45,14 @@ export class OrganizationsController {
   @Get('join/:code')
   async getOrgByInviteCode(@Param('code') code: string) {
     const org = await this.orgsService.findByInviteCode(code);
-    if (!org) throw new NotFoundException('Invalid or expired invite link');
+    if (!org) throw new NotFoundException('Invalid invite link');
     return { organizationId: org.id, organizationName: org.name };
   }
 
   @Post('join/:code')
   async joinOrg(@Param('code') code: string, @Body() dto: JoinDto) {
     const org = await this.orgsService.findByInviteCode(code);
-    if (!org) throw new NotFoundException('Invalid or expired invite link');
+    if (!org) throw new NotFoundException('Invalid invite link');
     return this.playersService.create(dto, org.id);
   }
 }

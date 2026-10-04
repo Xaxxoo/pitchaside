@@ -81,8 +81,8 @@ export default function GroupLinkPage() {
         <div className="w-full max-w-sm text-center">
           <Logo />
           <OffsideFlag className="w-48 h-40 mx-auto mt-8 mb-2" />
-          <h1 className="text-2xl font-extrabold text-ink mb-2">This link has expired</h1>
-          <p className="text-sm text-gray-500">Ask your organiser for the latest group link.</p>
+          <h1 className="text-2xl font-extrabold text-ink mb-2">Link not found</h1>
+          <p className="text-sm text-gray-500">This group link is no longer valid. Ask your organiser for the latest link.</p>
         </div>
       </div>
     );

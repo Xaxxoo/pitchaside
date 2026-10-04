@@ -142,7 +142,7 @@ export default function JoinPage() {
             <OffsideFlag className="w-48 h-40 mx-auto mb-2" />
             <h1 className="text-2xl font-extrabold text-ink mb-2">Invalid invite link</h1>
             <p className="text-sm text-gray-500">
-              This invite link is invalid or has expired. Please ask your organiser for a new link.
+              This invite link is not valid. Please ask your organiser for the latest link.
             </p>
           </div>
         </div>

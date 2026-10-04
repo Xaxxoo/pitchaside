@@ -411,7 +411,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       where: { inviteCode: code },
       relations: ['organization', 'memberships'],
     });
-    if (!group) throw new NotFoundException('This link is invalid or has expired');
+    if (!group) throw new NotFoundException('This group link is not valid. Ask your organiser for the latest link.');
     if (!group.accountNumber) await this.setupGroup(group);
     return {
       groupName: group.name,
@@ -452,7 +452,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   /** New player who has just created their account from this group's link. */
   async joinGroup(code: string, input: ClubPerson) {
     const group = await this.groupsRepo.findOne({ where: { inviteCode: code } });
-    if (!group) throw new NotFoundException('This link is invalid or has expired');
+    if (!group) throw new NotFoundException('This group link is not valid. Ask your organiser for the latest link.');
     const player = await clubPlayerFor(this.playersRepo, group.organizationId, input);
     return { playerId: player.id, ...(await this.addToGroup(group, player)) };
   }
@@ -482,7 +482,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   /** Signed-in person tapping a group link — even one from a club they've never played for. */
   async joinGroupAsPerson(code: string, person: ClubPerson) {
     const group = await this.groupsRepo.findOne({ where: { inviteCode: code } });
-    if (!group) throw new NotFoundException('This link is invalid or has expired');
+    if (!group) throw new NotFoundException('This group link is not valid. Ask your organiser for the latest link.');
     const player = await clubPlayerFor(this.playersRepo, group.organizationId, person);
     return this.addToGroup(group, player);
   }

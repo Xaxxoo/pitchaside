@@ -167,7 +167,7 @@ export class PlayerAuthService {
   /** Club invite link (/join/:code): the club behind it, or a 404. */
   async clubByInviteCode(code: string) {
     const org = await this.orgsRepo.findOne({ where: { inviteCode: code } });
-    if (!org) throw new NotFoundException('This invite link is invalid or has expired');
+    if (!org) throw new NotFoundException('This invite link is invalid. Ask your organiser for the latest link.');
     return org;
   }
 
