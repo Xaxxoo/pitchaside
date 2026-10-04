@@ -178,13 +178,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       group.inviteCode = randomBytes(6).toString('base64url');
       await this.groupsRepo.save(group);
     }
-    if (!group.accountNumber) {
-      try {
-        await this.provisionAccount(group);
-      } catch (err: any) {
-        this.logger.warn(`Account provisioning failed for group ${group.id}: ${err.message}`);
-      }
-    }
+    // Account is NOT auto-provisioned here — the admin must provide
+    // their BVN first via the "Create account" flow (createGroupAccount).
     await this.ensureCurrentPeriod(group);
     return group;
   }
