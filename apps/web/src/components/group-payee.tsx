@@ -119,7 +119,7 @@ function PayeeForm({
     <form onSubmit={save} className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-ink">{current ? 'Change payee' : 'Who do you pay for the pitch?'}</h3>
-        <button type="button" onClick={onCancel} className="text-xs text-gray-400 hover:text-ink">
+        <button type="button" onClick={onCancel} className="text-xs text-gray-500 hover:text-ink">
           Cancel
         </button>
       </div>
@@ -160,7 +160,7 @@ function PayeeForm({
 
       <div>
         <label className="text-xs font-semibold text-gray-600 mb-1 block">
-          Usual amount (₦) <span className="text-gray-400 font-medium">(optional)</span>
+          Usual amount (₦) <span className="text-gray-500 font-medium">(optional)</span>
         </label>
         <input type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 30000" className={input} />
         <p className="text-[11px] text-gray-500 mt-1">Prefilled each time you pay them. You can still change it.</p>
@@ -277,7 +277,7 @@ export function PayeeCard({
     <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-400">{payee.label}</p>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-500">{payee.label}</p>
           <p className="text-base font-extrabold text-ink truncate mt-0.5">{payee.name}</p>
           <p className="text-xs text-gray-500">
             {payee.bankName} · ···{payee.accountNumber.slice(-4)}
@@ -327,7 +327,7 @@ export function PayeeCard({
       )}
 
       {!paying && (
-        <button onClick={remove} className="mt-2 w-full text-[11px] font-semibold text-gray-400 hover:text-kit-600">
+        <button onClick={remove} className="mt-2 w-full text-[11px] font-semibold text-gray-500 hover:text-kit-600">
           Remove {payee.label.toLowerCase()}
         </button>
       )}

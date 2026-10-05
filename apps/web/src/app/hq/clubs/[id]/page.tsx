@@ -159,7 +159,7 @@ export default function HqClubPage({ params: paramsPromise }: { params: Promise<
 
           <Panel title="Recent activity" hint="What this club's organisers have done.">
             {club.activity.length === 0 ? (
-              <p className="text-sm text-gray-400">No activity recorded.</p>
+              <p className="text-sm text-gray-500">No activity recorded.</p>
             ) : (
               <ul className="space-y-3">
                 {club.activity.map((a) => (
@@ -167,7 +167,7 @@ export default function HqClubPage({ params: paramsPromise }: { params: Promise<
                     <p className="text-ink">
                       <span className="font-semibold">{a.actor ?? 'Someone'}</span> · {actionLabel(a.action)}
                     </p>
-                    <p className="text-xs text-gray-400">{dayTime(a.createdAt)}</p>
+                    <p className="text-xs text-gray-500">{dayTime(a.createdAt)}</p>
                   </li>
                 ))}
               </ul>

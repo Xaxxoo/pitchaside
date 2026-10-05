@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Logo } from '@/components/brand';
+import { KeepHyphens, Logo } from '@/components/brand';
 import { NightStadium, OffsideFlag, Trophy } from '@/components/illustrations';
 import { BallLoader, BallSpinner } from '@/components/skeleton';
 import { Avatar, VoteResultsList, categoryMeta } from '@/components/ratings';
@@ -105,7 +105,7 @@ export default function VotePage() {
       <div className="absolute inset-0 bg-gradient-to-t from-pitch-950 via-pitch-950/40 to-transparent" />
       <div className="absolute left-4 right-4 bottom-3">
         <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-volt-300">Post-match vote · {matchDate}</p>
-        <h1 className="font-display text-[26px] font-extrabold text-white leading-tight">{ballot.groupName}</h1>
+        <h1 className="font-display text-[26px] font-extrabold text-white leading-tight"><KeepHyphens text={ballot.groupName ?? ''} /></h1>
       </div>
       <span className="absolute top-3 right-3 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-white/90 text-ink tabular-nums">
         {ballot.ballots}/{ballot.squadSize} voted
@@ -171,7 +171,7 @@ export default function VotePage() {
                       {meta.short}
                     </span>
                     <h2 className="text-base font-bold text-ink">{c.title}</h2>
-                    {c.key === 'potm' && <span className="text-[10px] text-gray-400 ml-auto">required</span>}
+                    {c.key === 'potm' && <span className="text-[10px] text-gray-500 ml-auto">required</span>}
                   </div>
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {teammates.map((p) => {

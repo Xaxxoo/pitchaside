@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Logo } from '@/components/brand';
+import { KeepHyphens, Logo } from '@/components/brand';
 import { NightStadium, OffsideFlag, Trophy } from '@/components/illustrations';
 import { BallLoader, BallSpinner } from '@/components/skeleton';
 import { PayIntoCard } from '@/components/account-card';
@@ -135,7 +135,7 @@ export default function GroupLinkPage() {
           >
             Open my PitchAside →
           </Link>
-          <p className="mt-3 text-xs text-gray-400 text-center">Your games, what you owe, your player card and the table.</p>
+          <p className="mt-3 text-xs text-gray-500 text-center">Your games, what you owe, your player card and the table.</p>
         </div>
       </div>
     );
@@ -155,7 +155,7 @@ export default function GroupLinkPage() {
             <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-volt-300">
               {group.organizationName ? `${group.organizationName} invites you` : 'You’ve been called up'}
             </p>
-            <h1 className="font-display text-[26px] font-extrabold text-white leading-tight">{group.groupName}</h1>
+            <h1 className="font-display text-[26px] font-extrabold text-white leading-tight"><KeepHyphens text={group.groupName} /></h1>
           </div>
         </div>
 

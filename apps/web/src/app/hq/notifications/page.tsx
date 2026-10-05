@@ -184,7 +184,7 @@ export default function HqNotificationsPage() {
                       <td className="px-4 py-3 max-w-sm">
                         <p className="font-semibold text-ink break-words">{m.kind === 'otp' ? 'Sign-in code (hidden)' : title}</p>
                         {rest.length > 0 && <p className="text-xs text-gray-500 whitespace-pre-line break-words">{rest.join('\n')}</p>}
-                        <p className="text-[11px] text-gray-400 mt-0.5">
+                        <p className="text-[11px] text-gray-500 mt-0.5">
                           {channelLabels[m.channel] ?? m.channel} · {m.kind.replace(/_/g, ' ')}
                         </p>
                       </td>
@@ -195,7 +195,7 @@ export default function HqNotificationsPage() {
                             {m.clubName}
                           </Link>
                         ) : (
-                          <span className="text-gray-400">—</span>
+                          <span className="text-gray-500">—</span>
                         )}
                       </td>
                       <td className="px-4 py-3">

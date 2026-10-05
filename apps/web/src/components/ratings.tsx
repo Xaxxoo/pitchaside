@@ -58,7 +58,7 @@ export function VoteResultsList({ results, compact = false }: { results: VoteRes
               <span className={`text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full ${meta.tone}`}>
                 {meta.short}
               </span>
-              <span className={`text-[11px] font-semibold ${c.key === 'potm' && !compact ? 'text-white/50' : 'text-gray-400'}`}>
+              <span className={`text-[11px] font-semibold ${c.key === 'potm' && !compact ? 'text-white/50' : 'text-gray-500'}`}>
                 {c.title}
               </span>
             </div>
@@ -79,7 +79,7 @@ export function VoteResultsList({ results, compact = false }: { results: VoteRes
                 <span className="font-display text-2xl font-extrabold tabular-nums">{winner.count}</span>
               </div>
             ) : (
-              <p className={`text-sm mt-3 ${c.key === 'potm' && !compact ? 'text-white/50' : 'text-gray-400'}`}>No votes yet</p>
+              <p className={`text-sm mt-3 ${c.key === 'potm' && !compact ? 'text-white/50' : 'text-gray-500'}`}>No votes yet</p>
             )}
           </div>
         );
@@ -122,7 +122,7 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
           >
             <span
               className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-extrabold tabular-nums ${
-                i === 0 ? 'bg-sun-400 text-ink' : i === 1 ? 'bg-gray-200 text-ink' : i === 2 ? 'bg-kit-400/30 text-ink' : 'text-gray-400'
+                i === 0 ? 'bg-sun-400 text-ink' : i === 1 ? 'bg-gray-200 text-ink' : i === 2 ? 'bg-kit-400/30 text-ink' : 'text-gray-500'
               }`}
             >
               {i + 1}

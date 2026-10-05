@@ -86,7 +86,7 @@ export function PlayerPaymentRow({
           {playerName.charAt(0)}
         </div>
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink truncate">{playerName}</p>
+          <p className="text-sm font-semibold text-ink leading-snug break-words">{playerName}</p>
           <p className="text-xs text-gray-500 tabular-nums">
             {formatCurrency(amount)}
             {viaTransfer && status === PaymentStatus.PAID && (
@@ -109,7 +109,7 @@ export function PlayerPaymentRow({
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
               </svg>
-              Paid
+              Mark paid
             </button>
             {onWaive && (
               <button

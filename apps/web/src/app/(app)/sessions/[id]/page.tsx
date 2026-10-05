@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
+import { KeepHyphens } from '@/components/brand';
 import { PlayerPaymentRow } from '@/components/player-payment-row';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -240,7 +241,7 @@ export default function SessionDetailPage() {
                     })}${kickoff ? ` · ${prettyTime(kickoff)}` : ''}`}
               </p>
               <h1 className="font-display text-[28px] leading-[1.05] font-extrabold mt-1 line-clamp-2">
-                {session.group?.name || 'Game Session'}
+                <KeepHyphens text={session.group?.name || 'Game Session'} />
               </h1>
             </div>
             <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${style.bg} ${style.text}`}>

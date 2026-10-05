@@ -122,7 +122,7 @@ export function SendMoneyModal({
           <h2 id={titleId} className="text-xl font-extrabold text-ink">
             Send money
           </h2>
-          <button type="button" onClick={onClose} className="text-xs font-bold text-gray-400 hover:text-ink">
+          <button type="button" onClick={onClose} className="text-xs font-bold text-gray-500 hover:text-ink">
             Close
           </button>
         </div>
@@ -210,7 +210,7 @@ export function SendMoneyModal({
 
         <div>
           <label htmlFor={`${titleId}-note`} className="text-xs font-semibold text-gray-600 mb-1 block">
-            Narration <span className="text-gray-400 font-medium">(optional)</span>
+            Narration <span className="text-gray-500 font-medium">(optional)</span>
           </label>
           <input
             id={`${titleId}-note`}

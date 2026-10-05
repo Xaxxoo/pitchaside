@@ -238,7 +238,7 @@ export function MatchDayCard({ day }: { day: RecentMatchDay }) {
             ★ POTM: {day.potm.isMe ? 'You!' : day.potm.name}
           </span>
         )}
-        {!played && !day.potm && <span className="text-xs text-gray-400">No results recorded</span>}
+        {!played && !day.potm && <span className="text-xs text-gray-500">No results recorded</span>}
         {day.shareToken && (played > 0 || day.potm) && (
           <ShareCardButton
             token={day.shareToken}

@@ -327,7 +327,7 @@ export function GroupAccountCard({
           </div>
           <button
             onClick={() => setConfirmRegen(true)}
-            className="text-[11px] font-semibold text-gray-400 hover:text-ink transition-colors shrink-0"
+            className="text-[11px] font-semibold text-gray-500 hover:text-ink transition-colors shrink-0"
           >
             Regenerate
           </button>
@@ -585,7 +585,7 @@ export function TransfersPanel({
                     {t.senderName || 'Unknown sender'}
                     {t.narration ? ` · “${t.narration}”` : ''}
                   </p>
-                  <p className="text-[11px] text-gray-400 mt-0.5">
+                  <p className="text-[11px] text-gray-500 mt-0.5">
                     {new Date(t.receivedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
                 </div>

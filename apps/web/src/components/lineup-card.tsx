@@ -116,11 +116,15 @@ export function LineupCard({ sessionId }: { sessionId: string }) {
         <Avatar name={`${m.firstName} ${m.lastName}`} className="w-7 h-7 text-[10px]" />
         <span className="flex-1 min-w-0 text-sm font-semibold text-ink truncate">{m.firstName}</span>
         {m.paid === 'paid' && <span className="text-[10px] font-extrabold text-pitch-600" title="Paid for this game">✓</span>}
-        {m.paid === 'unpaid' && <span className="text-[10px] font-extrabold text-kit-600 whitespace-nowrap">Not paid</span>}
+        {m.paid === 'unpaid' && (
+          <span className="w-2 h-2 rounded-full bg-kit-500 shrink-0" title="Hasn't paid for this game">
+            <span className="sr-only">Hasn't paid</span>
+          </span>
+        )}
         {busy === m.id ? (
           <BallSpinner className="w-3.5 h-3.5" />
         ) : (
-          m.ovr != null && <span className="text-[10px] font-extrabold text-gray-400 tabular-nums">{m.ovr}</span>
+          m.ovr != null && <span className="text-[10px] font-extrabold text-gray-500 tabular-nums">{m.ovr}</span>
         )}
       </button>
       {picking === m.id && (
@@ -168,7 +172,7 @@ export function LineupCard({ sessionId }: { sessionId: string }) {
           </div>
         </div>
         <div className="flex items-center justify-between gap-2 mt-3">
-          <p className="text-xs text-white/60">Tap a player to move them. Every game counts towards their W-D-L.</p>
+          <p className="text-xs text-white/60">Tap a player to move them. Every game counts towards their <span className="whitespace-nowrap">W-D-L</span>.</p>
           <button
             onClick={() => run('balance', () => balanceLineup(sessionId), `Split into ${lineup.teamCount} balanced teams`)}
             disabled={!!busy}
@@ -198,7 +202,7 @@ export function LineupCard({ sessionId }: { sessionId: string }) {
                   {members.map((m) => (
                     <Chip key={m.id} m={m} />
                   ))}
-                  {members.length === 0 && <p className="text-xs text-gray-400 px-1 py-2">Nobody yet</p>}
+                  {members.length === 0 && <p className="text-xs text-gray-500 px-1 py-2">Nobody yet</p>}
                 </div>
               </div>
             );
@@ -206,13 +210,18 @@ export function LineupCard({ sessionId }: { sessionId: string }) {
         </div>
         {unpicked.length > 0 && (
           <div className="mt-3">
-            <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 mb-1.5">Not picked ({unpicked.length})</p>
+            <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-1.5">Not picked ({unpicked.length})</p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
               {unpicked.map((m) => (
                 <Chip key={m.id} m={m} />
               ))}
             </div>
           </div>
+        )}
+        {lineup.squad.some((m) => m.paid === 'unpaid') && (
+          <p className="mt-3 flex items-center gap-1.5 text-[11px] text-gray-500">
+            <span className="w-2 h-2 rounded-full bg-kit-500" aria-hidden /> Hasn’t paid for this game
+          </p>
         )}
       </div>
 
@@ -258,7 +267,7 @@ export function LineupCard({ sessionId }: { sessionId: string }) {
           <ol className="mt-3 space-y-1.5">
             {lineup.games.map((g, i) => (
               <li key={g.id} className="flex items-center gap-2 rounded-xl bg-chalk px-3 py-2">
-                <span className="text-[10px] font-extrabold text-gray-400 w-5 tabular-nums">{i + 1}</span>
+                <span className="text-[10px] font-extrabold text-gray-500 w-5 tabular-nums">{i + 1}</span>
                 <span className="flex-1 flex items-center justify-end gap-1.5 text-sm font-bold text-ink">
                   {TEAMS[g.teamA].name}
                   <Swatch team={g.teamA} />

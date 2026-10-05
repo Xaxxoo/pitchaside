@@ -126,7 +126,7 @@ export function PlayerAccountSettings({
             required={false}
           />
           <PasswordField id="pw-new" label="New password" value={pw.next} onChange={(v) => setPw({ ...pw, next: v })} autoComplete="new-password" />
-          {save('Change password', pw.next.length < 6)}
+          {save('Change password', pw.next.length < 8)}
         </form>
       )}
     </div>

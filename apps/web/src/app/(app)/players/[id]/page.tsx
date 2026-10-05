@@ -338,7 +338,7 @@ export default function PlayerDetailPage() {
                   <div>
                     <p className="text-sm font-bold text-ink">{g.name}</p>
                     {g.schedule && (
-                      <p className="text-xs text-gray-400">{g.schedule}</p>
+                      <p className="text-xs text-gray-500">{g.schedule}</p>
                     )}
                   </div>
                 </div>
@@ -370,7 +370,7 @@ export default function PlayerDetailPage() {
                 <div>
                   <p className="text-sm font-bold text-ink tabular-nums">{formatCurrency(payment.amount)}</p>
                   {payment.paidAt && (
-                    <p className="text-xs text-gray-400">
+                    <p className="text-xs text-gray-500">
                       {new Date(payment.paidAt).toLocaleDateString('en-US', {
                         month: 'short',
                         day: 'numeric',

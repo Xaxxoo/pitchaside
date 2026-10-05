@@ -12,6 +12,47 @@ import { UserRole } from '@pitchaside/shared';
 import { PageHeader } from '@/components/brand';
 import { kitFor } from '@/components/illustrations';
 
+/** An activity-feed entry as the API sends it: `summary` names the people and game involved. */
+interface ActivityLog {
+  id: string;
+  action: string;
+  createdAt: string;
+  summary?: {
+    actorName: string | null;
+    playerName: string | null;
+    groupName: string | null;
+    sessionDate: string | null;
+    amount: number | null;
+    count: number;
+  };
+}
+
+/** "Tunde marked Tobi Martins paid · ₦3,000", with the group and game underneath. */
+function describeActivity(log: ActivityLog) {
+  const s = log.summary;
+  const who = s?.actorName ?? 'Someone';
+  const amount = s?.amount != null ? ` · ${formatCurrency(s.amount)}` : '';
+  let title: string;
+  switch (log.action) {
+    case 'payment_marked_paid':
+      title = `${who} marked ${s?.playerName ?? 'a payment'} paid${amount}`;
+      break;
+    case 'payment_bulk_marked_paid':
+      title = `${who} marked ${s?.count ?? 'several'} payment${s?.count === 1 ? '' : 's'} paid`;
+      break;
+    case 'payment_waived':
+      title = `${who} waived ${s?.playerName ? `${s.playerName}’s due` : 'a due'}${amount}`;
+      break;
+    default:
+      title = log.action.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+  }
+  const game = s?.sessionDate
+    ? new Date(`${s.sessionDate}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+    : null;
+  const detail = [s?.groupName, game && `game on ${game}`].filter(Boolean).join(' · ');
+  return { title, detail };
+}
+
 export default function AdminPage() {
   const { user } = useAuth();
   const router = useRouter();
@@ -20,7 +61,7 @@ export default function AdminPage() {
 
   const [orgStats, setOrgStats] = useState<any>(null);
   const [orgMembers, setOrgMembers] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<ActivityLog[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Invite form state
@@ -149,16 +190,16 @@ export default function AdminPage() {
         <div className="mb-8">
           <h2 className="text-lg font-bold text-ink mb-3">Recent Activity</h2>
           <div className="space-y-2">
-            {auditLogs.map((log: any) => (
+            {auditLogs.map((log: ActivityLog) => {
+              const { title, detail } = describeActivity(log);
+              return (
               <div
                 key={log.id}
                 className="bg-white rounded-2xl shadow-card p-3.5 border border-gray-100 text-sm"
               >
-                <div className="flex justify-between items-start">
-                  <p className="text-gray-900 font-medium capitalize">
-                    {log.action.replace(/_/g, ' ')}
-                  </p>
-                  <p className="text-xs text-gray-400">
+                <div className="flex justify-between items-start gap-3">
+                  <p className="text-gray-900 font-medium">{title}</p>
+                  <p className="text-xs text-gray-500">
                     {new Date(log.createdAt).toLocaleDateString('en-US', {
                       month: 'short',
                       day: 'numeric',
@@ -167,11 +208,10 @@ export default function AdminPage() {
                     })}
                   </p>
                 </div>
-                <p className="text-xs text-gray-400 mt-0.5">
-                  {log.entityType} &middot; {log.entityId?.slice(0, 8)}...
-                </p>
+                {detail && <p className="text-xs text-gray-500 mt-0.5">{detail}</p>}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -245,7 +285,7 @@ export default function AdminPage() {
               type="password"
               placeholder="Temporary password"
               required
-              minLength={6}
+              minLength={8}
               value={inviteForm.password}
               onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
               className={inputClass}
@@ -274,7 +314,7 @@ export default function AdminPage() {
                   <p className="text-sm font-bold text-ink">
                     {member.firstName} {member.lastName}
                   </p>
-                  <p className="text-xs text-gray-400">{member.email}</p>
+                  <p className="text-xs text-gray-500">{member.email}</p>
                 </div>
               </div>
               <span className={`text-[10px] font-semibold px-2 py-1 rounded-full uppercase tracking-wide ${
@@ -298,7 +338,7 @@ export default function AdminPage() {
           ))}
 
           {orgMembers.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-8">No team members yet.</p>
+            <p className="text-sm text-gray-500 text-center py-8">No team members yet.</p>
           )}
         </div>
       </div>
