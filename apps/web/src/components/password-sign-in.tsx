@@ -254,7 +254,7 @@ export function PasswordSignIn({
             aria-label="6-digit code"
           />
           <PasswordField id="rp-new" label="New password" value={password} onChange={setPassword} autoComplete="new-password" />
-          {button(newcomer ? 'Create password & continue' : 'Reset password & sign in', code.length !== 6 || password.length < 6)}
+          {button(newcomer ? 'Create password & continue' : 'Reset password & sign in', code.length !== 6 || password.length < 8)}
           <button type="button" onClick={() => sendCode()} disabled={busy} className="w-full text-xs font-semibold text-pitch-600">
             Email the code again
           </button>

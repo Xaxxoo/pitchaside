@@ -224,7 +224,7 @@ export default function SettingsPage() {
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={pwData.newPassword}
               onChange={(e) => setPwData({ ...pwData, newPassword: e.target.value })}
               className={inputClass}
@@ -235,7 +235,7 @@ export default function SettingsPage() {
             <input
               type="password"
               required
-              minLength={6}
+              minLength={8}
               value={pwData.confirm}
               onChange={(e) => setPwData({ ...pwData, confirm: e.target.value })}
               className={inputClass}
@@ -350,7 +350,7 @@ export default function SettingsPage() {
             <div className="flex justify-center">
               <img src={twoFASetup.qrCodeUrl} alt="2FA QR Code" className="w-48 h-48 rounded-xl" />
             </div>
-            <p className="text-xs text-gray-400 text-center break-all font-mono bg-gray-50 p-3 rounded-xl">
+            <p className="text-xs text-gray-500 text-center break-all font-mono bg-gray-50 p-3 rounded-xl">
               {twoFASetup.secret}
             </p>
             <input

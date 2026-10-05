@@ -55,7 +55,7 @@ export function NewSessionSheet({ groups, onClose }: { groups: IGroupWithMembers
           <h2 id={titleId} className="text-xl font-extrabold text-ink">
             New game
           </h2>
-          <button type="button" onClick={onClose} className="text-xs font-bold text-gray-400 hover:text-ink">
+          <button type="button" onClick={onClose} className="text-xs font-bold text-gray-500 hover:text-ink">
             Close
           </button>
         </div>

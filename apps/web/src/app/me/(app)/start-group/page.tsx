@@ -79,11 +79,11 @@ export default function StartGroupPage() {
             id="password"
             type="password"
             required
-            minLength={6}
+            minLength={8}
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             className={input}
-            placeholder="At least 6 characters"
+            placeholder="At least 8 characters"
           />
         </div>
         <button

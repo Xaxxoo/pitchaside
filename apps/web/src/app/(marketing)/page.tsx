@@ -386,7 +386,7 @@ export default function LandingPage() {
           <div className="text-center max-w-2xl mx-auto mb-12">
             <p className="text-xs font-extrabold text-pitch-600 uppercase tracking-[0.16em] mb-3">How it works</p>
             <h2 className="text-4xl sm:text-5xl font-extrabold text-ink tracking-tight">
-              Up and running in 90 minutes. <span className="text-gray-400">Well, three.</span>
+              Up and running in 90 minutes. <span className="text-gray-500">Well, three.</span>
             </h2>
           </div>
 

@@ -68,7 +68,7 @@ export function Panel({
 
 /** Change against the previous period, e.g. "▲ 12% vs previous 30 days". */
 export function Delta({ current, previous, period = 'previous 30 days' }: { current: number; previous: number; period?: string }) {
-  if (previous === 0 && current === 0) return <span className="text-gray-400">No change vs {period}</span>;
+  if (previous === 0 && current === 0) return <span className="text-gray-500">No change vs {period}</span>;
   if (previous === 0) return <span className="text-gray-500">none in the {period}</span>;
   const change = Math.round(((current - previous) / previous) * 100);
   const up = change >= 0;
@@ -242,7 +242,7 @@ export function WeeklyBars({
 
   if (weeks.every((w) => w.value === 0)) {
     return (
-      <div className="flex items-center justify-center text-sm text-gray-400 chalk-dots rounded-2xl" style={{ height: height + 22 }}>
+      <div className="flex items-center justify-center text-sm text-gray-500 chalk-dots rounded-2xl" style={{ height: height + 22 }}>
         Nothing in the last {weeks.length} weeks yet
       </div>
     );
@@ -251,7 +251,7 @@ export function WeeklyBars({
   return (
     <div className="flex gap-2">
       {/* Axis ticks */}
-      <div className="relative w-10 shrink-0 text-[10px] text-gray-400 tabular-nums text-right" style={{ height }} aria-hidden>
+      <div className="relative w-10 shrink-0 text-[10px] text-gray-500 tabular-nums text-right" style={{ height }} aria-hidden>
         <span className="absolute right-0 -top-1.5">{tick(top)}</span>
         <span className="absolute right-0 top-1/2 -translate-y-1/2">{tick(top / 2)}</span>
         <span className="absolute right-0 -bottom-1.5">{tick(0)}</span>
@@ -301,7 +301,7 @@ export function WeeklyBars({
         {/* Week labels — every third, so they never collide */}
         <div className="flex mt-1.5" aria-hidden>
           {weeks.map((w, i) => (
-            <span key={w.week} className="flex-1 text-center text-[10px] text-gray-400 whitespace-nowrap overflow-visible">
+            <span key={w.week} className="flex-1 text-center text-[10px] text-gray-500 whitespace-nowrap overflow-visible">
               {(weeks.length - 1 - i) % 3 === 0 ? shortDay(w.week) : ''}
             </span>
           ))}

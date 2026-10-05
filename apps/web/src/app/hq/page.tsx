@@ -182,7 +182,7 @@ export default function HqOverviewPage() {
             }
           >
             {recentClubs.length === 0 ? (
-              <p className="text-sm text-gray-400">No clubs have signed up yet.</p>
+              <p className="text-sm text-gray-500">No clubs have signed up yet.</p>
             ) : (
               <ul className="divide-y divide-gray-100 -my-2">
                 {recentClubs.map((c) => (
@@ -259,7 +259,7 @@ export default function HqOverviewPage() {
 
           <Panel title="Top clubs, last 30 days" hint="By money collected.">
             {topClubs.length === 0 ? (
-              <p className="text-sm text-gray-400">No payments in the last 30 days.</p>
+              <p className="text-sm text-gray-500">No payments in the last 30 days.</p>
             ) : (
               <ol className="space-y-2.5">
                 {topClubs.map((c, i) => (
@@ -267,7 +267,7 @@ export default function HqOverviewPage() {
                     <Link href={`/hq/clubs/${c.id}`} className="block group">
                       <span className="flex justify-between gap-3 text-sm">
                         <span className="font-semibold text-ink truncate group-hover:text-pitch-600">
-                          <span className="text-gray-400 tabular-nums mr-1.5">{i + 1}</span>
+                          <span className="text-gray-500 tabular-nums mr-1.5">{i + 1}</span>
                           {c.name}
                         </span>
                         <span className="font-bold text-ink tabular-nums">{formatCurrency(c.collected)}</span>

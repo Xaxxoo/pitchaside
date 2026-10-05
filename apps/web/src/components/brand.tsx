@@ -1,5 +1,25 @@
 import Link from 'next/link';
 
+/**
+ * Text whose hyphenated words never break across lines — so "Tuesday Night 5-a-side"
+ * wraps as "Tuesday Night / 5-a-side", not "5- / a-side". Spaces still wrap as usual.
+ */
+export function KeepHyphens({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\s+)/).map((part, i) =>
+        part.includes('-') ? (
+          <span key={i} className="whitespace-nowrap">
+            {part}
+          </span>
+        ) : (
+          part
+        ),
+      )}
+    </>
+  );
+}
+
 /** The PitchAside mark: a volt pitch tile with a halfway line and centre spot. */
 export function LogoMark({ className = 'w-9 h-9' }: { className?: string }) {
   return (

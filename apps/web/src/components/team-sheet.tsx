@@ -66,7 +66,7 @@ export function TeamSheet({ sessionId, onChange }: { sessionId: string; onChange
         </div>
         <span className="font-display text-2xl font-extrabold text-ink tabular-nums">
           {board.in.length}
-          <span className="text-gray-400 text-base">/{board.capacity}</span>
+          <span className="text-gray-500 text-base">/{board.capacity}</span>
         </span>
       </div>
       <div className="w-full bg-gray-100 rounded-full h-2 mt-3">
@@ -76,9 +76,9 @@ export function TeamSheet({ sessionId, onChange }: { sessionId: string; onChange
       <div className="mt-4 grid sm:grid-cols-2 gap-x-6">
         <div>
           <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mb-1">In ({board.in.length})</p>
-          {board.in.length === 0 && <p className="text-xs text-gray-400 py-2">Nobody yet.</p>}
+          {board.in.length === 0 && <p className="text-xs text-gray-500 py-2">Nobody yet.</p>}
           {board.in.map((p) => (
-            <Row key={p.id} p={p} action={btn('Out', () => move(p, 'out'))} />
+            <Row key={p.id} p={p} action={btn('Mark out', () => move(p, 'out'))} />
           ))}
           {board.waitlist.length > 0 && (
             <>
@@ -90,7 +90,7 @@ export function TeamSheet({ sessionId, onChange }: { sessionId: string; onChange
                   action={
                     <span className="flex items-center gap-1.5">
                       <span className="text-[10px] font-extrabold text-amber-700">#{i + 1}</span>
-                      {btn('In', () => move(p, 'in'), true)}
+                      {btn('Mark in', () => move(p, 'in'), true)}
                     </span>
                   }
                 />
@@ -103,13 +103,13 @@ export function TeamSheet({ sessionId, onChange }: { sessionId: string; onChange
             No reply ({board.noReply.length})
           </p>
           {board.noReply.map((p) => (
-            <Row key={p.id} p={p} action={btn('In', () => move(p, 'in'), true)} />
+            <Row key={p.id} p={p} action={btn('Mark in', () => move(p, 'in'), true)} />
           ))}
           {board.out.length > 0 && (
             <>
-              <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-400 mt-3 mb-1">Out ({board.out.length})</p>
+              <p className="text-[11px] font-extrabold uppercase tracking-wider text-gray-500 mt-3 mb-1">Out ({board.out.length})</p>
               {board.out.map((p) => (
-                <Row key={p.id} p={p} action={btn('In', () => move(p, 'in'))} />
+                <Row key={p.id} p={p} action={btn('Mark in', () => move(p, 'in'))} />
               ))}
             </>
           )}

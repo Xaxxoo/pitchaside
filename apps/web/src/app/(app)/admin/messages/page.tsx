@@ -83,14 +83,14 @@ export default function NotificationsLogPage() {
                   <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-full bg-volt-300 text-ink">
                     {kindLabels[m.kind] ?? m.kind}
                   </span>
-                  <span className="text-[11px] text-gray-400 whitespace-nowrap truncate">
+                  <span className="text-[11px] text-gray-500 whitespace-nowrap truncate">
                     {m.to} ·{' '}
                     {new Date(m.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </span>
                 </div>
                 <p className="text-sm font-bold text-ink">{m.kind === 'otp' ? 'Sign-in code' : title}</p>
                 {rest.length > 0 && m.kind !== 'otp' && <p className="text-sm text-gray-600 whitespace-pre-line break-words">{rest.join('\n')}</p>}
-                <p className={`text-[11px] font-bold mt-2 ${m.status === 'sent' || m.status === 'mock' ? 'text-pitch-600' : 'text-gray-400'}`}>
+                <p className={`text-[11px] font-bold mt-2 ${m.status === 'sent' || m.status === 'mock' ? 'text-pitch-600' : 'text-gray-500'}`}>
                   {m.channel === 'push'
                     ? m.status === 'sent'
                       ? '● Delivered'

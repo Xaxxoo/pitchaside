@@ -29,7 +29,7 @@ export function Pagination({ page, totalPages, total, limit, onPageChange }: Pag
 
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-6">
-      <p className="text-xs text-gray-400 tabular-nums">
+      <p className="text-xs text-gray-500 tabular-nums">
         {start}–{end} of {total}
       </p>
       <div className="flex items-center gap-1">

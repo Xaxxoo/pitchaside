@@ -153,7 +153,7 @@ export function PayoutsPanel({
       {/* Balance card */}
       {balance && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-400">Available balance</p>
+          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-500">Available balance</p>
           <p className="font-display text-3xl font-extrabold text-ink tabular-nums mt-1">
             {formatCurrency(balance.available)}
           </p>
@@ -218,7 +218,7 @@ export function PayoutsPanel({
               <div className="min-w-0">
                 <p className="font-display text-xl font-extrabold text-ink tabular-nums">
                   {formatCurrency(Number(p.amount))}
-                  {Number(p.fee) > 0 && <span className="text-sm font-bold text-gray-400 ml-1">+ {formatCurrency(Number(p.fee))} fee</span>}
+                  {Number(p.fee) > 0 && <span className="text-sm font-bold text-gray-500 ml-1">+ {formatCurrency(Number(p.fee))} fee</span>}
                 </p>
                 {p.refundPlayer && (
                   <p className="text-xs font-bold text-pitch-600 mt-0.5 truncate">
@@ -228,8 +228,8 @@ export function PayoutsPanel({
                 <p className="text-xs text-gray-500 mt-0.5 truncate">
                   → {p.beneficiaryName || p.beneficiaryAccount} · {p.beneficiaryBankName}
                 </p>
-                {p.narration && <p className="text-xs text-gray-400 mt-0.5 truncate">{p.narration}</p>}
-                <p className="text-[11px] text-gray-400 mt-0.5">
+                {p.narration && <p className="text-xs text-gray-500 mt-0.5 truncate">{p.narration}</p>}
+                <p className="text-[11px] text-gray-500 mt-0.5">
                   {new Date(p.createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   {p.initiatedBy && ` · ${p.initiatedBy.firstName} ${p.initiatedBy.lastName}`}
                 </p>

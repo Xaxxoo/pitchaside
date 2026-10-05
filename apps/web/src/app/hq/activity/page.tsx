@@ -37,7 +37,7 @@ export default function HqActivityPage() {
                       {a.clubName}
                     </Link>
                   ) : (
-                    <span className="text-gray-400">—</span>
+                    <span className="text-gray-500">—</span>
                   )}
                 </td>
               </tr>

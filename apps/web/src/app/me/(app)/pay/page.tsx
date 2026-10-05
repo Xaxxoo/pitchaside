@@ -138,7 +138,7 @@ function KittyCard({ kitty }: { kitty: GroupKitty }) {
           <>
             <p className="mt-2 font-display text-2xl font-extrabold text-ink tabular-nums">
               {formatCurrency(kitty.collected)}
-              <span className="text-sm font-bold text-gray-400"> of {formatCurrency(kitty.expected)}</span>
+              <span className="text-sm font-bold text-gray-500"> of {formatCurrency(kitty.expected)}</span>
             </p>
             <div
               className="mt-2 h-2.5 rounded-full bg-gray-100 overflow-hidden"

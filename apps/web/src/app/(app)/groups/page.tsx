@@ -132,7 +132,7 @@ export default function GroupsPage() {
                         <div>
                           <h3 className="text-base font-bold text-ink">{group.name}</h3>
                           {group.schedule && (
-                            <p className="text-xs text-gray-400 mt-0.5">{group.schedule}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{group.schedule}</p>
                           )}
                         </div>
                       </div>

@@ -34,7 +34,7 @@ function PlayersTable({ search }: { search: string }) {
           <tr key={p.id}>
             <td className="px-4 py-3 font-bold text-ink">{p.name}</td>
             <td className="px-4 py-3 text-gray-600">
-              {p.email ? <p>{p.email}</p> : <p className="text-gray-400">No email — can&apos;t sign in</p>}
+              {p.email ? <p>{p.email}</p> : <p className="text-gray-500">No email — can&apos;t sign in</p>}
               {p.phone && <p className="text-xs tabular-nums">{p.phone}</p>}
             </td>
             <td className="px-4 py-3 text-gray-600">{p.clubs.join(', ')}</td>

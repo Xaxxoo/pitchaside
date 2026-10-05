@@ -43,12 +43,32 @@ function useCheckOnReturn(active: boolean, onCheck: () => Promise<void>) {
   }, [active, onCheck]);
 }
 
+const SNOOZE_KEY = 'pitchaside_verify_email_later';
+const SNOOZE_MS = 24 * 60 * 60 * 1000;
+
+/** Whether "I'll do it later" was chosen within the last day (storage may be unavailable). */
+function snoozed() {
+  try {
+    return Date.now() - Number(localStorage.getItem(SNOOZE_KEY) ?? 0) < SNOOZE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function snooze() {
+  try {
+    localStorage.setItem(SNOOZE_KEY, String(Date.now()));
+  } catch {
+    /* private mode: it'll just ask again next time */
+  }
+}
+
 /**
  * Asks an organiser who hasn't confirmed their email to do so. Verifying isn't
- * required to use the app, so it can be put off for the current session. The
- * reminder returns the next time the user signs in. Clicking outside or
- * pressing Escape only closes it for now, and Settings always has the resend
- * button (VerifyEmailRow). It goes away by itself once they've verified.
+ * required to use the app, so "I'll do it later" puts it off for a day (in this
+ * browser). Clicking outside or pressing Escape only closes it for now, and
+ * Settings always has the resend button (VerifyEmailRow). It goes away by itself
+ * once they've verified.
  */
 export function VerifyEmailModal({ email, onCheck }: { email: string; onCheck: () => Promise<void> }) {
   const titleId = useId();
@@ -56,15 +76,16 @@ export function VerifyEmailModal({ email, onCheck }: { email: string; onCheck: (
   const { state, resend } = useResend();
   useCheckOnReturn(open, onCheck);
 
-  // Open after mount so the reminder appears on every sign-in for an account
-  // whose email is still unverified.
-  useEffect(() => setOpen(true), []);
+  // Open after mount for an account whose email is still unverified — unless they chose
+  // "I'll do it later" in the last day (opening the app shouldn't nag every time).
+  useEffect(() => setOpen(!snoozed()), []);
 
   /** Closed until the next page load. */
   const close = () => setOpen(false);
 
-  /** Their explicit choice: close it for this session. */
+  /** Their explicit choice: don't ask again for a day. */
   function later() {
+    snooze();
     close();
   }
 

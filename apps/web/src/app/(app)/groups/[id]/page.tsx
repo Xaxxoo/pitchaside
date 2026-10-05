@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
+import { KeepHyphens } from '@/components/brand';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
@@ -395,7 +396,7 @@ export default function GroupDetailPage() {
             <div className="flex items-start gap-3.5 min-w-0">
               <JerseyBadge label={group.name.charAt(0).toUpperCase()} name={group.name} className="w-16 h-16 shrink-0 -mt-1" />
               <div className="min-w-0">
-                <h1 className="text-[28px] leading-tight font-extrabold text-ink">{group.name}</h1>
+                <h1 className="text-[28px] leading-tight font-extrabold text-ink"><KeepHyphens text={group.name} /></h1>
                 {group.description && (
                   <p className="text-sm text-gray-500 mt-0.5">{group.description}</p>
                 )}
@@ -628,7 +629,7 @@ export default function GroupDetailPage() {
                       <p className="text-sm font-bold text-ink">
                         {m.player.firstName} {m.player.lastName}
                       </p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-500">
                         <span className="capitalize">{m.role}</span>
                         {Number(m.credit) > 0 && (
                           <span className="ml-1.5 font-bold text-pitch-600">· {formatCurrency(Number(m.credit))} credit</span>
@@ -717,7 +718,7 @@ export default function GroupDetailPage() {
                       <span className="text-xs text-gray-500 tabular-nums">
                         {formatCurrency(s.collectedAmount)} / {formatCurrency(s.targetAmount)}
                       </span>
-                      <span className="text-xs font-medium text-gray-400 tabular-nums">{progress}%</span>
+                      <span className="text-xs font-medium text-gray-500 tabular-nums">{progress}%</span>
                     </div>
                   </Link>
                 );

@@ -227,7 +227,7 @@ export default function SessionsPage() {
                       <span className="text-xs text-gray-500 tabular-nums">
                         <span className="font-bold text-ink">{formatCurrency(session.collectedAmount)}</span> / {formatCurrency(session.targetAmount)}
                       </span>
-                      <span className="text-xs font-medium text-gray-400 tabular-nums">
+                      <span className="text-xs font-medium text-gray-500 tabular-nums">
                         {totalCount > 0 ? `${paidCount}/${totalCount} paid` : `${progress}%`}
                       </span>
                     </div>

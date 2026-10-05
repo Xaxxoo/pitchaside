@@ -154,7 +154,7 @@ export default function NewPlayerPage() {
 
         <div>
           <label htmlFor="phone" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Phone <span className="text-gray-400 font-medium">(optional)</span>
+            Phone <span className="text-gray-500 font-medium">(optional)</span>
           </label>
           <input
             id="phone"

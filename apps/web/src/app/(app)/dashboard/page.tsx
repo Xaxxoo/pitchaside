@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { KeepHyphens } from '@/components/brand';
 import {
   getGroups,
   getSessions,
@@ -255,7 +256,7 @@ export default function Dashboard() {
                     {daysToGo === 0 ? 'Today' : daysToGo === 1 ? 'Tomorrow' : `In ${daysToGo} days`}
                   </span>
                 </div>
-                <p className="font-display text-2xl sm:text-[28px] font-extrabold leading-tight">{nextGroup?.name || 'Game'}</p>
+                <p className="font-display text-2xl sm:text-[28px] font-extrabold leading-tight"><KeepHyphens text={nextGroup?.name || 'Game'} /></p>
                 <p className="text-sm text-white/60 mt-1">
                   {new Date(nextSession.date).toLocaleDateString('en-US', {
                     weekday: 'long',

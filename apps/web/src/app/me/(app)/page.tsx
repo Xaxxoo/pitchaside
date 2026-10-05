@@ -132,7 +132,7 @@ export default function PlayerHomePage() {
                       key={row.id}
                       className={`flex items-center gap-3 px-4 py-2.5 border-t border-gray-100 ${row.id === t.myPlayerId ? 'bg-volt-100' : ''}`}
                     >
-                      <span className="w-5 text-xs font-extrabold text-gray-400 tabular-nums">{row.rank}</span>
+                      <span className="w-5 text-xs font-extrabold text-gray-500 tabular-nums">{row.rank}</span>
                       <Avatar name={row.name} className="w-7 h-7 text-[10px]" />
                       <span className="flex-1 text-sm font-bold text-ink truncate">{row.id === t.myPlayerId ? 'You' : row.name}</span>
                       <span className="font-display font-extrabold text-ink tabular-nums">{row.points}</span>
@@ -140,7 +140,7 @@ export default function PlayerHomePage() {
                   ))}
                   {t.me && t.me.rank > t.top.length && (
                     <div className="flex items-center gap-3 px-4 py-2.5 border-t border-dashed border-gray-200 bg-volt-100">
-                      <span className="w-5 text-xs font-extrabold text-gray-400 tabular-nums">{t.me.rank}</span>
+                      <span className="w-5 text-xs font-extrabold text-gray-500 tabular-nums">{t.me.rank}</span>
                       <Avatar name={`${home.player.firstName} ${home.player.lastName}`} className="w-7 h-7 text-[10px]" />
                       <span className="flex-1 text-sm font-bold text-ink">You</span>
                       <span className="font-display font-extrabold text-ink tabular-nums">{t.me.points}</span>

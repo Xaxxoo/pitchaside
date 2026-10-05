@@ -82,7 +82,7 @@ export function PlayerSignupForm({
       </div>
       <div>
         <label htmlFor="su-phone" className="block text-xs font-bold text-gray-700 mb-1.5">
-          Phone number <span className="text-gray-400 font-medium">(optional)</span>
+          Phone number <span className="text-gray-500 font-medium">(optional)</span>
         </label>
         <input
           id="su-phone"
@@ -101,7 +101,7 @@ export function PlayerSignupForm({
         value={form.password}
         onChange={(v) => setForm({ ...form, password: v })}
         autoComplete="new-password"
-        hint="At least 6 characters. You'll sign in with your email and this password."
+        hint="At least 8 characters. You'll sign in with your email and this password."
       />
       <button
         type="submit"
