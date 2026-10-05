@@ -10,6 +10,30 @@ import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import * as bcrypt from 'bcrypt';
+import { IsEmail, IsIn, IsNotEmpty, IsOptional, IsString, MinLength } from 'class-validator';
+
+/** A co-admin added from Admin: they sign in with this email and temporary password. */
+export class AddOrgMemberDto {
+  @IsString()
+  @IsNotEmpty()
+  firstName: string;
+
+  @IsString()
+  @IsNotEmpty()
+  lastName: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsString()
+  @MinLength(8)
+  password: string;
+
+  /** Co-organiser (full access minus Admin) or treasurer (payments only). */
+  @IsOptional()
+  @IsIn([UserRole.MEMBER, UserRole.TREASURER])
+  role?: UserRole.MEMBER | UserRole.TREASURER;
+}
 
 /** Never send password hashes or 2FA secrets to the browser. */
 function publicUser({ passwordHash: _hash, twoFactorSecret: _secret, ...user }: User) {
@@ -47,7 +71,7 @@ export class AdminController {
   @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
   async addOrgMember(
     @CurrentUser() user: User,
-    @Body() body: { firstName: string; lastName: string; email: string; password: string; role?: string },
+    @Body() body: AddOrgMemberDto,
   ) {
     const passwordHash = await bcrypt.hash(body.password, 10);
     const newUser = await this.usersService.create({

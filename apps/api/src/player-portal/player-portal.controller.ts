@@ -58,7 +58,7 @@ export class SignupDto {
   phone?: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
 }
 
@@ -78,7 +78,7 @@ export class ResetPasswordDto {
   code: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
 }
 
@@ -88,7 +88,7 @@ export class ChangePasswordDto {
   currentPassword?: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   newPassword: string;
 }
 
@@ -108,7 +108,7 @@ export class StartGroupDto {
   clubName: string;
 
   @IsString()
-  @MinLength(6)
+  @MinLength(8)
   password: string;
 }
 
