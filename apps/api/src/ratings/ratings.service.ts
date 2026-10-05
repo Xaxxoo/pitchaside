@@ -14,6 +14,7 @@ import { Vote, VoteCategory } from './entities/vote.entity';
 import { SessionGame } from './entities/session-game.entity';
 import { GamePaid, paidForGames } from '../payments/game-dues';
 import { localDate } from '../common/time.util';
+import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
 
 /** Sides on match day. Colours live in the UI (Orange, Yellow, Blue, White, Green, Red). */
 export const TEAM_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
@@ -33,6 +34,10 @@ export const CATEGORIES: { key: VoteCategory; title: string; attr?: 'PAC' | 'SHO
 
 /** Ratings need a few games of votes before they reach the extremes. */
 const RATING_PRIOR = 6;
+/** How far votes move a card attribute away from the player's skill: up to +20, down to −6. */
+const VOTE_WEIGHT = 8;
+const VOTE_UP_MAX = 20;
+const VOTE_DOWN_MAX = 6;
 
 /** League points: what makes the table move. */
 export const POINTS = { potmVote: 3, attrVote: 1, potmWin: 5 };
@@ -49,12 +54,46 @@ export interface PlayerRatings {
   /** Match days finished top of the day's table. */
   teamOfDay: number;
   points: number;
+  /** Skill rating from match results (Elo, ~1500 average); drives team balancing. */
+  skill: number;
+  /** Fewer than PROVISIONAL_UNDER scored games so far: the card is still settling. */
+  provisional: boolean;
   ovr: number | null;
   attributes: { PAC: number | null; SHO: number | null; PAS: number | null; DEF: number | null; GK: number | null };
 }
 
 function emptyVotes(): Record<VoteCategory, number> {
   return { potm: 0, pace: 0, shooting: 0, passing: 0, defending: 0, keeper: 0 };
+}
+
+/**
+ * The player card. Every attribute starts from the skill rating (on the card's scale), and
+ * votes move it relative to what a random pick would give: more votes than expected lift
+ * it, none nudges it down a little, and PRIOR keeps a low-turnout week from swinging it.
+ * OVR is the best four attributes plus a Player of the Match bonus.
+ */
+export function playerCard(skill: Skill | undefined, votes: Record<VoteCategory, number>, expectedPerCategory: number, ballotsSeen: number) {
+  const base = cardRating(skill?.rating ?? DEFAULT_START);
+  const rate = (n: number) => {
+    const lift = Math.round((VOTE_WEIGHT * (n - expectedPerCategory)) / (expectedPerCategory + RATING_PRIOR));
+    return Math.max(40, Math.min(99, base + Math.max(-VOTE_DOWN_MAX, Math.min(VOTE_UP_MAX, lift))));
+  };
+  const attributes = {
+    PAC: rate(votes.pace),
+    SHO: rate(votes.shooting),
+    PAS: rate(votes.passing),
+    DEF: rate(votes.defending),
+    GK: rate(votes.keeper),
+  };
+  // OVR uses a player's best four attributes, so keepers aren't dragged down by SHO and vice versa.
+  const best = Object.values(attributes).sort((x, y) => y - x).slice(0, 4);
+  const potmBoost = ballotsSeen > 0 ? Math.min(6, Math.round((votes.potm / ballotsSeen) * 12)) : 0;
+  return {
+    skill: Math.round(skill?.rating ?? DEFAULT_START),
+    provisional: (skill?.games ?? 0) < PROVISIONAL_UNDER,
+    attributes,
+    ovr: Math.min(99, Math.round(best.reduce((x, y) => x + y, 0) / best.length) + potmBoost),
+  };
 }
 
 @Injectable()
@@ -319,7 +358,7 @@ export class RatingsService {
 
   async getLineup(sessionId: string, organizationId: string) {
     const session = await this.loadSession(sessionId, organizationId);
-    const [ovr, games, paid] = await Promise.all([
+    const [{ ovr, skills }, games, paid] = await Promise.all([
       this.ovrMap(organizationId),
       this.gamesRepo.find({ where: { sessionId }, order: { createdAt: 'ASC' } }),
       this.paidFor(session),
@@ -334,7 +373,8 @@ export class RatingsService {
           firstName: p.player.firstName,
           lastName: p.player.lastName,
           team: this.teamOf(session, p.team),
-          ovr: ovr.get(p.player.id) ?? null,
+          ovr: ovr.get(p.player.id) ?? cardRating(skills.get(p.player.id)?.rating ?? DEFAULT_START),
+          skill: Math.round(skills.get(p.player.id)?.rating ?? DEFAULT_START),
           // Organisers always see who's paid for this game (or the period it falls in).
           paid: paid.get(p.playerId) ?? 'unpaid',
         })),
@@ -438,12 +478,12 @@ export class RatingsService {
     return this.playerLineup(sessionId, playerIds);
   }
 
-  /** Snake draft by OVR across N sides so each gets a fair share of the best players. */
+  /** Snake draft by skill rating across N sides so each gets a fair share of the best players. */
   async balanceTeams(sessionId: string, organizationId: string, teamCount?: number) {
     if (teamCount) await this.setLineup(sessionId, organizationId, { teamCount });
     const lineup = await this.getLineup(sessionId, organizationId);
     const n = lineup.teamCount;
-    const sorted = [...lineup.squad].sort((a, b) => (b.ovr ?? 60) - (a.ovr ?? 60) || a.firstName.localeCompare(b.firstName));
+    const sorted = [...lineup.squad].sort((a, b) => b.skill - a.skill || a.firstName.localeCompare(b.firstName));
     const teams: Record<string, string> = {};
     sorted.forEach((p, i) => {
       const round = Math.floor(i / n);
@@ -483,16 +523,48 @@ export class RatingsService {
   }
 
   private async ovrMap(organizationId: string) {
-    const stats = await this.aggregate(await this.gamesQuery(organizationId).getMany());
-    return new Map([...stats.entries()].map(([id, s]) => [id, s.ovr]));
+    const skills = await this.skills(organizationId);
+    const stats = await this.aggregate(await this.gamesQuery(organizationId).getMany(), skills);
+    const ovr = new Map([...stats.entries()].map(([id, s]) => [id, s.ovr]));
+    return { ovr, skills };
+  }
+
+  /**
+   * Every player's skill rating in the organisation, from replaying all its scored games in
+   * order (each rating depends on everyone else's, so always the whole club). Players who
+   * haven't played start from the level their organiser gave them, else average.
+   */
+  async skills(organizationId: string): Promise<Map<string, Skill>> {
+    const [sessions, players] = await Promise.all([
+      this.gamesQuery(organizationId).orderBy('session.date', 'ASC').addOrderBy('session.createdAt', 'ASC').getMany(),
+      this.sessionsRepo.manager.find(Player, { where: { organizationId }, select: ['id', 'level'] }),
+    ]);
+    const starts = new Map(players.map((p) => [p.id, p.level ? LEVEL_START[p.level] : DEFAULT_START]));
+    if (!sessions.length) return replaySkill([], starts);
+
+    const games = await this.gamesRepo.find({ where: { sessionId: In(sessions.map((s) => s.id)) }, order: { createdAt: 'ASC' } });
+    const bySession = new Map<string, SessionGame[]>();
+    for (const g of games) bySession.set(g.sessionId, [...(bySession.get(g.sessionId) ?? []), g]);
+
+    const replay: SkillGame[] = [];
+    for (const session of sessions) {
+      const side = (team: string) =>
+        (session.payments ?? []).filter((p) => p.player && this.teamOf(session, p.team) === team).map((p) => p.playerId);
+      for (const g of bySession.get(session.id) ?? []) {
+        replay.push({ sideA: side(g.teamA), sideB: side(g.teamB), scoreA: g.scoreA, scoreB: g.scoreB });
+      }
+    }
+    return replaySkill(replay, starts);
   }
 
   // ── Ratings & league table ──
 
   /** Aggregates every vote across the given games into per-player ratings. */
-  private async aggregate(sessions: Session[]) {
+  private async aggregate(sessions: Session[], skills: Map<string, Skill>) {
     const stats = new Map<string, PlayerRatings & { player: SquadMember }>();
     if (!sessions.length) return stats;
+    /** Votes a player would get per category if teammates picked at random. */
+    const expectedVotes = new Map<string, number>();
 
     const votes = await this.votesRepo.find({ where: { sessionId: In(sessions.map((s) => s.id)) } });
     const allGames = await this.gamesRepo.find({ where: { sessionId: In(sessions.map((s) => s.id)) } });
@@ -513,7 +585,8 @@ export class RatingsService {
       for (const v of sv) if (v.category === VoteCategory.POTM) potmCounts.set(v.nomineeId, (potmCounts.get(v.nomineeId) ?? 0) + 1);
       const top = Math.max(0, ...potmCounts.values());
 
-      for (const member of this.squad(session)) {
+      const squad = this.squad(session);
+      for (const member of squad) {
         const s = stats.get(member.id) ?? {
           player: member,
           games: 0,
@@ -523,11 +596,15 @@ export class RatingsService {
           record: { w: 0, d: 0, l: 0 },
           teamOfDay: 0,
           points: 0,
+          skill: DEFAULT_START,
+          provisional: true,
           ovr: null,
           attributes: { PAC: null, SHO: null, PAS: null, DEF: null, GK: null },
         };
         s.games += 1;
-        s.ballotsSeen += voters.size - (voters.has(member.id) ? 1 : 0);
+        const othersVoting = voters.size - (voters.has(member.id) ? 1 : 0);
+        s.ballotsSeen += othersVoting;
+        expectedVotes.set(member.id, (expectedVotes.get(member.id) ?? 0) + othersVoting / Math.max(1, squad.length - 1));
         for (const v of sv) if (v.nomineeId === member.id) s.votes[v.category] += 1;
         if (top > 0 && potmCounts.get(member.id) === top) s.potmWins += 1;
         const team = session.payments?.find((p) => p.playerId === member.id)?.team;
@@ -546,26 +623,10 @@ export class RatingsService {
       }
     }
 
-    for (const s of stats.values()) {
+    for (const [id, s] of stats) {
       const attrVotes = s.votes.pace + s.votes.shooting + s.votes.passing + s.votes.defending + s.votes.keeper;
       s.points = s.votes.potm * POINTS.potmVote + attrVotes * POINTS.attrVote + s.potmWins * POINTS.potmWin;
-      if (s.ballotsSeen > 0) {
-        // Share of teammates' ballots that picked you, mapped onto a 55–99 card rating.
-        // RATING_PRIOR phantom ballots keep one big night from jumping straight to 99.
-        const rate = (n: number) =>
-          55 + Math.round(44 * Math.min(1, (n / (s.ballotsSeen + RATING_PRIOR)) * 1.5));
-        s.attributes = {
-          PAC: rate(s.votes.pace),
-          SHO: rate(s.votes.shooting),
-          PAS: rate(s.votes.passing),
-          DEF: rate(s.votes.defending),
-          GK: rate(s.votes.keeper),
-        };
-        // OVR uses a player's best four attributes, so keepers aren't dragged down by SHO and vice versa.
-        const a = (Object.values(s.attributes) as number[]).sort((x, y) => y - x).slice(0, 4);
-        const potmBoost = Math.min(6, Math.round((s.votes.potm / s.ballotsSeen) * 12));
-        s.ovr = Math.min(99, Math.round(a.reduce((x, y) => x + y, 0) / a.length) + potmBoost);
-      }
+      Object.assign(s, playerCard(skills.get(id), s.votes, expectedVotes.get(id) ?? 0, s.ballotsSeen));
     }
     return stats;
   }
@@ -643,7 +704,7 @@ export class RatingsService {
     const group = await this.groupsRepo.findOne({ where: { id: groupId, organizationId } });
     if (!group) throw new NotFoundException('Group not found');
     const sessions = await this.gamesQuery(organizationId).andWhere('session.groupId = :groupId', { groupId }).getMany();
-    const stats = await this.aggregate(sessions);
+    const stats = await this.aggregate(sessions, await this.skills(organizationId));
     const rows = [...stats.values()].sort(
       (a, b) => b.points - a.points || b.votes.potm - a.votes.potm || b.games - a.games,
     );
@@ -653,21 +714,22 @@ export class RatingsService {
   async getPlayerRatings(playerId: string, organizationId: string): Promise<PlayerRatings> {
     const sessions = await this.gamesQuery(organizationId).getMany();
     const mine = sessions.filter((s) => s.payments?.some((p) => p.playerId === playerId));
-    const s = (await this.aggregate(mine)).get(playerId);
+    const skills = await this.skills(organizationId);
+    const s = (await this.aggregate(mine, skills)).get(playerId);
     if (s) {
       const { player: _player, ...ratings } = s;
       return ratings;
     }
+    // Not played yet: the card starts from their level.
     return {
       games: 0,
       ballotsSeen: 0,
       votes: emptyVotes(),
       potmWins: 0,
       record: { w: 0, d: 0, l: 0 },
-          teamOfDay: 0,
+      teamOfDay: 0,
       points: 0,
-      ovr: null,
-      attributes: { PAC: null, SHO: null, PAS: null, DEF: null, GK: null },
+      ...playerCard(skills.get(playerId), emptyVotes(), 0, 0),
     };
   }
 }

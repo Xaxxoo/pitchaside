@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsEmail, IsNotEmpty, MinLength, Matches } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsIn, IsNotEmpty, MinLength, Matches } from 'class-validator';
+import { PLAYER_LEVELS, type PlayerLevel } from '../../ratings/skill';
 
 export class CreatePlayerDto {
   @IsString()
@@ -18,6 +19,11 @@ export class CreatePlayerDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  /** How good they are before they've played here; seeds their skill rating for team balancing. */
+  @IsOptional()
+  @IsIn(PLAYER_LEVELS)
+  level?: PlayerLevel;
 }
 
 /**
@@ -44,4 +50,9 @@ export class UpdatePlayerDto {
   @IsOptional()
   @IsEmail()
   email?: string;
+
+  /** How good they are before they've played here; seeds their skill rating for team balancing. */
+  @IsOptional()
+  @IsIn(PLAYER_LEVELS)
+  level?: PlayerLevel;
 }

@@ -8,6 +8,7 @@ import { PaymentType } from '../groups/entities/group.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
 import { RsvpService } from '../rsvp/rsvp.service';
 import { RatingsService, PlayerRatings } from '../ratings/ratings.service';
+import { DEFAULT_START } from '../ratings/skill';
 import { BillingService } from '../billing/billing.service';
 import { AuthService } from '../auth/auth.service';
 import { localDate } from '../common/time.util';
@@ -399,6 +400,8 @@ function emptyRatings(): PlayerRatings {
     record: { w: 0, d: 0, l: 0 },
     teamOfDay: 0,
     points: 0,
+    skill: DEFAULT_START,
+    provisional: true,
     ovr: null,
     attributes: { PAC: null, SHO: null, PAS: null, DEF: null, GK: null },
   };
