@@ -6,6 +6,7 @@ import { Nav } from '@/components/nav';
 import { useAuth } from '@/lib/auth';
 import { EmailVerifiedModal, VerifyEmailModal } from '@/components/verify-email-modal';
 import { BallLoader } from '@/components/skeleton';
+import { InstallCard } from '@/components/pwa';
 
 export default function AppLayout({
   children,
@@ -50,6 +51,9 @@ export default function AppLayout({
       <main className="min-h-screen pb-28 pt-[env(safe-area-inset-top)] md:pb-10 md:pl-60 md:pt-4">
         {children}
       </main>
+      <div className="fixed bottom-20 left-4 right-4 z-40 md:hidden">
+        <InstallCard />
+      </div>
       <Nav />
     </>
   );

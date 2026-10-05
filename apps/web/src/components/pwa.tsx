@@ -33,7 +33,11 @@ export function InstallCard() {
   useEffect(() => {
     if (isStandalone()) return;
     try {
-      if (localStorage.getItem('pa_install_dismissed')) return;
+      const dismissed = localStorage.getItem('pa_install_dismissed');
+      if (dismissed) {
+        const elapsed = Date.now() - Number(dismissed);
+        if (elapsed < 3 * 24 * 60 * 60 * 1000) return;
+      }
     } catch {
       /* ignore */
     }
@@ -54,7 +58,7 @@ export function InstallCard() {
   const dismiss = () => {
     setHidden(true);
     try {
-      localStorage.setItem('pa_install_dismissed', '1');
+      localStorage.setItem('pa_install_dismissed', Date.now().toString());
     } catch {
       /* ignore */
     }
