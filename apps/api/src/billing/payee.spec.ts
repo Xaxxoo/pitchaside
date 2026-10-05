@@ -11,7 +11,9 @@ function setup(groupOverrides: Partial<Group> = {}) {
     findOne: jest.fn(async () => group),
     save: jest.fn(async (g: Group) => Object.assign(group, g)),
   };
-  const payoutsRepo = {
+  const payoutsRepo: any = {
+    // Payouts are recorded inside a transaction that locks the group; here it just runs.
+    manager: { transaction: (fn: (tx: unknown) => unknown) => fn({ findOne: async () => null, save: (p: any) => payoutsRepo.save(p) }) },
     createQueryBuilder: () => {
       const qb: any = { select: () => qb, where: () => qb, andWhere: () => qb, getRawOne: async () => ({ dailyTotal: 0 }) };
       return qb;

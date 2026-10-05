@@ -21,6 +21,21 @@ function apiOrigin() {
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   transpilePackages: ['@pitchaside/shared'],
+  async headers() {
+    return [
+      {
+        // No other site may put PitchAside in a frame, so a page can't be overlaid to trick
+        // an organiser into clicking (clickjacking) — e.g. on payouts.
+        source: '/:path*',
+        headers: [
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'none'" },
+          { key: 'X-Frame-Options', value: 'DENY' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        ],
+      },
+    ];
+  },
   async rewrites() {
     return [
       {

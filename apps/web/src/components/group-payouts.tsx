@@ -161,6 +161,11 @@ export function PayoutsPanel({
             <span>Recorded in: <span className="font-bold text-ink">{formatCurrency(balance.totalIn)}</span></span>
             <span>Out: <span className="font-bold text-ink">{formatCurrency(balance.totalOut)}</span></span>
           </div>
+          {balance.manualIn > 0 && (
+            <p className="mt-2 text-xs text-gray-500">
+              {formatCurrency(balance.manualIn)} of that was recorded by hand, so it isn’t included in what you can send.
+            </p>
+          )}
           <button
             onClick={() => setShowForm(true)}
             className="mt-4 w-full py-3 bg-ink text-volt-300 font-bold rounded-xl hover:bg-pitch-900 transition-colors"

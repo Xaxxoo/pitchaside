@@ -442,6 +442,8 @@ export function getPublicGroup(code: string): Promise<PublicGroup> {
 
 export interface GroupBalance {
   totalIn: number;
+  /** Part of totalIn recorded by hand: kept for the books, not withdrawable. */
+  manualIn: number;
   totalOut: number;
   available: number;
 }

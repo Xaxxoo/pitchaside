@@ -8,6 +8,10 @@ import { RefreshToken } from './entities/refresh-token.entity';
 import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 import { randomBytes, createHash } from 'crypto';
 
+/** Wrong transfer PINs in a row before the PIN locks, and for how long. */
+export const TRANSFER_PIN_MAX_ATTEMPTS = 5;
+export const TRANSFER_PIN_LOCK_MS = 15 * 60 * 1000;
+
 @Injectable()
 export class UsersService {
   constructor(
@@ -249,18 +253,47 @@ export class UsersService {
     const user = await this.usersRepo.findOneOrFail({ where: { id: userId } });
     if (user.transferPin) {
       if (!currentPin) throw new BadRequestException('Current PIN is required');
-      const valid = await bcrypt.compare(currentPin, user.transferPin);
-      if (!valid) throw new BadRequestException('Current PIN is incorrect');
+      if (!(await this.checkTransferPin(user, currentPin))) throw new BadRequestException('Current PIN is incorrect');
     }
     user.transferPin = await bcrypt.hash(pin, 10);
     user.transferPinSetAt = new Date();
+    user.transferPinFailedAttempts = 0;
+    user.transferPinLockedUntil = null;
     await this.usersRepo.save(user);
   }
 
   async verifyTransferPin(userId: string, pin: string): Promise<boolean> {
     const user = await this.usersRepo.findOneOrFail({ where: { id: userId } });
     if (!user.transferPin) throw new BadRequestException('Transfer PIN has not been set. Please set a PIN first.');
-    return bcrypt.compare(pin, user.transferPin);
+    return this.checkTransferPin(user, pin);
+  }
+
+  /**
+   * Compares a PIN, counting wrong ones: after TRANSFER_PIN_MAX_ATTEMPTS in a row the PIN is
+   * locked for TRANSFER_PIN_LOCK_MS, so a stolen session can't guess its way to a payout.
+   */
+  private async checkTransferPin(user: User, pin: string): Promise<boolean> {
+    if (user.transferPinLockedUntil && user.transferPinLockedUntil > new Date()) {
+      const minutes = Math.ceil((user.transferPinLockedUntil.getTime() - Date.now()) / 60_000);
+      throw new BadRequestException(`Too many wrong PINs. Try again in ${minutes} minute${minutes === 1 ? '' : 's'}.`);
+    }
+    if (await bcrypt.compare(pin, user.transferPin!)) {
+      if (user.transferPinFailedAttempts || user.transferPinLockedUntil) {
+        await this.usersRepo.update(user.id, { transferPinFailedAttempts: 0, transferPinLockedUntil: null });
+      }
+      return true;
+    }
+    // Counted in the database, so guesses sent in parallel all add up.
+    await this.usersRepo.increment({ id: user.id }, 'transferPinFailedAttempts', 1);
+    const { transferPinFailedAttempts: failed } = await this.usersRepo.findOneOrFail({ where: { id: user.id } });
+    if (failed >= TRANSFER_PIN_MAX_ATTEMPTS) {
+      await this.usersRepo.update(user.id, {
+        transferPinFailedAttempts: 0,
+        transferPinLockedUntil: new Date(Date.now() + TRANSFER_PIN_LOCK_MS),
+      });
+      throw new BadRequestException(`Too many wrong PINs. Transfers are locked for ${TRANSFER_PIN_LOCK_MS / 60_000} minutes.`);
+    }
+    return false;
   }
 
   async hasTransferPin(userId: string): Promise<boolean> {

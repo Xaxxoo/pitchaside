@@ -72,6 +72,13 @@ export class User {
   @Column({ name: 'transfer_pin_set_at', type: 'timestamp', nullable: true })
   transferPinSetAt: Date | null;
 
+  /** Wrong transfer PINs in a row; at TRANSFER_PIN_MAX_ATTEMPTS the PIN locks for a while. */
+  @Column({ name: 'transfer_pin_failed_attempts', type: 'int', default: 0 })
+  transferPinFailedAttempts: number;
+
+  @Column({ name: 'transfer_pin_locked_until', type: 'timestamp', nullable: true })
+  transferPinLockedUntil: Date | null;
+
   @CreateDateColumn()
   createdAt: Date;
 
