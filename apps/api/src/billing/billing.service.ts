@@ -59,6 +59,8 @@ function grossAmount(net: number): number {
 
 /** PitchAside service fee per outbound payout, transferred to the platform account. */
 const PLATFORM_FEE = 350;
+/** Transfers an organiser records by hand get this id prefix; they never count as withdrawable. */
+const MANUAL_PREFIX = 'manual_';
 
 
 // Unambiguous characters for human-typed references (no 0/O, 1/I/L).
@@ -883,7 +885,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   ) {
     const group = await this.findGroup(groupId, organizationId);
     const incoming: IncomingTransfer = {
-      providerTransactionId: `manual_${randomBytes(8).toString('hex')}`,
+      providerTransactionId: `${MANUAL_PREFIX}${randomBytes(8).toString('hex')}`,
       accountNumber: group.accountNumber ?? '',
       amount: input.amount,
       senderName: input.senderName,
@@ -951,14 +953,21 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
   // ── Payouts (transfer out) ──
 
+  /**
+   * What's come in, gone out, and can be paid out. Transfers an organiser records by hand
+   * (recordManualTransfer) are bookkeeping — they show in `totalIn` but aren't withdrawable,
+   * since nothing proves that money reached the account. Only bank-reported credits are.
+   */
   async getGroupBalance(groupId: string, organizationId: string) {
     const group = await this.findGroup(groupId, organizationId);
 
-    const { totalIn } = await this.transfersRepo
+    const { totalIn, manualIn } = await this.transfersRepo
       .createQueryBuilder('t')
       .select('COALESCE(SUM(t.amount), 0)', 'totalIn')
+      .addSelect(`COALESCE(SUM(CASE WHEN LEFT(t.providerTransactionId, ${MANUAL_PREFIX.length}) = :manual THEN t.amount ELSE 0 END), 0)`, 'manualIn')
       .where('t.groupId = :groupId', { groupId })
       .andWhere('t.status IN (:...statuses)', { statuses: [TransferStatus.MATCHED, TransferStatus.ASSIGNED, TransferStatus.UNMATCHED] })
+      .setParameter('manual', MANUAL_PREFIX)
       .getRawOne();
 
     const { totalOut } = await this.payoutsRepo
@@ -968,9 +977,10 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       .andWhere('p.status NOT IN (:...excluded)', { excluded: [PayoutStatus.FAILED, PayoutStatus.CANCELLED] })
       .getRawOne();
 
-    const available = Number(totalIn) - Number(totalOut);
+    const available = Number(totalIn) - Number(manualIn) - Number(totalOut);
     return {
       totalIn: Number(totalIn),
+      manualIn: Number(manualIn),
       totalOut: Number(totalOut),
       available,
     };
@@ -1004,24 +1014,11 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     if (dto.refundPlayerId && dto.toPayee) throw new BadRequestException("A refund goes to the member's account, not the payee");
     const to = await this.payoutRecipient(group, dto);
 
-    // Check balance (amount + platform fee)
-    const balance = await this.getGroupBalance(groupId, organizationId);
-    if (dto.amount + PLATFORM_FEE > balance.available) {
-      throw new BadRequestException(`Insufficient balance. Available: ${naira(balance.available)} (includes ${naira(PLATFORM_FEE)} service fee)`);
-    }
-
-    // Platform daily limit: ₦10M per group
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-    const { dailyTotal } = await this.payoutsRepo
-      .createQueryBuilder('p')
-      .select('COALESCE(SUM(p.amount), 0)', 'dailyTotal')
-      .where('p.groupId = :groupId', { groupId })
-      .andWhere('p.status != :cancelled', { cancelled: PayoutStatus.CANCELLED })
-      .andWhere('p.createdAt >= :todayStart', { todayStart })
-      .getRawOne();
-    if (Number(dailyTotal) + dto.amount > 10_000_000) {
-      throw new BadRequestException('Daily transfer limit (₦10,000,000) exceeded for this group');
+    // What the bank says is in the account, when Pulse can tell us: a second check that
+    // doesn't depend on our own ledger being right.
+    const held = await this.pulse.getBalance(group.accountNumber).catch(() => null);
+    if (held !== null && dto.amount + PLATFORM_FEE > held) {
+      throw new BadRequestException(`The group account holds ${naira(held)}, not enough for ${naira(dto.amount)} plus the ${naira(PLATFORM_FEE)} service fee`);
     }
 
     const reference = `PA-${randomBytes(8).toString('hex').toUpperCase()}`;
@@ -1039,24 +1036,47 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       refundPlayerId: dto.refundPlayerId ?? null,
     });
 
-    // A refund comes off the member's credit in the same transaction that records it, so two
-    // refunds sent at once can't both spend it.
-    const payout = dto.refundPlayerId
-      ? await this.payoutsRepo.manager.transaction(async (tx) => {
-          const membership = await tx.findOne(GroupMembership, {
-            where: { groupId, playerId: dto.refundPlayerId },
-            lock: { mode: 'pessimistic_write' },
-          });
-          if (!membership) throw new BadRequestException("That player isn't in this group");
-          const credit = Number(membership.credit);
-          if (dto.amount > credit + 0.001) {
-            throw new BadRequestException(`They only have ${naira(credit)} credit to refund`);
-          }
-          membership.credit = (credit - dto.amount).toFixed(2);
-          await tx.save(membership);
-          return tx.save(draft);
-        })
-      : await this.payoutsRepo.save(draft);
+    // Checking the balance and recording the payout happen under a lock on the group row, so
+    // payouts sent at the same moment queue up: each one sees the ones before it (they count
+    // as soon as they're recorded) and two can't both spend the same money. A refund also
+    // comes off the member's credit inside the same transaction.
+    const payout = await this.payoutsRepo.manager.transaction(async (tx) => {
+      await tx.findOne(Group, { where: { id: groupId }, lock: { mode: 'pessimistic_write' } });
+
+      const balance = await this.getGroupBalance(groupId, organizationId);
+      if (dto.amount + PLATFORM_FEE > balance.available) {
+        throw new BadRequestException(`Insufficient balance. Available: ${naira(balance.available)} (includes ${naira(PLATFORM_FEE)} service fee)`);
+      }
+
+      // Platform daily limit: ₦10M per group
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { dailyTotal } = await this.payoutsRepo
+        .createQueryBuilder('p')
+        .select('COALESCE(SUM(p.amount), 0)', 'dailyTotal')
+        .where('p.groupId = :groupId', { groupId })
+        .andWhere('p.status != :cancelled', { cancelled: PayoutStatus.CANCELLED })
+        .andWhere('p.createdAt >= :todayStart', { todayStart })
+        .getRawOne();
+      if (Number(dailyTotal) + dto.amount > 10_000_000) {
+        throw new BadRequestException('Daily transfer limit (₦10,000,000) exceeded for this group');
+      }
+
+      if (dto.refundPlayerId) {
+        const membership = await tx.findOne(GroupMembership, {
+          where: { groupId, playerId: dto.refundPlayerId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!membership) throw new BadRequestException("That player isn't in this group");
+        const credit = Number(membership.credit);
+        if (dto.amount > credit + 0.001) {
+          throw new BadRequestException(`They only have ${naira(credit)} credit to refund`);
+        }
+        membership.credit = (credit - dto.amount).toFixed(2);
+        await tx.save(membership);
+      }
+      return tx.save(draft);
+    });
 
     try {
       const result = await this.pulse.transferOut({
