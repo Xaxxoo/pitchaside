@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CONTRIBUTIONS_VISIBILITY, Group } from './entities/group.entity';
 import { GroupMembership } from './entities/group-membership.entity';
-import { CreateGroupDto } from './dto/create-group.dto';
+import { CreateGroupDto, UpdateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 import { BillingService } from '../billing/billing.service';
@@ -69,9 +69,9 @@ export class GroupsService {
     return group;
   }
 
-  async update(id: string, dto: Partial<CreateGroupDto>, organizationId: string) {
+  async update(id: string, dto: UpdateGroupDto, organizationId: string) {
     const group = await this.findOne(id, organizationId);
-    // PATCH bodies are typed Partial<CreateGroupDto>, which the ValidationPipe can't see through.
+    // Also checked by UpdateGroupDto; kept for callers that don't go through the controller.
     if (dto.contributionsVisibility !== undefined && !CONTRIBUTIONS_VISIBILITY.includes(dto.contributionsVisibility)) {
       throw new BadRequestException('contributionsVisibility must be private, totals or names');
     }

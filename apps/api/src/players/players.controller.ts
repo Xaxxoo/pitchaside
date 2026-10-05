@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { PlayersService } from './players.service';
-import { CreatePlayerDto } from './dto/create-player.dto';
+import { CreatePlayerDto, UpdatePlayerDto } from './dto/create-player.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { toCsv } from '../common/csv.util';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -54,7 +54,7 @@ export class PlayersController {
   @Patch(':id')
   update(
     @Param('id') id: string,
-    @Body() dto: Partial<CreatePlayerDto>,
+    @Body() dto: UpdatePlayerDto,
     @CurrentUser() user: User,
   ) {
     return this.playersService.update(id, dto, user.organizationId);
