@@ -6,8 +6,8 @@ import { getMatchCard } from './match-card';
 
 export const dynamic = 'force-dynamic';
 
-function origin() {
-  const h = headers();
+async function origin() {
+  const h = await headers();
   const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
   const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') || /^\d/.test(host) ? 'http' : 'https');
   return `${proto}://${host}`;
@@ -19,10 +19,11 @@ function title(card: { groupName: string; awards: { key: string; name: string }[
 }
 
 /** The link shared to WhatsApp: its preview is the match card image. */
-export async function generateMetadata({ params }: { params: { token: string } }): Promise<Metadata> {
-  const card = await getMatchCard(params.token);
+export async function generateMetadata({ params }: { params: Promise<{ token: string }> }): Promise<Metadata> {
+  const { token } = await params;
+  const card = await getMatchCard(token);
   if (!card) return { title: 'PitchAside' };
-  const image = `${origin()}/share/${params.token}/image`;
+  const image = `${await origin()}/share/${token}/image`;
   const description = card.open
     ? `${card.ballots} of ${card.squadSize} have voted. Have your say on PitchAside.`
     : 'Final result on PitchAside.';
@@ -34,8 +35,9 @@ export async function generateMetadata({ params }: { params: { token: string } }
   };
 }
 
-export default async function SharePage({ params }: { params: { token: string } }) {
-  const card = await getMatchCard(params.token);
+export default async function SharePage({ params }: { params: Promise<{ token: string }> }) {
+  const { token } = await params;
+  const card = await getMatchCard(token);
   if (!card) notFound();
 
   return (
@@ -43,7 +45,7 @@ export default async function SharePage({ params }: { params: { token: string } 
       <div className="w-full max-w-sm">
         {/* eslint-disable-next-line @next/next/no-img-element -- generated PNG route */}
         <img
-          src={`/share/${params.token}/image`}
+          src={`/share/${token}/image`}
           alt={title(card)}
           width={1080}
           height={1350}
@@ -51,7 +53,7 @@ export default async function SharePage({ params }: { params: { token: string } 
         />
         <div className="mt-5 space-y-2">
           <Link
-            href={`/v/${params.token}`}
+            href={`/v/${token}`}
             className="block w-full py-3.5 text-center text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 transition-colors"
           >
             {card.open ? 'Played? Cast your votes' : 'See the full results'}

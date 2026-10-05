@@ -25,7 +25,7 @@ export default function PlayersPage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
-  const debounceTimer = useRef<ReturnType<typeof setTimeout>>();
+  const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   function fetchPlayers(p = page, s = debouncedSearch) {
     return getPlayersPaginated(p, 10, s || undefined)

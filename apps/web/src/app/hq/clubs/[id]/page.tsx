@@ -1,5 +1,6 @@
 'use client';
 
+import { use } from 'react';
 import { BackButton } from '@/components/back-button';
 import { PageHeader } from '@/components/brand';
 import { formatCurrency } from '@/lib/api';
@@ -23,7 +24,8 @@ const billingLabels: Record<string, string> = {
 
 const sessionTones = { upcoming: 'volt', completed: 'good', cancelled: 'muted' } as const;
 
-export default function HqClubPage({ params }: { params: { id: string } }) {
+export default function HqClubPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = use(paramsPromise);
   const { data: club, error } = useLoad(() => hq.club(params.id), [params.id]);
 
   if (error) {
