@@ -10,6 +10,9 @@ RUN cd apps/api && npx nest build
 
 FROM node:20-alpine
 WORKDIR /app
+# Production mode: no schema synchronize (migrations run at start-up instead), no stack traces
+# in error responses, Secure cookies. See src/main.ts.
+ENV NODE_ENV=production
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/packages/shared ./packages/shared
