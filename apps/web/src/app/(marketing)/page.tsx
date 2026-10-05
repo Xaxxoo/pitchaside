@@ -83,19 +83,19 @@ const testimonials = [
 const faqs = [
   {
     q: 'How much does PitchAside cost?',
-    a: 'Pricing details are coming soon. Sign up now to be first in line when we launch.',
+    a: 'Creating groups and managing players is free. We charge a flat \u20A6350 service fee on each payout you make from your group account.',
   },
   {
-    q: 'Does it handle actual payments?',
-    a: 'Not yet — PitchAside tracks who owes what and who has paid. You still collect payments however you prefer (cash, bank transfer, etc.).',
+    q: 'How do players pay?',
+    a: 'Each group gets its own dedicated bank account (Payrep MFB). Players transfer directly to it and payments are matched to them automatically \u2014 no more chasing people on WhatsApp.',
   },
   {
     q: 'Can I manage more than one group?',
-    a: 'Absolutely. Create as many groups as you need and manage them all from a single dashboard.',
+    a: 'Yes. Create as many groups as you need and manage them all from a single dashboard.',
   },
   {
-    q: 'Do my players need accounts?',
-    a: 'No. Only the organiser needs an account. Players are added by the organiser and don\'t need to sign up.',
+    q: 'Do my players need to sign up?',
+    a: 'Players get a link to join your group, set up their profile and see their own payment history. The organiser can also add players manually.',
   },
 ];
 
