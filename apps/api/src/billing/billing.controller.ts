@@ -14,6 +14,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { Request } from 'express';
 import { BillingService } from './billing.service';
 import {
@@ -31,6 +32,9 @@ import { AllowTreasurer } from '../auth/decorators/allow-treasurer.decorator';
 import { SkipCsrf } from '../auth/decorators/skip-csrf.decorator';
 import { User } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
+
+/** Routes that check the transfer PIN: on top of the per-account lockout, a per-client cap. */
+const PIN_RATE_LIMIT = { default: { ttl: 60_000, limit: 10 } };
 
 /** Admin endpoints for a group's account, invite link, transfers and payouts. */
 @UseGuards(JwtAuthGuard)
@@ -119,6 +123,8 @@ export class BillingController {
   }
 
   @Post('groups/:id/payouts')
+  @Throttle(PIN_RATE_LIMIT)
+  @UseGuards(ThrottlerGuard)
   initiatePayout(@Param('id') id: string, @Body() dto: InitiatePayoutDto, @CurrentUser() user: User) {
     return this.billing.initiateTransferOut(id, user.organizationId, user.id, dto);
   }
@@ -163,12 +169,16 @@ export class BillingController {
   }
 
   @Post('me/transfer-pin')
+  @Throttle(PIN_RATE_LIMIT)
+  @UseGuards(ThrottlerGuard)
   async setPin(@Body() dto: SetTransferPinDto, @CurrentUser() user: User) {
     await this.users.setTransferPin(user.id, dto.pin, dto.currentPin);
     return { success: true };
   }
 
   @Put('me/transfer-pin')
+  @Throttle(PIN_RATE_LIMIT)
+  @UseGuards(ThrottlerGuard)
   async changePin(@Body() dto: ChangeTransferPinDto, @CurrentUser() user: User) {
     await this.users.setTransferPin(user.id, dto.newPin, dto.currentPin);
     return { success: true };
