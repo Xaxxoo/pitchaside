@@ -1,5 +1,7 @@
 'use client';
 
+import { PlayerLevelPicker } from '@/components/player-level';
+import type { PlayerLevel } from '@pitchaside/shared';
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -48,6 +50,7 @@ export default function PlayerDetailPage() {
     lastName: '',
     phone: '',
     email: '',
+    level: 'average' as PlayerLevel,
   });
   const [saving, setSaving] = useState(false);
 
@@ -74,6 +77,7 @@ export default function PlayerDetailPage() {
       lastName: player.lastName,
       phone: player.phone || '',
       email: player.email || '',
+      level: player.level ?? 'average',
     });
     setEditing(true);
   }
@@ -86,6 +90,7 @@ export default function PlayerDetailPage() {
         lastName: editData.lastName.trim(),
         phone: editData.phone.trim() || null,
         email: editData.email.trim() || null,
+        level: editData.level,
       });
       const updated = await getPlayer(id);
       setPlayer(updated);
@@ -192,6 +197,7 @@ export default function PlayerDetailPage() {
               className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
             />
           </div>
+          <PlayerLevelPicker value={editData.level} onChange={(level) => setEditData({ ...editData, level })} />
           <div className="flex gap-3 pt-1">
             <button
               onClick={() => setEditing(false)}
@@ -232,6 +238,11 @@ export default function PlayerDetailPage() {
                 />
                 <Ball x={84} y={138} r={8} />
               </svg>
+              {ratings?.provisional && (
+                <p className="absolute bottom-1.5 inset-x-1.5 text-center rounded-md bg-black/45 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.12em] text-volt-300" title="Rating is still settling: fewer than 3 games with scores">
+                  Provisional
+                </p>
+              )}
             </div>
 
             <div className="min-w-0 flex flex-col">
@@ -269,8 +280,8 @@ export default function PlayerDetailPage() {
                   <AttributeRow ratings={ratings} dark />
                   <p className="text-[10px] text-white/40 mt-1.5">
                     {ratings.games > 0
-                      ? `From teammates' votes over ${ratings.games} game${ratings.games === 1 ? '' : 's'}${ratings.record.w + ratings.record.d + ratings.record.l ? ` · W${ratings.record.w} D${ratings.record.d} L${ratings.record.l}` : ''}${ratings.potmWins ? ` · ★ ${ratings.potmWins}× POTM` : ''}`
-                      : 'Ratings appear after their first voted game'}
+                      ? `From results and teammates' votes over ${ratings.games} game${ratings.games === 1 ? '' : 's'}${ratings.record.w + ratings.record.d + ratings.record.l ? ` · W${ratings.record.w} D${ratings.record.d} L${ratings.record.l}` : ''}${ratings.potmWins ? ` · ★ ${ratings.potmWins}× POTM` : ''}`
+                      : 'Based on their level until they’ve played; results and votes take over'}
                   </p>
                 </div>
               )}

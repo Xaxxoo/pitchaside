@@ -29,7 +29,7 @@ export default function PlayerHomePage() {
   const r = home.ratings;
   const firstTable = home.tables.find((t) => t.me);
   const caption = [
-    firstTable?.me ? `#${firstTable.me.rank} in ${firstTable.groupName} · ${firstTable.me.points} pts` : 'Play and get votes to build your card',
+    firstTable?.me ? `#${firstTable.me.rank} in ${firstTable.groupName} · ${firstTable.me.points} pts` : 'Play, win and get votes to build your card',
     r.record.w + r.record.d + r.record.l ? `W${r.record.w} D${r.record.d} L${r.record.l}` : null,
     r.potmWins ? `★ ${r.potmWins} POTM` : null,
   ]

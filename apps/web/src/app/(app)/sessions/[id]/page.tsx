@@ -33,6 +33,12 @@ const statusStyles: Record<string, { bg: string; text: string }> = {
   cancelled: { bg: 'bg-kit-500', text: 'text-white' },
 };
 
+/** Today as YYYY-MM-DD in the browser's time zone. */
+function localToday() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
 export default function SessionDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -445,7 +451,7 @@ export default function SessionDetailPage() {
           {session.status === SessionStatus.UPCOMING && <TeamSheet sessionId={id} onChange={fetchSession} />}
           {session.status !== SessionStatus.CANCELLED && (
             <div id="lineup" className="scroll-mt-20">
-              <LineupCard sessionId={id} />
+              <LineupCard sessionId={id} matchDay={String(session.date).slice(0, 10) <= localToday()} />
             </div>
           )}
         </>

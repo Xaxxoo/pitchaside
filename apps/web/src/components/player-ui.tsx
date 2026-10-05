@@ -89,6 +89,11 @@ export function PlayerCardHero({
             />
             <Ball x={84} y={138} r={8} />
           </svg>
+          {ratings.provisional && (
+            <p className="absolute bottom-1.5 inset-x-1.5 text-center rounded-md bg-black/45 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.12em] text-volt-300" title="Rating is still settling: fewer than 3 games with scores">
+              Provisional
+            </p>
+          )}
         </div>
         <div className="min-w-0">
           <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-volt-300">Hi {firstName} 👋</p>
