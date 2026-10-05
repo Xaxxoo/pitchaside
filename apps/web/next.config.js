@@ -1,3 +1,5 @@
+const path = require('path');
+
 /**
  * Where the browser's /api/* calls are proxied to. It has to be an address
  * Vercel can reach from the public internet: the API's public URL, not
@@ -20,6 +22,9 @@ function apiOrigin() {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // The repo root (npm workspaces), so builds trace files from packages/shared and don't
+  // guess the root from whichever lockfile they find first.
+  outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@pitchaside/shared'],
   async headers() {
     return [
