@@ -4,7 +4,7 @@ import { MoreThan, Repository } from 'typeorm';
 import { Player } from './entities/player.entity';
 import { Payment } from '../payments/entities/payment.entity';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
-import { CreatePlayerDto } from './dto/create-player.dto';
+import { CreatePlayerDto, UpdatePlayerDto } from './dto/create-player.dto';
 import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 
 @Injectable()
@@ -62,7 +62,7 @@ export class PlayersService {
     return player;
   }
 
-  async update(id: string, dto: Partial<CreatePlayerDto>, organizationId: string) {
+  async update(id: string, dto: UpdatePlayerDto, organizationId: string) {
     const player = await this.findOne(id, organizationId);
     Object.assign(player, dto);
     return this.playersRepo.save(player);

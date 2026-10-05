@@ -12,6 +12,7 @@ import {
 import { GroupMembership } from '../../groups/entities/group-membership.entity';
 import { Payment } from '../../payments/entities/payment.entity';
 import { Organization } from '../../organizations/entities/organization.entity';
+import type { PlayerLevel } from '../../ratings/skill';
 
 /**
  * A player within one club (organisation). The same person can play for
@@ -36,6 +37,10 @@ export class Player {
 
   @Column({ nullable: true })
   email: string;
+
+  /** Level the organiser gave them before they'd played; seeds their skill rating (null = average). */
+  @Column({ type: 'varchar', length: 16, nullable: true })
+  level: PlayerLevel | null;
 
   @ManyToOne(() => Organization, (org) => org.players, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organization_id' })

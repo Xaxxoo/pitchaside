@@ -7,6 +7,8 @@ import { FormHero, FormShell, formCardClass } from '@/components/form-hero';
 import { Player, Ball, palette, skins } from '@/components/illustrations';
 import { useToast } from '@/components/toast';
 import { addMember, createPlayer, getGroups, type IGroupWithMembers } from '@/lib/api';
+import { PlayerLevelPicker } from '@/components/player-level';
+import type { PlayerLevel } from '@pitchaside/shared';
 
 type Errors = Record<string, string>;
 
@@ -37,6 +39,7 @@ export default function NewPlayerPage() {
   const [errors, setErrors] = useState<Errors>({});
   const [groups, setGroups] = useState<IGroupWithMembers[]>([]);
   const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [level, setLevel] = useState<PlayerLevel>('average');
 
   useEffect(() => {
     getGroups()
@@ -69,6 +72,7 @@ export default function NewPlayerPage() {
         lastName: (form.get('lastName') as string).trim(),
         email: (form.get('email') as string).trim() || undefined,
         phone: (form.get('phone') as string).trim() || undefined,
+        level,
       });
       // Registering adds them to the club; groups are separate memberships.
       const added = await Promise.allSettled(groupIds.map((groupId) => addMember(groupId, { playerId: player.id })));
@@ -165,6 +169,8 @@ export default function NewPlayerPage() {
           />
           {errors.phone && <p className="text-xs text-kit-600 mt-1">{errors.phone}</p>}
         </div>
+
+        <PlayerLevelPicker value={level} onChange={setLevel} />
 
         {groups.length > 0 && (
           <fieldset>

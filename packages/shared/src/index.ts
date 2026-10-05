@@ -58,8 +58,13 @@ export interface IPlayer {
   /** Optional contact number. Players sign in with their email. */
   phone?: string | null;
   email?: string | null;
+  /** Level the organiser gave them; seeds their skill rating (null = average). */
+  level?: PlayerLevel | null;
   createdAt: string;
 }
+
+/** How good a player is before they've played here: seeds their skill rating for team balancing. */
+export type PlayerLevel = 'beginner' | 'average' | 'good' | 'strong';
 
 export interface ISession {
   id: string;

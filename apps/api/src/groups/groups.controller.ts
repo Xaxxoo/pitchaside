@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { GroupsService } from './groups.service';
-import { CreateGroupDto } from './dto/create-group.dto';
+import { CreateGroupDto, UpdateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { toCsv } from '../common/csv.util';
@@ -53,7 +53,7 @@ export class GroupsController {
   @Patch(':id')
   update(
     @Param('id') id: string,
-    @Body() dto: Partial<CreateGroupDto>,
+    @Body() dto: UpdateGroupDto,
     @CurrentUser() user: User,
   ) {
     return this.groupsService.update(id, dto, user.organizationId);

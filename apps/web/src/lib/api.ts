@@ -7,6 +7,7 @@ import type {
   PaymentType,
   PaymentStatus,
   MemberRole,
+  PlayerLevel,
 } from '@pitchaside/shared';
 import { http } from './http';
 
@@ -133,6 +134,7 @@ export function createPlayer(data: {
   lastName: string;
   email?: string;
   phone?: string;
+  level?: PlayerLevel;
 }): Promise<IPlayer> {
   return http.post<IPlayer>('/players', data);
 }
@@ -145,6 +147,7 @@ export function updatePlayer(
     /** null clears it. */
     phone: string | null;
     email: string | null;
+    level: PlayerLevel;
   }>,
 ): Promise<IPlayer> {
   return http.patch<IPlayer>(`/players/${id}`, data);
@@ -587,7 +590,7 @@ export interface TeamStanding {
 export interface Lineup {
   teamCount: number;
   /** `paid`: for this game, or for the dues period it falls in when dues cover games. */
-  squad: (SquadMember & { team: TeamKey | null; ovr: number | null; paid?: 'paid' | 'unpaid' | 'waived' })[];
+  squad: (SquadMember & { team: TeamKey | null; ovr: number | null; skill: number; paid?: 'paid' | 'unpaid' | 'waived' })[];
   games: MatchGame[];
   standings: TeamStanding[];
   teamOfTheDay: TeamKey | null;
@@ -703,6 +706,10 @@ export interface PlayerRatings {
   record: { w: number; d: number; l: number };
   teamOfDay: number;
   points: number;
+  /** Skill rating from match results (~1500 average); drives team balancing. */
+  skill: number;
+  /** Still settling: fewer than three scored games. */
+  provisional: boolean;
   ovr: number | null;
   attributes: Record<Attribute, number | null>;
 }

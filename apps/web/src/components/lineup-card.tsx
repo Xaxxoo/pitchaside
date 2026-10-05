@@ -63,7 +63,8 @@ function TeamPicker({ teams, value, onChange, exclude }: { teams: TeamKey[]; val
 }
 
 /** Match day: split the squad into 2–6 coloured sides, record each short game, crown the Team of the Day. */
-export function LineupCard({ sessionId }: { sessionId: string }) {
+/** `matchDay`: the game is today or has been played, so scores can be recorded. */
+export function LineupCard({ sessionId, matchDay = false }: { sessionId: string; matchDay?: boolean }) {
   const toast = useToast();
   const [lineup, setLineup] = useState<Lineup | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -228,6 +229,11 @@ export function LineupCard({ sessionId }: { sessionId: string }) {
       {/* Games */}
       <div className="border-t border-gray-100 p-4">
         <h3 className="text-base font-extrabold text-ink mb-3">Games</h3>
+        {matchDay && lineup.games.length === 0 && lineup.squad.some((m) => m.team) && (
+          <p className="mb-3 rounded-xl bg-volt-200 px-3 py-2.5 text-xs font-semibold text-ink">
+            ⚽ Add each game’s score below. Results keep “Balance by rating” fair and build everyone’s rating.
+          </p>
+        )}
 
         <div className="rounded-2xl bg-ink turf-stripes p-4">
           <div className="grid grid-cols-[1fr_auto_1fr] items-start gap-2">
