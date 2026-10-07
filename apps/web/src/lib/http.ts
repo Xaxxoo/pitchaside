@@ -7,7 +7,7 @@ const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
  * player app) being signed out as an organiser is normal, so a 401 there must
  * not throw the visitor onto the organiser sign-in page.
  */
-const ORGANISER_PAGES = /^\/(dashboard|groups|players|sessions|admin|settings|hq)(\/|$)/;
+const ORGANISER_PAGES = /^\/(dashboard|groups|players|sessions|competitions|admin|settings|hq)(\/|$)/;
 
 function getCsrfToken(): string | null {
   if (typeof document === 'undefined') return null;

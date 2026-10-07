@@ -35,6 +35,8 @@ import { ClubPerson, clubPlayerFor } from '../players/club-player';
 import { paidByTransfer, refundToCredit } from '../payments/credit';
 import { PERIODIC_TYPES, periodFor } from './periods';
 import { COVERED_BY_DUES, gameTarget, squadEntry } from '../payments/game-dues';
+import { Competition } from '../competitions/entities/competition.entity';
+import { CompetitionTeam, TeamRegistrationStatus } from '../competitions/entities/competition-team.entity';
 
 export { periodFor };
 
@@ -127,6 +129,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     @InjectRepository(Player) private playersRepo: Repository<Player>,
     @InjectRepository(BankTransfer) private transfersRepo: Repository<BankTransfer>,
     @InjectRepository(OutgoingTransfer) private payoutsRepo: Repository<OutgoingTransfer>,
+    @InjectRepository(Competition) private competitionsRepo: Repository<Competition>,
+    @InjectRepository(CompetitionTeam) private competitionTeamsRepo: Repository<CompetitionTeam>,
     @Inject(PULSE_CLIENT) private pulse: PulseClient,
     private paymentsService: PaymentsService,
     private notifications: NotificationsService,
@@ -591,6 +595,30 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       note('recorded');
       log(`credit of ${credit.amount} to ${credit.accountNumber} → ${result.status}${'duplicate' in result ? ' (duplicate)' : ''}`);
       return result;
+    }
+
+    // Money into a competition collection account.
+    if (credit) {
+      const comp = await this.competitionsRepo.createQueryBuilder('c')
+        .where('RIGHT(c.account_number, 10) = :acct', { acct: credit.accountNumber })
+        .getOne();
+      if (comp) {
+        const refMatch = credit.narration?.toUpperCase().match(/CP([A-F0-9]{8})/);
+        if (refMatch) {
+          const paymentRef = `CP${refMatch[1]}`;
+          const team = await this.competitionTeamsRepo.findOne({ where: { competitionId: comp.id, paymentRef } });
+          if (team && team.registrationStatus !== TeamRegistrationStatus.CONFIRMED) {
+            team.registrationStatus = TeamRegistrationStatus.CONFIRMED;
+            team.paidAt = new Date();
+            await this.competitionTeamsRepo.save(team);
+            log(`competition payment: ${paymentRef} confirmed for ${comp.name}`);
+          }
+        }
+        const result = await this.recordTransfer(credit);
+        note('recorded');
+        log(`competition credit of ${credit.amount} to ${credit.accountNumber} → ${result.status}`);
+        return result;
+      }
     }
 
     // Otherwise it may be news about one of our payouts, matched by reference.

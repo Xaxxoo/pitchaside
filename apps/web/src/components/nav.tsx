@@ -60,6 +60,23 @@ const tabs = [
       </svg>
     ),
   },
+  {
+    label: 'Cups',
+    href: '/competitions',
+    icon: (active: boolean) => (
+      <svg className="w-5 h-5" fill={active ? 'currentColor' : 'none'} viewBox="0 0 24 24" strokeWidth={active ? 0 : 1.5} stroke="currentColor">
+        {active ? (
+          <path d="M11.25 2.25h1.5v.75h4.5a.75.75 0 0 1 .75.75v2.25a3.75 3.75 0 0 1-3.254 3.72A4.504 4.504 0 0 1 12.75 12.6v2.15h2.5a.75.75 0 0 1 .75.75v1.5h1.25a.75.75 0 0 1 .75.75v2.25a.75.75 0 0 1-.75.75H6.75a.75.75 0 0 1-.75-.75v-2.25a.75.75 0 0 1 .75-.75H8v-1.5a.75.75 0 0 1 .75-.75h2.5V12.6a4.504 4.504 0 0 1-1.996-2.88A3.75 3.75 0 0 1 6 5.97V3.75a.75.75 0 0 1 .75-.75h4.5v-.75Z" />
+        ) : (
+          <>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M16.5 18v-1.5h-9V18m9 0h1.5v2.25H6V18h1.5m9 0H7.5" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 14.25v-2.5m0 0A3.75 3.75 0 0 0 15.75 8V3.75h-7.5V8A3.75 3.75 0 0 0 12 11.75Z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25H18a2.25 2.25 0 0 1 0 4.5h-.75m-9-4.5H6a2.25 2.25 0 0 0 0 4.5h.75" />
+          </>
+        )}
+      </svg>
+    ),
+  },
 ];
 
 const adminTab = {

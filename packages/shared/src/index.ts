@@ -195,3 +195,123 @@ export interface IGroupBalance {
   totalOut: number;
   available: number;
 }
+
+// ── Competitions ──
+
+export enum CompetitionFormat {
+  KNOCKOUT = 'knockout',
+  LEAGUE = 'league',
+}
+
+export enum CompetitionScope {
+  NATIONWIDE = 'nationwide',
+  STATE = 'state',
+  CITY = 'city',
+}
+
+export enum CompetitionStatus {
+  DRAFT = 'draft',
+  REGISTRATION_OPEN = 'registration_open',
+  REGISTRATION_CLOSED = 'registration_closed',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+}
+
+export enum CompetitionVisibility {
+  PUBLIC = 'public',
+  INVITE_ONLY = 'invite_only',
+}
+
+export enum MatchStatus {
+  SCHEDULED = 'scheduled',
+  IN_PROGRESS = 'in_progress',
+  COMPLETED = 'completed',
+  CANCELLED = 'cancelled',
+  WALKOVER = 'walkover',
+}
+
+export enum TeamRegistrationStatus {
+  PENDING_PAYMENT = 'pending_payment',
+  CONFIRMED = 'confirmed',
+  WITHDRAWN = 'withdrawn',
+  DISQUALIFIED = 'disqualified',
+}
+
+export interface ICompetition {
+  id: string;
+  name: string;
+  description?: string;
+  format: CompetitionFormat;
+  scope: CompetitionScope;
+  state?: string;
+  city?: string;
+  visibility: CompetitionVisibility;
+  status: CompetitionStatus;
+  entryFee: number;
+  maxTeams: number;
+  minPlayersPerTeam: number;
+  maxPlayersPerTeam: number;
+  registrationDeadline?: string;
+  startDate?: string;
+  endDate?: string;
+  rules?: string;
+  inviteCode?: string;
+  accountNumber?: string;
+  accountName?: string;
+  bankName?: string;
+  createdByUserId: string;
+  organizationId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ICompetitionTeam {
+  id: string;
+  competitionId: string;
+  name: string;
+  captainName: string;
+  captainPhone: string;
+  captainEmail?: string;
+  registrationStatus: TeamRegistrationStatus;
+  paidAt?: string;
+  seed?: number;
+  paymentRef?: string;
+  createdAt: string;
+}
+
+export interface ICompetitionMatch {
+  id: string;
+  competitionId: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  homeTeam?: ICompetitionTeam;
+  awayTeam?: ICompetitionTeam;
+  round: number;
+  matchNumber: number;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  venue?: string;
+  homeScore?: number;
+  awayScore?: number;
+  homePenalties?: number;
+  awayPenalties?: number;
+  winnerId?: string;
+  status: MatchStatus;
+  notes?: string;
+  createdAt: string;
+}
+
+export interface ICompetitionStanding {
+  position: number;
+  teamId: string;
+  team: ICompetitionTeam;
+  played: number;
+  won: number;
+  drawn: number;
+  lost: number;
+  goalsFor: number;
+  goalsAgainst: number;
+  goalDifference: number;
+  points: number;
+}

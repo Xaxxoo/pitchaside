@@ -22,6 +22,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { RsvpModule } from './rsvp/rsvp.module';
 import { PlayerPortalModule } from './player-portal/player-portal.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { CompetitionsModule } from './competitions/competitions.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 
 @Module({
@@ -59,6 +60,7 @@ import { LoggerMiddleware } from './common/middleware/logger.middleware';
     RsvpModule,
     PlayerPortalModule,
     RemindersModule,
+    CompetitionsModule,
   ],
   providers: [
     {

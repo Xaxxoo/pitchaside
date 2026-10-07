@@ -8,6 +8,14 @@ import type {
   PaymentStatus,
   MemberRole,
   PlayerLevel,
+  ICompetition,
+  ICompetitionTeam,
+  ICompetitionMatch,
+  ICompetitionStanding,
+  CompetitionFormat,
+  CompetitionScope,
+  CompetitionVisibility,
+  CompetitionStatus,
 } from '@pitchaside/shared';
 import { http } from './http';
 
@@ -740,4 +748,151 @@ export function getBallot(token: string): Promise<Ballot> {
 
 export function getVoteResults(token: string): Promise<VoteResults> {
   return http.get(`/public/votes/${token}/results`);
+}
+
+// ── Competitions (organiser) ──
+
+export type CompetitionWithCount = ICompetition & { teamCount?: number };
+
+export function getCompetitions(page = 1, limit = 10): Promise<PaginatedResponse<ICompetition>> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  return http.get<PaginatedResponse<ICompetition>>(`/competitions?${params}`);
+}
+
+export function getCompetition(id: string): Promise<CompetitionWithCount> {
+  return http.get<CompetitionWithCount>(`/competitions/${id}`);
+}
+
+export function createCompetition(data: {
+  name: string;
+  description?: string;
+  format: CompetitionFormat;
+  scope: CompetitionScope;
+  state?: string;
+  city?: string;
+  visibility?: CompetitionVisibility;
+  entryFee?: number;
+  maxTeams?: number;
+  minPlayersPerTeam?: number;
+  maxPlayersPerTeam?: number;
+  registrationDeadline?: string;
+  startDate?: string;
+  endDate?: string;
+  rules?: string;
+}): Promise<ICompetition> {
+  return http.post<ICompetition>('/competitions', data);
+}
+
+export function updateCompetition(id: string, data: Partial<Parameters<typeof createCompetition>[0]>): Promise<ICompetition> {
+  return http.patch<ICompetition>(`/competitions/${id}`, data);
+}
+
+export function deleteCompetition(id: string): Promise<void> {
+  return http.delete<void>(`/competitions/${id}`);
+}
+
+export function updateCompetitionStatus(id: string, status: CompetitionStatus): Promise<ICompetition> {
+  return http.post<ICompetition>(`/competitions/${id}/status`, { status });
+}
+
+export function provisionCompetitionAccount(id: string): Promise<ICompetition> {
+  return http.post<ICompetition>(`/competitions/${id}/account`);
+}
+
+export function generateFixtures(id: string): Promise<ICompetitionMatch[]> {
+  return http.post<ICompetitionMatch[]>(`/competitions/${id}/generate-fixtures`);
+}
+
+export function getCompetitionTeams(id: string): Promise<ICompetitionTeam[]> {
+  return http.get<ICompetitionTeam[]>(`/competitions/${id}/teams`);
+}
+
+export function confirmTeamPayment(competitionId: string, teamId: string): Promise<ICompetitionTeam> {
+  return http.post<ICompetitionTeam>(`/competitions/${competitionId}/teams/${teamId}/confirm`);
+}
+
+export function removeCompetitionTeam(competitionId: string, teamId: string): Promise<void> {
+  return http.delete<void>(`/competitions/${competitionId}/teams/${teamId}`);
+}
+
+export function getCompetitionMatches(id: string): Promise<ICompetitionMatch[]> {
+  return http.get<ICompetitionMatch[]>(`/competitions/${id}/matches`);
+}
+
+export function recordMatchResult(
+  competitionId: string,
+  matchId: string,
+  data: { homeScore: number; awayScore: number; homePenalties?: number; awayPenalties?: number },
+): Promise<ICompetitionMatch> {
+  return http.post<ICompetitionMatch>(`/competitions/${competitionId}/matches/${matchId}/result`, data);
+}
+
+export function updateMatchSchedule(
+  competitionId: string,
+  matchId: string,
+  data: { scheduledDate?: string; scheduledTime?: string; venue?: string },
+): Promise<ICompetitionMatch> {
+  return http.patch<ICompetitionMatch>(`/competitions/${competitionId}/matches/${matchId}`, data);
+}
+
+export function getCompetitionStandings(id: string): Promise<ICompetitionStanding[]> {
+  return http.get<ICompetitionStanding[]>(`/competitions/${id}/standings`);
+}
+
+export function getCompetitionBracket(id: string): Promise<{ rounds: Record<number, ICompetitionMatch[]> }> {
+  return http.get(`/competitions/${id}/bracket`);
+}
+
+// ── Competitions (public) ──
+
+export function browseCompetitions(
+  filters?: { scope?: CompetitionScope; state?: string; city?: string },
+  page = 1,
+  limit = 10,
+): Promise<PaginatedResponse<ICompetition>> {
+  const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+  if (filters?.scope) params.set('scope', filters.scope);
+  if (filters?.state) params.set('state', filters.state);
+  if (filters?.city) params.set('city', filters.city);
+  return http.get<PaginatedResponse<ICompetition>>(`/public/competitions?${params}`);
+}
+
+export function getPublicCompetition(id: string): Promise<CompetitionWithCount> {
+  return http.get<CompetitionWithCount>(`/public/competitions/${id}`);
+}
+
+export function getCompetitionByInvite(code: string): Promise<ICompetition> {
+  return http.get<ICompetition>(`/public/competitions/invite/${code}`);
+}
+
+export function registerTeam(
+  competitionId: string,
+  data: { name: string; captainName: string; captainPhone: string; captainEmail?: string },
+): Promise<ICompetitionTeam> {
+  return http.post<ICompetitionTeam>(`/public/competitions/${competitionId}/register`, data);
+}
+
+export function getPublicCompetitionTeams(id: string): Promise<ICompetitionTeam[]> {
+  return http.get<ICompetitionTeam[]>(`/public/competitions/${id}/teams`);
+}
+
+export function getPublicCompetitionMatches(id: string): Promise<ICompetitionMatch[]> {
+  return http.get<ICompetitionMatch[]>(`/public/competitions/${id}/matches`);
+}
+
+export function getPublicCompetitionStandings(id: string): Promise<ICompetitionStanding[]> {
+  return http.get<ICompetitionStanding[]>(`/public/competitions/${id}/standings`);
+}
+
+export function getPublicCompetitionBracket(id: string): Promise<{ rounds: Record<number, ICompetitionMatch[]> }> {
+  return http.get(`/public/competitions/${id}/bracket`);
+}
+
+export interface NigerianStateData {
+  name: string;
+  cities: string[];
+}
+
+export function getNigerianStates(): Promise<NigerianStateData[]> {
+  return http.get<NigerianStateData[]>('/public/nigerian-states');
 }

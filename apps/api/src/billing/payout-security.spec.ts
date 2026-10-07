@@ -56,7 +56,9 @@ function setup(bankIn: number) {
 
   const service = new BillingService(
     { findOne: async () => group } as any, {} as any, {} as any, {} as any, {} as any, {} as any,
-    payoutsRepo as any, pulse, {} as any, {} as any, usersService as any,
+    payoutsRepo as any,
+    {} as any, {} as any,
+    pulse, {} as any, {} as any, usersService as any,
     { get: (_key: string, fallback?: unknown) => fallback } as any,
   );
   jest.spyOn(service, 'getGroupBalance').mockImplementation(async () => {

@@ -46,6 +46,7 @@ describe('releaseTransferDues', () => {
     const paymentsService = { recalculateSessionTotal: jest.fn() };
     const service = new BillingService(
       {} as any, {} as any, {} as any, paymentsRepo as any, {} as any, {} as any, {} as any,
+      {} as any, {} as any,
       new MockPulseClient('secret'), paymentsService as any, {} as any, {} as any, {} as any,
     );
     const applyCredits = jest.spyOn(service, 'applyCredits').mockResolvedValue(undefined);

@@ -16,6 +16,7 @@ function setup(recordedIn = 0, recordedOut = 0, recordedByHand = 0) {
     groupsRepo as any, {} as any, {} as any, {} as any, {} as any,
     { createQueryBuilder: qbFor({ totalIn: recordedIn, manualIn: recordedByHand }) } as any,
     { createQueryBuilder: qbFor({ totalOut: recordedOut }) } as any,
+    {} as any, {} as any,
     pulse, {} as any, {} as any, {} as any, {} as any,
   );
   return { service };
