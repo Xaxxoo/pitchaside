@@ -479,23 +479,23 @@ export default function GroupDetailPage() {
       <div className="flex p-1 bg-white border border-gray-200 rounded-2xl mb-4">
         <button
           onClick={() => setTab('members')}
-          className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors ${
+          className={`flex-1 px-1 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap rounded-xl transition-colors ${
             tab === 'members' ? 'bg-ink text-volt-300' : 'text-gray-500 hover:text-ink'
           }`}
         >
-          Members ({memberCount})
+          Members<span className="hidden sm:inline"> ({memberCount})</span>
         </button>
         <button
           onClick={() => setTab('sessions')}
-          className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors ${
+          className={`flex-1 px-1 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap rounded-xl transition-colors ${
             tab === 'sessions' ? 'bg-ink text-volt-300' : 'text-gray-500 hover:text-ink'
           }`}
         >
-          {group.paymentType === PaymentType.PER_SESSION ? 'Sessions' : 'Dues'} ({sessions.length})
+          {group.paymentType === PaymentType.PER_SESSION ? 'Sessions' : 'Dues'}<span className="hidden sm:inline"> ({sessions.length})</span>
         </button>
         <button
           onClick={() => setTab('table')}
-          className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors ${
+          className={`flex-1 px-1 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap rounded-xl transition-colors ${
             tab === 'table' ? 'bg-ink text-volt-300' : 'text-gray-500 hover:text-ink'
           }`}
         >
@@ -503,20 +503,20 @@ export default function GroupDetailPage() {
         </button>
         <button
           onClick={() => setTab('transfers')}
-          className={`relative flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors ${
+          className={`relative flex-1 px-1 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap rounded-xl transition-colors ${
             tab === 'transfers' ? 'bg-ink text-volt-300' : 'text-gray-500 hover:text-ink'
           }`}
         >
           Transfers
           {billing && billing.unmatchedTransfers > 0 && (
-            <span className="absolute top-1 right-2 min-w-5 h-5 px-1 rounded-full bg-kit-500 text-white text-[10px] font-extrabold flex items-center justify-center">
+            <span className="absolute -top-2 right-0 sm:top-1 sm:right-2 min-w-5 h-5 px-1 rounded-full bg-kit-500 text-white text-[10px] font-extrabold flex items-center justify-center">
               {billing.unmatchedTransfers}
             </span>
           )}
         </button>
         <button
           onClick={() => setTab('payouts')}
-          className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors ${
+          className={`flex-1 px-1 py-2.5 text-xs sm:text-sm font-bold whitespace-nowrap rounded-xl transition-colors ${
             tab === 'payouts' ? 'bg-ink text-volt-300' : 'text-gray-500 hover:text-ink'
           }`}
         >

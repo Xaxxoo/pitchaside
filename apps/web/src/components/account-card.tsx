@@ -11,11 +11,16 @@ function useCopy() {
   const [copied, setCopied] = useState<string | null>(null);
   return {
     copied,
-    copy(key: string, text: string) {
-      navigator.clipboard.writeText(text).then(() => {
-        setCopied(key);
-        setTimeout(() => setCopied((c) => (c === key ? null : c)), 1800);
-      });
+    /** Resolves false when the browser won't copy (no clipboard access, or not over https). */
+    copy(key: string, text: string): Promise<boolean> {
+      return (navigator.clipboard?.writeText(text) ?? Promise.reject()).then(
+        () => {
+          setCopied(key);
+          setTimeout(() => setCopied((c) => (c === key ? null : c)), 1800);
+          return true;
+        },
+        () => false,
+      );
     },
   };
 }
@@ -28,12 +33,15 @@ function PaidSheet({
   groupId,
   account,
   amount,
+  copied,
   onClose,
   onClaimed,
 }: {
   groupId: string;
   account: GroupAccount;
   amount: number;
+  /** Whether the account number made it to the clipboard on the way here. */
+  copied: boolean;
   onClose: () => void;
   onClaimed?: (status: 'matched' | 'waiting') => void;
 }) {
@@ -83,7 +91,7 @@ function PaidSheet({
         Have you made the transfer?
       </h2>
       <p className="text-sm text-gray-600 mt-2">
-        Account number copied. Send it to <span className="font-bold text-ink">{account.bankName}</span>{' '}
+        {copied ? 'Account number copied. ' : ''}Send it to <span className="font-bold text-ink">{account.bankName}</span>{' '}
         <span className="font-bold text-ink tabular-nums">{formatAccountNumber(account.accountNumber)}</span>, then tap
         &ldquo;Yes&rdquo; so we can match it to you.
       </p>
@@ -141,7 +149,7 @@ export function PayIntoCard({
   onClaimed?: (status: 'matched' | 'waiting') => void;
 }) {
   const { copied, copy } = useCopy();
-  const [asking, setAsking] = useState(false);
+  const [asking, setAsking] = useState<{ copied: boolean } | null>(null);
   if (!account) {
     return (
       <div className="rounded-3xl bg-chalk border border-gray-200 p-5 text-sm text-gray-600">
@@ -163,10 +171,11 @@ export function PayIntoCard({
           </span>
         </div>
         <button
-          onClick={() => {
-            copy('acct', account.accountNumber);
-            if (claim) setAsking(true);
-          }}
+          onClick={() =>
+            copy('acct', account.accountNumber).then((ok) => {
+              if (claim) setAsking({ copied: ok });
+            })
+          }
           className="group mt-4 flex items-center gap-3 text-left w-full"
         >
           <span className="font-display text-[30px] font-extrabold tracking-[0.06em] tabular-nums leading-none">
@@ -195,7 +204,7 @@ export function PayIntoCard({
 
         {claim && (
           <button
-            onClick={() => setAsking(true)}
+            onClick={() => setAsking({ copied: false })}
             className="mt-3 w-full py-2.5 text-sm font-bold text-white bg-white/10 rounded-xl hover:bg-white/20 transition-colors"
           >
             I&apos;ve paid
@@ -207,7 +216,8 @@ export function PayIntoCard({
           groupId={claim.groupId}
           account={account}
           amount={claim.amount}
-          onClose={() => setAsking(false)}
+          copied={asking.copied}
+          onClose={() => setAsking(null)}
           onClaimed={onClaimed}
         />
       )}
