@@ -113,7 +113,13 @@ export default function GroupLinkPage() {
           </div>
 
           <div className="mt-6">
-            <PayIntoCard account={joined.account} fee={joined.feePerPlayer} paymentType={joined.paymentType} reference={joined.paymentRef} />
+            <PayIntoCard
+              account={joined.account}
+              fee={joined.feePerPlayer}
+              paymentType={joined.paymentType}
+              reference={joined.paymentRef}
+              claim={{ groupId: joined.groupId, amount: joined.feePerPlayer }}
+            />
           </div>
 
           <ol className="mt-6 space-y-3">

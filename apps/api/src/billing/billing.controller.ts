@@ -99,6 +99,13 @@ export class BillingController {
     return this.billing.assignTransfer(id, dto.paymentId, user.organizationId);
   }
 
+  /** Give an unmatched transfer to the player whose "I've paid" it matches. */
+  @AllowTreasurer()
+  @Post('transfers/:id/claims/:claimId/accept')
+  acceptClaim(@Param('id') id: string, @Param('claimId') claimId: string, @CurrentUser() user: User) {
+    return this.billing.acceptClaim(id, claimId, user.organizationId);
+  }
+
   @AllowTreasurer()
   @Post('transfers/:id/ignore')
   ignore(@Param('id') id: string, @CurrentUser() user: User) {

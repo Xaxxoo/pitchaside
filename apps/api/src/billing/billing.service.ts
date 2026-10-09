@@ -10,7 +10,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThanOrEqual, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Group, PaymentType } from '../groups/entities/group.entity';
 import { GroupMembership, MemberRole } from '../groups/entities/group-membership.entity';
@@ -22,6 +22,8 @@ import { normaliseWebhookUrl, webhookUrlsFor } from './webhook-url';
 import { PaymentsService } from '../payments/payments.service';
 import { BankTransfer, TransferStatus } from './entities/bank-transfer.entity';
 import { OutgoingTransfer, PayoutStatus } from './entities/outgoing-transfer.entity';
+import { ClaimStatus, PaymentClaim } from './entities/payment-claim.entity';
+import { CLAIM_WINDOW_MS, AMOUNT_TOLERANCE, claimForTransfer, couldPair, transferForClaim } from './claims';
 import { IncomingTransfer, PULSE_CLIENT, PulseClient } from './pulse/pulse.client';
 import { HttpPulseClient } from './pulse/http-pulse.client';
 import { MockPulseClient } from './pulse/mock-pulse.client';
@@ -136,6 +138,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     private notifications: NotificationsService,
     private usersService: UsersService,
     private config: ConfigService,
+    @InjectRepository(PaymentClaim) private claimsRepo: Repository<PaymentClaim>,
   ) {}
 
   // ── Lifecycle: open new dues periods as time rolls over ──
@@ -510,6 +513,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
     return {
       alreadyMember,
+      groupId: group.id,
       firstName: player.firstName,
       paymentRef: membership.paymentRef,
       ...(await this.getPublicGroup(group.inviteCode)),
@@ -695,9 +699,96 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
         transfer.narration = ref + (transfer.narration ? ` ${transfer.narration}` : '');
       }
       await this.transfersRepo.save(transfer);
+    } else {
+      await this.pairWithClaim(transfer);
     }
     if (transfer.status === TransferStatus.UNMATCHED) notifyUnmatched();
     return { received: true, status: transfer.status };
+  }
+
+  // ── "Yes, I've paid": pairing transfers with players' confirmations ──
+
+  /**
+   * Gives an unmatched transfer to a player and credits them. The status flips first, in
+   * one conditional update, so a transfer can't be given away twice by callers racing.
+   */
+  private async settleTransfer(transfer: BankTransfer, playerId: string, status: TransferStatus): Promise<boolean> {
+    const { affected } = await this.transfersRepo.update(
+      { id: transfer.id, status: TransferStatus.UNMATCHED },
+      { status, playerId },
+    );
+    if (!affected) return false;
+    const { settled } = await this.applyCredit(transfer.groupId, playerId, Number(transfer.amount));
+    transfer.status = status;
+    transfer.playerId = playerId;
+    transfer.paymentId = settled[0]?.id ?? (null as unknown as string);
+    const ref = await this.getPlayerRef(transfer.groupId, playerId);
+    if (ref && !transfer.narration?.includes(ref)) {
+      transfer.narration = ref + (transfer.narration ? ` ${transfer.narration}` : '');
+    }
+    await this.transfersRepo.save(transfer);
+    return true;
+  }
+
+  /** What's still open around a moment: pending claims and unmatched transfers that could pair. */
+  private openAround(groupId: string, at: Date) {
+    // Twice the window: a pair can sit a full window either side of something that's itself a window away.
+    const since = new Date(at.getTime() - 2 * CLAIM_WINDOW_MS);
+    return Promise.all([
+      this.claimsRepo.find({ where: { groupId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(since) } }),
+      this.transfersRepo.find({ where: { groupId, status: TransferStatus.UNMATCHED, receivedAt: MoreThanOrEqual(since) } }),
+    ]);
+  }
+
+  /** A transfer nobody's reference or name matched: is it the one a player said they'd sent? */
+  private async pairWithClaim(transfer: BankTransfer) {
+    const [claims, unmatched] = await this.openAround(transfer.groupId, transfer.receivedAt);
+    const claim = claimForTransfer(transfer, claims, unmatched);
+    if (claim && (await this.settleTransfer(transfer, claim.playerId, TransferStatus.MATCHED))) {
+      await this.claimsRepo.update(claim.id, { status: ClaimStatus.MATCHED, transferId: transfer.id });
+    }
+  }
+
+  /**
+   * A player tapped "Yes, I've paid". Pairs it with their transfer if that's already in and
+   * unambiguous; otherwise it waits for the transfer, and the organiser sees it as a suggestion.
+   */
+  async claimPayment(groupId: string, playerId: string, amount: number): Promise<{ status: 'matched' | 'waiting' }> {
+    if (!(amount > 0)) throw new BadRequestException('Enter the amount you sent');
+    // A second tap for the same payment reuses the first rather than looking like two.
+    const recent = await this.claimsRepo.findOne({
+      where: { groupId, playerId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(new Date(Date.now() - 10 * 60 * 1000)) },
+      order: { createdAt: 'DESC' },
+    });
+    const claim =
+      recent && Math.abs(Number(recent.amount) - amount) <= AMOUNT_TOLERANCE
+        ? recent
+        : await this.claimsRepo.save(this.claimsRepo.create({ groupId, playerId, amount }));
+
+    const [claims, unmatched] = await this.openAround(groupId, claim.createdAt);
+    const transfer = transferForClaim(claim, unmatched, claims);
+    if (transfer && (await this.settleTransfer(transfer, playerId, TransferStatus.MATCHED))) {
+      await this.claimsRepo.update(claim.id, { status: ClaimStatus.MATCHED, transferId: transfer.id });
+      return { status: 'matched' };
+    }
+    return { status: 'waiting' };
+  }
+
+  /** The organiser picks which player's "I've paid" an unmatched transfer belongs to. */
+  async acceptClaim(transferId: string, claimId: string, organizationId: string) {
+    const transfer = await this.findTransfer(transferId, organizationId);
+    if (transfer.status !== TransferStatus.UNMATCHED) {
+      throw new BadRequestException('This transfer has already been handled');
+    }
+    const claim = await this.claimsRepo.findOne({
+      where: { id: claimId, groupId: transfer.groupId, status: ClaimStatus.PENDING },
+    });
+    if (!claim) throw new NotFoundException('That confirmation has already been used');
+    if (!(await this.settleTransfer(transfer, claim.playerId, TransferStatus.ASSIGNED))) {
+      throw new BadRequestException('This transfer has already been handled');
+    }
+    await this.claimsRepo.update(claim.id, { status: ClaimStatus.MATCHED, transferId: transfer.id });
+    return { status: transfer.status };
   }
 
   /** Look up a player's PA reference for a given group membership. */
@@ -859,12 +950,36 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
   async listTransfers(groupId: string, organizationId: string) {
     await this.findGroup(groupId, organizationId);
-    return this.transfersRepo.find({
+    const transfers = await this.transfersRepo.find({
       where: { groupId },
       relations: ['payment', 'payment.player', 'payment.session', 'player'],
       order: { receivedAt: 'DESC' },
       take: 200,
     });
+    if (!transfers.some((t) => t.status === TransferStatus.UNMATCHED)) return transfers;
+
+    // Players who said "I've paid" around the time of an unmatched transfer, for the organiser to pick from.
+    const claims = await this.claimsRepo.find({
+      where: { groupId, status: ClaimStatus.PENDING },
+      relations: ['player'],
+      order: { createdAt: 'DESC' },
+      take: 200,
+    });
+    return transfers.map((t) =>
+      t.status === TransferStatus.UNMATCHED
+        ? {
+            ...t,
+            claims: claims
+              .filter((c) => couldPair(c, t))
+              .map((c) => ({
+                id: c.id,
+                amount: Number(c.amount),
+                createdAt: c.createdAt,
+                player: { id: c.player.id, firstName: c.player.firstName, lastName: c.player.lastName },
+              })),
+          }
+        : t,
+    );
   }
 
   async assignTransfer(transferId: string, paymentId: string, organizationId: string) {

@@ -160,6 +160,7 @@ export function changeMyPassword(currentPassword: string, newPassword: string) {
 }
 
 export type JoinResult = PublicGroup & {
+  groupId: string;
   paymentRef: string;
   firstName: string;
   alreadyMember: boolean;
@@ -276,6 +277,11 @@ export interface GroupKitty {
 
 export function getPlayerPayments() {
   return request<PlayerPayments>('GET', '/me/payments');
+}
+
+/** "Yes, I've paid": matched now if the transfer is already in, otherwise when it lands. */
+export function claimPayment(groupId: string, amount: number) {
+  return request<{ status: 'matched' | 'waiting' }>('POST', `/me/groups/${groupId}/paid`, { amount });
 }
 
 export interface PlayerProfile {

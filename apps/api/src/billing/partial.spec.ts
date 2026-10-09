@@ -22,7 +22,7 @@ function setup(dues: number[], credit = 0) {
   const service = new BillingService(
     {} as any, membershipsRepo as any, {} as any, paymentsRepo as any, {} as any, transfersRepo as any, {} as any,
     {} as any, {} as any,
-    new MockPulseClient('secret'), paymentsService as any, notifications as any, {} as any, {} as any,
+    new MockPulseClient('secret'), paymentsService as any, notifications as any, {} as any, {} as any, {} as any,
   );
   return { service, membership, payments };
 }

@@ -9,6 +9,7 @@ import { Sheet } from '@/components/sheet';
 import { EmptyState } from '@/components/empty-state';
 import { BallIcon } from '@/components/illustrations';
 import {
+  acceptTransferClaim,
   assignTransfer,
   formatCurrency,
   getGroupTransfers,
@@ -893,6 +894,37 @@ export function TransfersPanel({
                 {(open || t.status === 'unmatched') && (
                   <div className="px-4 pb-4 -mt-1 space-y-1.5 text-xs text-gray-600">
                     {open && <TransferDetails t={t} />}
+                    {t.status === 'unmatched' && t.claims && t.claims.length > 0 && (
+                      <div className="pt-1 space-y-1.5">
+                        <p className="font-bold text-ink">Said they&apos;ve paid</p>
+                        {t.claims.map((c) => {
+                          const name = `${c.player.firstName} ${c.player.lastName}`;
+                          return (
+                            <div key={c.id} className="flex items-center justify-between gap-2 rounded-xl bg-volt-100 px-3 py-2">
+                              <span className="min-w-0">
+                                <span className="block font-bold text-ink truncate">{name}</span>
+                                <span className="block text-[11px] text-gray-600">
+                                  {formatCurrency(c.amount)} ·{' '}
+                                  {new Date(c.createdAt).toLocaleString('en-GB', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </span>
+                              </span>
+                              <button
+                                disabled={workingId === t.id}
+                                onClick={() => run(t.id, () => acceptTransferClaim(t.id, c.id), `Matched to ${name}`)}
+                                className="px-3 py-2 text-xs font-bold text-volt-300 bg-ink rounded-lg hover:bg-pitch-900 disabled:opacity-40 transition-colors shrink-0"
+                              >
+                                Match
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                     {t.status === 'unmatched' && (
                       <div className="pt-1 flex flex-col sm:flex-row gap-2">
                         <select

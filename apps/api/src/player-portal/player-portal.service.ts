@@ -335,6 +335,12 @@ export class PlayerPortalService {
     return player;
   }
 
+  async claimPayment(person: Person, groupId: string, amount: number) {
+    const membership = await this.membershipsRepo.findOne({ where: { groupId, playerId: In(this.ids(person)) } });
+    if (!membership) throw new ForbiddenException("You're not in this group");
+    return this.billing.claimPayment(groupId, membership.playerId, amount);
+  }
+
   async setRsvp(person: Person, sessionId: string, status: 'in' | 'out') {
     const player = await this.playerForSession(person, sessionId);
     return this.rsvp.setByPlayer(sessionId, player.id, status);
