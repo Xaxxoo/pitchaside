@@ -99,7 +99,7 @@ export default function BrowseCompetitionsPage() {
               {competitions.map((comp) => (
                 <Link
                   key={comp.id}
-                  href={`/competitions/${comp.id}`}
+                  href={`/tournaments/${comp.id}`}
                   className="bg-white rounded-2xl border border-gray-200 p-4 hover:shadow-lg transition-shadow"
                 >
                   <div className="flex items-start justify-between gap-3">
