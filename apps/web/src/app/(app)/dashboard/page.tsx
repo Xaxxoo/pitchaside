@@ -68,6 +68,8 @@ export default function Dashboard() {
   // Most organisers run one team: their account sits right on the home page.
   const [billing, setBilling] = useState<GroupBilling | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
+  // Several groups: each one's balance, by group id.
+  const [balances, setBalances] = useState<Record<string, number>>({});
   const router = useRouter();
   const toast = useToast();
   // Treasurers can look but not change anything.
@@ -86,6 +88,12 @@ export default function Dashboard() {
         if (g.length === 1) {
           getGroupBilling(g[0].id).then(setBilling).catch(() => {});
           getGroupBalance(g[0].id).then((b) => setBalance(b.available)).catch(() => {});
+        } else {
+          for (const group of g.filter((x) => x.accountNumber)) {
+            getGroupBalance(group.id)
+              .then((b) => setBalances((prev) => ({ ...prev, [group.id]: b.available })))
+              .catch(() => {});
+          }
         }
       })
       .catch(() => {})
@@ -416,9 +424,14 @@ export default function Dashboard() {
                   <div key={g.id} className="flex items-center gap-3 rounded-2xl bg-chalk px-3 py-2.5">
                     <Link href={`/groups/${g.id}`} className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-ink truncate">{g.name}</p>
+                      {g.accountNumber && (
+                        <p className="font-display text-xl font-extrabold text-ink tabular-nums leading-tight mt-0.5">
+                          {g.id in balances ? formatCurrency(balances[g.id]) : '—'}
+                        </p>
+                      )}
                       {g.accountNumber ? (
                         <p className="text-xs text-gray-500 truncate">
-                          <span className="font-display font-extrabold text-ink tracking-[0.04em] tabular-nums">
+                          <span className="font-bold tracking-[0.04em] tabular-nums">
                             {formatAccountNumber(g.accountNumber)}
                           </span>{' '}
                           · {g.bankName}
