@@ -237,26 +237,25 @@ export function GroupAccountCard({
 
           {account ? (
             <>
+              {/* What's come in is what organisers check; the number is for sharing, so it sits below. */}
+              <p className="mt-5 text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/60">Balance</p>
+              <p className="font-display text-[40px] sm:text-5xl font-extrabold text-volt-300 tabular-nums leading-none mt-1.5">
+                {balance != null ? formatCurrency(balance) : '—'}
+              </p>
+
               <button
                 onClick={() => copy(account.accountNumber, toast, 'Account number')}
-                className="group mt-5 flex items-center gap-3 text-left"
+                className="group mt-4 flex w-fit items-center gap-2 rounded-xl bg-white/10 px-3 py-2 text-left hover:bg-white/15 transition-colors"
                 title="Copy account number"
               >
-                <span className="font-display text-[32px] sm:text-4xl font-extrabold tracking-[0.06em] tabular-nums leading-none">
+                <span className="text-base font-extrabold tracking-[0.06em] tabular-nums leading-none">
                   {formatAccountNumber(account.accountNumber)}
                 </span>
-                <span className="p-2 rounded-lg bg-white/10 text-white/70 group-hover:bg-volt-400 group-hover:text-ink transition-colors">
+                <span className="text-white/60 group-hover:text-volt-300 transition-colors">
                   <CopyIcon />
                 </span>
               </button>
-              <p className="text-sm text-white/60 mt-2 truncate">{account.accountName}</p>
-
-              {balance != null && (
-                <div className="mt-4 flex w-fit items-baseline gap-2 rounded-xl bg-white/10 px-3 py-2">
-                  <span className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-white/60">Balance</span>
-                  <span className="font-display text-2xl font-extrabold text-volt-300 tabular-nums leading-none">{formatCurrency(balance)}</span>
-                </div>
-              )}
+              <p className="text-xs text-white/60 mt-1.5 truncate">{account.accountName}</p>
 
               {billing.currentPeriod && (
                 <p className="mt-4 inline-flex items-center gap-2 text-xs text-white/70">
