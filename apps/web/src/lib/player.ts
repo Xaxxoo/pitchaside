@@ -254,6 +254,20 @@ export function getPlayerGames() {
   return request<{ upcoming: UpcomingGame[]; recent: RecentMatchDay[] }>('GET', '/me/games');
 }
 
+export type GamePlayer = { name: string; me: boolean };
+
+/** One game's own page: the game card plus where it is and who's playing. */
+export type PlayerGame = UpcomingGame & {
+  status: 'upcoming' | 'completed' | 'cancelled';
+  location: string | null;
+  playing: GamePlayer[];
+  waitlistNames: GamePlayer[];
+};
+
+export function getPlayerGame(id: string) {
+  return request<PlayerGame>('GET', `/me/games/${id}`);
+}
+
 export interface PlayerPayments {
   owed: PlayerHome['owed'];
   paid: { id: string; amount: number; groupName: string; label: string | null; date: string; paidAt: string | null; viaTransfer: boolean }[];

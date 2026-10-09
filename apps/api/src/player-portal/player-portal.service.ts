@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThanOrEqual, MoreThanOrEqual, Not, Repository } from 'typeorm';
 import { Player } from '../players/entities/player.entity';
@@ -82,27 +82,78 @@ export class PlayerPortalService {
     for (const g of games) {
       const board = await this.rsvp.board(g);
       const payment = myPayments.find((p) => p.sessionId === g.id);
-      result.push({
-        id: g.id,
-        date: g.date,
-        groupId: g.groupId,
-        groupName: g.group.name,
-        schedule: g.group.schedule,
-        kickoffTime: kickoffFor(g),
-        requireRsvp: g.group.requireRsvp,
-        myStatus: statuses.get(g.id) ?? null,
-        waitlistPosition: board.waitlist.findIndex((p) => ids.includes(p.id)) + 1 || null,
-        confirmed: board.in.length,
-        capacity: board.capacity,
-        waitlist: board.waitlist.length,
-        payment: payment ? { status: payment.status, amount: Number(payment.amount) } : null,
-        // Match day: players pick the bib they're handed.
-        bibsOpen: !!payment && g.date.slice(0, 10) <= localDate(0),
-        myTeam: payment?.team ?? null,
-        teamCount: g.teamCount,
-      });
+      result.push(this.gameCard(g, ids, statuses.get(g.id) ?? null, board, payment));
     }
     return result;
+  }
+
+  /** One upcoming game as the player's game card shows it. */
+  private gameCard(
+    g: Session,
+    ids: string[],
+    myStatus: string | null,
+    board: Awaited<ReturnType<RsvpService['board']>>,
+    payment: Payment | undefined,
+  ) {
+    return {
+      id: g.id,
+      date: g.date,
+      groupId: g.groupId,
+      groupName: g.group.name,
+      schedule: g.group.schedule,
+      kickoffTime: kickoffFor(g),
+      requireRsvp: g.group.requireRsvp,
+      myStatus,
+      waitlistPosition: board.waitlist.findIndex((p) => ids.includes(p.id)) + 1 || null,
+      confirmed: board.in.length,
+      capacity: board.capacity,
+      waitlist: board.waitlist.length,
+      payment: payment ? { status: payment.status, amount: Number(payment.amount) } : null,
+      // Match day: players pick the bib they're handed.
+      bibsOpen: !!payment && g.date.slice(0, 10) <= localDate(0),
+      myTeam: payment?.team ?? null,
+      teamCount: g.teamCount,
+    };
+  }
+
+  /**
+   * A game's own page for a player: their game card plus where it is and who's playing.
+   * With RSVPs on, "playing" is who said they're in; otherwise it's the game's squad.
+   */
+  async game(person: Person, sessionId: string) {
+    const ids = this.ids(person);
+    const g = await this.sessionsRepo.findOne({ where: { id: sessionId, kind: SessionKind.GAME }, relations: ['group'] });
+    if (!g) throw new NotFoundException('Game not found');
+    const member = ids.length
+      ? await this.membershipsRepo.findOne({ where: { groupId: g.groupId, playerId: In(ids) } })
+      : null;
+    if (!member) throw new ForbiddenException("You're not in this group");
+
+    const [board, statuses, squad] = await Promise.all([
+      this.rsvp.board(g),
+      this.rsvp.statusesForMany(ids, [g.id]),
+      this.paymentsRepo.find({ where: { sessionId: g.id }, relations: ['player'] }),
+    ]);
+    const payment = squad.find((p) => ids.includes(p.playerId));
+    const named = (p: { id: string; firstName: string; lastName: string }) => ({
+      name: `${p.firstName} ${p.lastName}`.trim(),
+      me: ids.includes(p.id),
+    });
+    // Without RSVPs everyone in the squad plays, except anyone who's said they can't make it.
+    const out = new Set(board.out.map((p) => p.id));
+    const playing = g.group.requireRsvp
+      ? board.in
+      : squad.filter((p) => p.player && !out.has(p.playerId)).map((p) => p.player);
+    const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+
+    return {
+      ...this.gameCard(g, ids, statuses.get(g.id) ?? null, board, payment),
+      status: g.status,
+      location: g.group.location ?? null,
+      playing: playing.map(named).sort(byName),
+      // Waitlist stays in the order people joined it: that's who gets the next spot.
+      waitlistNames: board.waitlist.map(named),
+    };
   }
 
   private async owed(person: Person) {
