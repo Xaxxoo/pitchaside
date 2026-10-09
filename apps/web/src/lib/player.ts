@@ -160,6 +160,7 @@ export function changeMyPassword(currentPassword: string, newPassword: string) {
 }
 
 export type JoinResult = PublicGroup & {
+  groupId: string;
   paymentRef: string;
   firstName: string;
   alreadyMember: boolean;
@@ -278,6 +279,11 @@ export function getPlayerPayments() {
   return request<PlayerPayments>('GET', '/me/payments');
 }
 
+/** "Yes, I've paid": matched now if the transfer is already in, otherwise when it lands. */
+export function claimPayment(groupId: string, amount: number) {
+  return request<{ status: 'matched' | 'waiting' }>('POST', `/me/groups/${groupId}/paid`, { amount });
+}
+
 export interface PlayerProfile {
   player: PlayerHome['player'];
   organiser: Organiser;
@@ -344,9 +350,6 @@ export function subscribePlayerPush(sub: PushSubscriptionJSON) {
   return request('POST', '/me/push', sub);
 }
 
-export function testPlayerPush() {
-  return request<{ delivered: number; missed: number }>('POST', '/me/push/test');
-}
 
 export function unsubscribePlayerPush(endpoint: string) {
   return request('DELETE', '/me/push', { endpoint });

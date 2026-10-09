@@ -33,7 +33,7 @@ function setup(credit: number) {
     payoutsRepo as any,
     {} as any, {} as any,
     pulse, {} as any, {} as any, usersService as any,
-    { get: (_key: string, fallback?: unknown) => fallback } as any,
+    { get: (_key: string, fallback?: unknown) => fallback } as any, {} as any,
   );
   jest.spyOn(service, 'getGroupBalance').mockResolvedValue({ available: 50_000 } as any);
   const refund = (amount: number, refundPlayerId = 'p1') =>

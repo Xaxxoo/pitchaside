@@ -380,6 +380,15 @@ export interface BankTransfer {
   payment?: (IPayment & { player?: IPlayer; session?: ISession & { label?: string } }) | null;
   /** Who sent it, when known — also set when it only added to their credit. */
   player?: IPlayer | null;
+  /** Unmatched only: players who said "I've paid" a similar amount around then. */
+  claims?: TransferClaim[];
+}
+
+export interface TransferClaim {
+  id: string;
+  amount: number;
+  createdAt: string;
+  player: { id: string; firstName: string; lastName: string };
 }
 
 export interface PublicGroup {
@@ -439,6 +448,11 @@ export function recordManualTransfer(
 
 export function assignTransfer(transferId: string, paymentId: string): Promise<BankTransfer> {
   return http.post(`/transfers/${transferId}/assign`, { paymentId });
+}
+
+/** Give an unmatched transfer to the player whose "I've paid" it matches. */
+export function acceptTransferClaim(transferId: string, claimId: string): Promise<{ status: string }> {
+  return http.post(`/transfers/${transferId}/claims/${claimId}/accept`);
 }
 
 export function ignoreTransfer(transferId: string): Promise<BankTransfer> {
@@ -659,10 +673,6 @@ export function resendVerification(): Promise<{ message: string }> {
 
 export function subscribeOrganiserPush(sub: PushSubscriptionJSON) {
   return http.post('/push/subscribe', sub);
-}
-
-export function testOrganiserPush() {
-  return http.post<{ delivered: number; missed: number }>('/push/test');
 }
 
 // ── Post-match voting, ratings & league table ──

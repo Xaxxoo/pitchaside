@@ -6,7 +6,7 @@ import { Avatar } from '@/components/ratings';
 import { InstallCard, PushToggle } from '@/components/pwa';
 import { GameCard, PlayerCardHero, Section, niceDate } from '@/components/player-ui';
 import { formatCurrency } from '@/lib/api';
-import { getPlayerHome, subscribePlayerPush, testPlayerPush, type PlayerHome } from '@/lib/player';
+import { getPlayerHome, subscribePlayerPush, type PlayerHome } from '@/lib/player';
 
 export default function PlayerHomePage() {
   const [home, setHome] = useState<PlayerHome | null>(null);
@@ -45,7 +45,7 @@ export default function PlayerHomePage() {
 
       <div className="mt-4 space-y-2 md:hidden">
         <InstallCard />
-        <PushToggle save={subscribePlayerPush} test={testPlayerPush} />
+        <PushToggle save={subscribePlayerPush} />
       </div>
 
       {pendingVotes.length > 0 && (
@@ -97,7 +97,7 @@ export default function PlayerHomePage() {
       <div>
       <div className="hidden md:block space-y-2">
         <InstallCard />
-        <PushToggle save={subscribePlayerPush} test={testPlayerPush} />
+        <PushToggle save={subscribePlayerPush} />
       </div>
 
       <Link

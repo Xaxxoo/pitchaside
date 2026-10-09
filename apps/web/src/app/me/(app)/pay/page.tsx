@@ -9,9 +9,12 @@ import { getPlayerPayments, type GroupKitty, type PlayerPayments } from '@/lib/p
 export default function PlayerPayPage() {
   const [data, setData] = useState<PlayerPayments | null>(null);
 
+  const load = () => getPlayerPayments().then(setData).catch(() => {});
   useEffect(() => {
-    getPlayerPayments().then(setData).catch(() => {});
+    load();
   }, []);
+  // Matched straight away: refresh so the due moves to History.
+  const onClaimed = (status: 'matched' | 'waiting') => status === 'matched' && load();
 
   if (!data) {
     return (
@@ -60,7 +63,14 @@ export default function PlayerPayPage() {
                 </div>
               ))}
             </div>
-            <PayIntoCard account={g.account} fee={g.feePerPlayer} paymentType={g.paymentType} reference={g.paymentRef} />
+            <PayIntoCard
+              account={g.account}
+              fee={g.feePerPlayer}
+              paymentType={g.paymentType}
+              reference={g.paymentRef}
+              claim={{ groupId: g.id, amount: items.reduce((sum, o) => sum + o.amount, 0) }}
+              onClaimed={onClaimed}
+            />
           </Section>
         );
       })}
@@ -73,7 +83,14 @@ export default function PlayerPayPage() {
             {data.groups.map((g) => (
               <div key={g.id}>
                 <p className="text-xs font-bold text-gray-500 mb-1.5">{g.name}</p>
-                <PayIntoCard account={g.account} fee={g.feePerPlayer} paymentType={g.paymentType} reference={g.paymentRef} />
+                <PayIntoCard
+                  account={g.account}
+                  fee={g.feePerPlayer}
+                  paymentType={g.paymentType}
+                  reference={g.paymentRef}
+                  claim={{ groupId: g.id, amount: g.feePerPlayer }}
+                  onClaimed={onClaimed}
+                />
               </div>
             ))}
           </div>

@@ -105,17 +105,13 @@ const pushCopy: Record<PushState, string> = {
 /** Toggle row for push notifications. `save` stores the subscription for a player or an organiser. */
 export function PushToggle({
   save,
-  test,
   tone = 'light',
 }: {
   save: (sub: PushSubscriptionJSON) => Promise<unknown>;
-  test?: () => Promise<{ delivered: number; missed: number }>;
   tone?: 'light' | 'dark';
 }) {
   const [state, setState] = useState<PushState | null>(null);
   const [busy, setBusy] = useState(false);
-  const [testing, setTesting] = useState(false);
-  const [testMessage, setTestMessage] = useState<string | null>(null);
 
   useEffect(() => {
     getPushState().then(setState);
@@ -159,28 +155,7 @@ export function PushToggle({
           {busy ? '…' : state === 'ready' ? 'Finish setup' : 'Turn on'}
         </button>
       )}
-      {state === 'on' && test && (
-        <button
-          disabled={testing}
-          onClick={async () => {
-            setTesting(true);
-            setTestMessage(null);
-            try {
-              const result = await test();
-              setTestMessage(result.delivered > 0 ? 'Test sent — check your notifications.' : 'No active device subscription was reached.');
-            } catch {
-              setTestMessage('Could not send the test notification.');
-            } finally {
-              setTesting(false);
-            }
-          }}
-          className="px-3 py-2 text-xs font-bold text-ink bg-volt-400 rounded-lg shrink-0 disabled:opacity-50"
-        >
-          {testing ? '…' : 'Test'}
-        </button>
-      )}
       </div>
-      {testMessage && <p className="text-[11px] text-gray-500 mt-1.5 px-1" aria-live="polite">{testMessage}</p>}
     </>
   );
 }

@@ -59,7 +59,7 @@ function setup(bankIn: number) {
     payoutsRepo as any,
     {} as any, {} as any,
     pulse, {} as any, {} as any, usersService as any,
-    { get: (_key: string, fallback?: unknown) => fallback } as any,
+    { get: (_key: string, fallback?: unknown) => fallback } as any, {} as any,
   );
   jest.spyOn(service, 'getGroupBalance').mockImplementation(async () => {
     events.push('balance');

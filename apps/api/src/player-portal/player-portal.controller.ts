@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, Patch, Post, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { IsEmail, IsIn, IsObject, IsOptional, IsString, Length, Matches, MinLength } from 'class-validator';
+import { IsEmail, IsIn, IsNumber, IsObject, IsOptional, IsString, Length, Matches, Max, Min, MinLength } from 'class-validator';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { BillingService } from '../billing/billing.service';
@@ -27,6 +27,13 @@ export class RequestCodeDto {
 export class RsvpDto {
   @IsIn(['in', 'out'])
   status: 'in' | 'out';
+}
+
+export class ClaimPaymentDto {
+  @IsNumber({}, { message: 'Enter the amount you sent' })
+  @Min(1, { message: 'Enter the amount you sent' })
+  @Max(10_000_000)
+  amount: number;
 }
 
 export class PickTeamDto {
@@ -274,6 +281,12 @@ export class PlayerPortalController {
   @Post('games/:id/team')
   pickTeam(@Param('id') id: string, @Body() dto: PickTeamDto, @CurrentPerson() person: Person) {
     return this.portal.pickTeam(person, id, dto.team);
+  }
+
+  /** "Yes, I've paid": the player says they've transferred into this group's account. */
+  @Post('groups/:id/paid')
+  claimPayment(@Param('id') id: string, @Body() dto: ClaimPaymentDto, @CurrentPerson() person: Person) {
+    return this.portal.claimPayment(person, id, dto.amount);
   }
 
   @Post('sessions/:id/rsvp')

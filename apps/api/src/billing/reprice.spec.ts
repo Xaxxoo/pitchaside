@@ -18,7 +18,7 @@ function setup(sessions: any[], payments: any[]) {
   const service = new BillingService(
     {} as any, membershipsRepo as any, sessionsRepo as any, paymentsRepo as any, {} as any, {} as any, {} as any,
     {} as any, {} as any,
-    new MockPulseClient('secret'), paymentsService as any, {} as any, {} as any, {} as any,
+    new MockPulseClient('secret'), paymentsService as any, {} as any, {} as any, {} as any, {} as any,
   );
   const applyCredits = jest.spyOn(service, 'applyCredits').mockResolvedValue(undefined);
   return { service, sessionsRepo, paymentsRepo, applyCredits };
