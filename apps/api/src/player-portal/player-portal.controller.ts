@@ -261,6 +261,11 @@ export class PlayerPortalController {
     return this.portal.games(person);
   }
 
+  @Get('games/:id')
+  game(@Param('id') id: string, @CurrentPerson() person: Person) {
+    return this.portal.game(person, id);
+  }
+
   @Get('payments')
   payments(@CurrentPerson() person: Person) {
     return this.portal.payments(person);

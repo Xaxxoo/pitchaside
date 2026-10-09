@@ -108,7 +108,54 @@ export function PlayerCardHero({
   );
 }
 
-export function GameCard({ game, onChange }: { game: UpcomingGame; onChange: () => Promise<unknown> }) {
+/** A later game in the list: one tap opens its game day card. */
+export function GameRow({ game }: { game: UpcomingGame }) {
+  const d = new Date(game.date);
+  const time = prettyTime(game.kickoffTime);
+  const status =
+    game.myStatus === 'in'
+      ? { text: "You're in ✅", cls: 'text-pitch-600' }
+      : game.myStatus === 'waitlist'
+        ? { text: `Waitlist #${game.waitlistPosition ?? '–'}`, cls: 'text-amber-700' }
+        : game.myStatus === 'out'
+          ? { text: "You're out", cls: 'text-gray-500' }
+          : { text: 'Not replied', cls: 'text-gray-500' };
+  return (
+    <Link
+      href={`/me/games/${game.id}`}
+      className="flex items-center gap-3 bg-white rounded-2xl p-3 border border-gray-100 shadow-card hover:border-gray-300 transition-colors"
+    >
+      <span className="w-12 h-12 rounded-xl overflow-hidden shrink-0 border border-gray-200 text-center">
+        <span className="block bg-kit-500 text-white text-[9px] font-extrabold uppercase tracking-wider py-0.5">
+          {d.toLocaleDateString('en-GB', { month: 'short' })}
+        </span>
+        <span className="block font-display text-lg font-extrabold text-ink leading-7">{d.getDate()}</span>
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-bold text-ink truncate">{game.groupName}</span>
+        <span className="block text-xs text-gray-500 mt-0.5">
+          {niceDate(game.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+          {time ? ` · ${time}` : ''}
+        </span>
+      </span>
+      <span className={`text-[11px] font-extrabold whitespace-nowrap ${status.cls}`}>{status.text}</span>
+      <span className="text-gray-400" aria-hidden>
+        ›
+      </span>
+    </Link>
+  );
+}
+
+export function GameCard({
+  game,
+  onChange,
+  showDetails = true,
+}: {
+  game: UpcomingGame;
+  onChange: () => Promise<unknown>;
+  /** Link to the game's own page (who's playing); off on that page itself. */
+  showDetails?: boolean;
+}) {
   const toast = useToast();
   const [busy, setBusy] = useState<'in' | 'out' | null>(null);
   const full = game.confirmed >= game.capacity;
@@ -208,6 +255,12 @@ export function GameCard({ game, onChange }: { game: UpcomingGame; onChange: () 
           </>
         )}
       </div>
+
+      {showDetails && (
+        <Link href={`/me/games/${game.id}`} className="mt-3 block text-center text-xs font-bold text-pitch-600 hover:text-ink">
+          See who&apos;s playing ›
+        </Link>
+      )}
     </div>
   );
 }
