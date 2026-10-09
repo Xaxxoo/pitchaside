@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useToast } from '@/components/toast';
 import { ConfirmDialog } from '@/components/confirm-dialog';
@@ -44,6 +45,12 @@ const WhatsAppIcon = () => (
 const CopyIcon = () => (
   <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
     <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 0 1-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 0 1 1.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 0 0-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 0 1-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 0 0-3.375-3.375h-1.5a1.125 1.125 0 0 1-1.125-1.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H9.75" />
+  </svg>
+);
+
+const ReceiptIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
+    <path strokeLinecap="round" strokeLinejoin="round" d="M9 14.25h6m-6-3.75h6M6.75 3h10.5A.75.75 0 0 1 18 3.75v16.5l-2.25-1.5-2.25 1.5-1.5-1.5-1.5 1.5-2.25-1.5L6 20.25V3.75A.75.75 0 0 1 6.75 3Z" />
   </svg>
 );
 
@@ -99,6 +106,7 @@ export function GroupAccountCard({
   billing,
   balance,
   onChange,
+  onShowTransfers,
 }: {
   groupId: string;
   groupName: string;
@@ -107,6 +115,8 @@ export function GroupAccountCard({
   /** What's in the account now (the bank's figure when we can get it); null while unknown. */
   balance?: number | null;
   onChange: (b: GroupBilling) => void;
+  /** Opens the transfer history in place; without it the button goes to the group's Transfers tab. */
+  onShowTransfers?: () => void;
 }) {
   const toast = useToast();
   const { user, refreshUser } = useAuth();
@@ -245,13 +255,25 @@ export function GroupAccountCard({
                   <WhatsAppIcon />
                   Share details
                 </button>
-                <button
-                  onClick={() => copy(shareText, toast, 'Payment details')}
-                  className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 transition-colors"
+                <Link
+                  href={`/groups/${groupId}?tab=transfers`}
+                  onClick={
+                    onShowTransfers &&
+                    ((e) => {
+                      e.preventDefault();
+                      onShowTransfers();
+                    })
+                  }
+                  className="relative flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 transition-colors"
                 >
-                  <CopyIcon />
-                  Copy details
-                </button>
+                  <ReceiptIcon />
+                  Transfers
+                  {billing.unmatchedTransfers > 0 && (
+                    <span className="min-w-5 h-5 px-1 rounded-full bg-kit-500 text-white text-[10px] font-extrabold flex items-center justify-center">
+                      {billing.unmatchedTransfers}
+                    </span>
+                  )}
+                </Link>
               </div>
 
               <QrToggle
@@ -360,12 +382,31 @@ export function GroupAccountCard({
   );
 }
 
-const transferStyles: Record<BankTransfer['status'], string> = {
-  matched: 'bg-volt-300 text-ink',
-  assigned: 'bg-ink text-volt-300',
-  unmatched: 'bg-sun-400/25 text-amber-800',
-  ignored: 'bg-gray-100 text-gray-500',
+const transferStatus: Record<BankTransfer['status'], { label: string; text: string; avatar: string }> = {
+  matched: { label: 'Matched', text: 'text-pitch-600', avatar: 'bg-volt-300 text-ink' },
+  assigned: { label: 'Matched', text: 'text-pitch-600', avatar: 'bg-volt-300 text-ink' },
+  unmatched: { label: 'Needs matching', text: 'text-amber-700', avatar: 'bg-sun-400/30 text-amber-800' },
+  ignored: { label: 'Ignored', text: 'text-gray-400', avatar: 'bg-gray-100 text-gray-400' },
 };
+
+function initials(name?: string | null) {
+  const words = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  return words.length ? (words[0][0] + (words[1]?.[0] ?? '')).toUpperCase() : '₦';
+}
+
+/** "Today", "Yesterday", or e.g. "Wed, 7 Oct" — how bank apps head each day's transactions. */
+function dayLabel(date: Date) {
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(date)) / 86_400_000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return date.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== new Date().getFullYear() && { year: 'numeric' }),
+  });
+}
 
 /** Money received into the group account, with manual matching for the leftovers. */
 export function TransfersPanel({
@@ -390,6 +431,9 @@ export function TransfersPanel({
   const [simulating, setSimulating] = useState(false);
   const [rec, setRec] = useState({ amount: '', senderName: '', narration: '' });
   const [recording, setRecording] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<'all' | 'unmatched'>('all');
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
 
   useEffect(() => {
@@ -453,6 +497,7 @@ export function TransfersPanel({
       await onRefresh();
       toast.success('Transfer recorded');
       setRec({ amount: '', senderName: '', narration: '' });
+      setShowRecord(false);
     } catch (err: any) {
       toast.error(err.message || 'Could not record transfer');
     } finally {
@@ -462,6 +507,20 @@ export function TransfersPanel({
 
   const input =
     'w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
+
+  const counted = transfers.filter((t) => t.status !== 'ignored');
+  const received = counted.reduce((sum, t) => sum + Number(t.amount), 0);
+  const unmatchedCount = transfers.filter((t) => t.status === 'unmatched').length;
+  const shown = filter === 'unmatched' ? transfers.filter((t) => t.status === 'unmatched') : transfers;
+  // Newest first (the API's order), bucketed by calendar day.
+  const days: { label: string; total: number; items: BankTransfer[] }[] = [];
+  for (const t of shown) {
+    const label = dayLabel(new Date(t.receivedAt));
+    let day = days[days.length - 1];
+    if (!day || day.label !== label) days.push((day = { label, total: 0, items: [] }));
+    day.items.push(t);
+    if (t.status !== 'ignored') day.total += Number(t.amount);
+  }
 
   return (
     <div className="space-y-3">
@@ -522,49 +581,78 @@ export function TransfersPanel({
         </div>
       )}
 
-      <form onSubmit={handleRecord} className="bg-white rounded-3xl border border-gray-100 shadow-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <svg className="w-5 h-5 text-ink" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-          </svg>
-          <p className="text-sm font-bold text-ink">Record a transfer</p>
-        </div>
-        <p className="text-xs text-gray-500 -mt-1">
-          Manually log money that arrived but wasn&apos;t picked up by the webhook.
-        </p>
-        <div className="grid grid-cols-[110px_1fr] gap-2">
-          <input
-            type="number"
-            min={1}
-            placeholder="Amount"
-            value={rec.amount}
-            onChange={(e) => setRec({ ...rec, amount: e.target.value })}
-            className={input}
-            aria-label="Amount"
-          />
-          <input
-            placeholder="Sender name"
-            value={rec.senderName}
-            onChange={(e) => setRec({ ...rec, senderName: e.target.value })}
-            className={input}
-          />
-        </div>
-        <div className="flex gap-2">
-          <input
-            placeholder="Narration / reference"
-            value={rec.narration}
-            onChange={(e) => setRec({ ...rec, narration: e.target.value })}
-            className={input}
-          />
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-4">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-500">Transfer history</p>
+            <p className="font-display text-2xl font-extrabold text-ink tabular-nums mt-1">{formatCurrency(received)}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              received in {counted.length} transfer{counted.length === 1 ? '' : 's'}
+            </p>
+          </div>
           <button
-            type="submit"
-            disabled={recording || !Number(rec.amount)}
-            className="px-4 text-sm font-bold text-volt-300 bg-ink rounded-xl hover:bg-pitch-900 disabled:opacity-50 whitespace-nowrap transition-colors"
+            onClick={() => setShowRecord(!showRecord)}
+            className="px-3 py-2 text-xs font-bold text-ink bg-white border border-gray-200 rounded-xl hover:border-ink transition-colors whitespace-nowrap"
           >
-            {recording ? 'Saving…' : 'Record'}
+            {showRecord ? 'Close' : '+ Record a transfer'}
           </button>
         </div>
-      </form>
+        {transfers.length > 0 && (
+          <div className="flex gap-2 mt-4">
+            {(['all', 'unmatched'] as const).map((f) => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors ${
+                  filter === f ? 'bg-ink text-volt-300' : 'bg-gray-100 text-gray-600 hover:text-ink'
+                }`}
+              >
+                {f === 'all' ? 'All' : `Needs matching (${unmatchedCount})`}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {showRecord && (
+        <form onSubmit={handleRecord} className="bg-white rounded-3xl border border-gray-100 shadow-card p-4 space-y-3">
+          <p className="text-xs text-gray-500">
+            Manually log money that arrived but wasn&apos;t picked up by the webhook.
+          </p>
+          <div className="grid grid-cols-[110px_1fr] gap-2">
+            <input
+              type="number"
+              min={1}
+              placeholder="Amount"
+              value={rec.amount}
+              onChange={(e) => setRec({ ...rec, amount: e.target.value })}
+              className={input}
+              aria-label="Amount"
+            />
+            <input
+              placeholder="Sender name"
+              value={rec.senderName}
+              onChange={(e) => setRec({ ...rec, senderName: e.target.value })}
+              className={input}
+            />
+          </div>
+          <div className="flex gap-2">
+            <input
+              placeholder="Narration / reference"
+              value={rec.narration}
+              onChange={(e) => setRec({ ...rec, narration: e.target.value })}
+              className={input}
+            />
+            <button
+              type="submit"
+              disabled={recording || !Number(rec.amount)}
+              className="px-4 text-sm font-bold text-volt-300 bg-ink rounded-xl hover:bg-pitch-900 disabled:opacity-50 whitespace-nowrap transition-colors"
+            >
+              {recording ? 'Saving…' : 'Record'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {transfers.length === 0 ? (
         <EmptyState
@@ -572,76 +660,123 @@ export function TransfersPanel({
           title="No transfers yet"
           description="When players pay into the group account, their transfers show up here and are matched automatically."
         />
+      ) : days.length === 0 ? (
+        <p className="text-sm text-gray-500 text-center py-6">Every transfer is matched.</p>
       ) : (
-        transfers.map((t) => {
-          const from = t.payment?.player ?? t.player;
-          const who = from ? `${from.firstName} ${from.lastName}` : null;
-          return (
-            <div key={t.id} className="bg-white rounded-2xl border border-gray-100 shadow-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-display text-xl font-extrabold text-ink tabular-nums">{formatCurrency(Number(t.amount))}</p>
-                  <p className="text-xs text-gray-500 mt-0.5 truncate">
-                    {t.senderName || 'Unknown sender'}
-                    {t.narration ? ` · “${t.narration}”` : ''}
-                  </p>
-                  <p className="text-[11px] text-gray-500 mt-0.5">
-                    {new Date(t.receivedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-                <span className={`text-[10px] font-extrabold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0 ${transferStyles[t.status]}`}>
-                  {t.status}
-                </span>
-              </div>
-
-              {who && t.payment && (
-                <p className="mt-3 text-xs text-gray-600">
-                  Paid for <span className="font-bold text-ink">{who}</span>
-                  {t.payment.session?.label ? ` · ${t.payment.session.label}` : ''}
-                </p>
-              )}
-              {who && !t.payment && (
-                <p className="mt-3 text-xs text-gray-600">
-                  From <span className="font-bold text-ink">{who}</span> · less than a due, so it&apos;s held as their credit and
-                  pays their next due once it&apos;s enough
-                </p>
-              )}
-
-              {t.status === 'unmatched' && (
-                <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                  <select
-                    value={selection[t.id] ?? ''}
-                    onChange={(e) => setSelection({ ...selection, [t.id]: e.target.value })}
-                    className={`${input} flex-1`}
-                  >
-                    <option value="">Match to a pending payment…</option>
-                    {pendingOptions.map((o) => (
-                      <option key={o.id} value={o.id}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex gap-2">
-                    <button
-                      disabled={!selection[t.id] || workingId === t.id}
-                      onClick={() => run(t.id, () => assignTransfer(t.id, selection[t.id]), 'Payment matched')}
-                      className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-bold text-volt-300 bg-ink rounded-xl hover:bg-pitch-900 disabled:opacity-40 transition-colors"
-                    >
-                      Match
-                    </button>
-                    <button
-                      disabled={workingId === t.id}
-                      onClick={() => run(t.id, () => ignoreTransfer(t.id), 'Transfer ignored')}
-                      className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-ink disabled:opacity-40 transition-colors"
-                    >
-                      Ignore
-                    </button>
-                  </div>
-                </div>
-              )}
+        days.map((day) => (
+          <section key={day.label}>
+            <div className="flex items-baseline justify-between px-1 mb-1.5">
+              <h3 className="text-xs font-extrabold text-gray-500">{day.label}</h3>
+              <span className="text-[11px] font-bold text-gray-500 tabular-nums">In {formatCurrency(day.total)}</span>
             </div>
-          );
-        })
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
+              {day.items.map((t) => {
+                const from = t.payment?.player ?? t.player;
+                const who = from ? `${from.firstName} ${from.lastName}` : null;
+                const status = transferStatus[t.status];
+                const open = openId === t.id;
+                return (
+                  <div key={t.id}>
+                    <button
+                      onClick={() => setOpenId(open ? null : t.id)}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                      aria-expanded={open}
+                    >
+                      <span className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${status.avatar}`}>
+                        {initials(t.senderName || who)}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-ink truncate">
+                          Transfer from {t.senderName || who || 'unknown sender'}
+                        </span>
+                        <span className="block text-[11px] text-gray-500 mt-0.5 truncate">
+                          {new Date(t.receivedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                          {who && t.status !== 'unmatched' ? ` · ${who}` : ''}
+                        </span>
+                      </span>
+                      <span className="text-right shrink-0">
+                        <span
+                          className={`block text-sm font-extrabold tabular-nums ${
+                            t.status === 'ignored' ? 'text-gray-400 line-through' : 'text-pitch-600'
+                          }`}
+                        >
+                          +{formatCurrency(Number(t.amount))}
+                        </span>
+                        <span className={`block text-[11px] font-bold mt-0.5 ${status.text}`}>{status.label}</span>
+                      </span>
+                    </button>
+
+                    {(open || t.status === 'unmatched') && (
+                      <div className="px-4 pb-4 -mt-1 space-y-1.5 text-xs text-gray-600">
+                        {open && (
+                          <>
+                            <p>
+                              {new Date(t.receivedAt).toLocaleString('en-GB', {
+                                day: 'numeric',
+                                month: 'short',
+                                year: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </p>
+                            <p>
+                              Narration: <span className="text-ink">{t.narration ? `“${t.narration}”` : 'none'}</span>
+                            </p>
+                          </>
+                        )}
+                        {who && t.payment && (
+                          <p>
+                            Paid for <span className="font-bold text-ink">{who}</span>
+                            {t.payment.session?.label ? ` · ${t.payment.session.label}` : ''}
+                          </p>
+                        )}
+                        {who && !t.payment && t.status !== 'unmatched' && (
+                          <p>
+                            From <span className="font-bold text-ink">{who}</span> · less than a due, so it&apos;s held as their
+                            credit and pays their next due once it&apos;s enough
+                          </p>
+                        )}
+
+                        {t.status === 'unmatched' && (
+                          <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                            <select
+                              value={selection[t.id] ?? ''}
+                              onChange={(e) => setSelection({ ...selection, [t.id]: e.target.value })}
+                              className={`${input} flex-1`}
+                            >
+                              <option value="">Match to a pending payment…</option>
+                              {pendingOptions.map((o) => (
+                                <option key={o.id} value={o.id}>
+                                  {o.label}
+                                </option>
+                              ))}
+                            </select>
+                            <div className="flex gap-2">
+                              <button
+                                disabled={!selection[t.id] || workingId === t.id}
+                                onClick={() => run(t.id, () => assignTransfer(t.id, selection[t.id]), 'Payment matched')}
+                                className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-bold text-volt-300 bg-ink rounded-xl hover:bg-pitch-900 disabled:opacity-40 transition-colors"
+                              >
+                                Match
+                              </button>
+                              <button
+                                disabled={workingId === t.id}
+                                onClick={() => run(t.id, () => ignoreTransfer(t.id), 'Transfer ignored')}
+                                className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-ink disabled:opacity-40 transition-colors"
+                              >
+                                Ignore
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        ))
       )}
     </div>
   );

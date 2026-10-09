@@ -863,7 +863,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       where: { groupId },
       relations: ['payment', 'payment.player', 'payment.session', 'player'],
       order: { receivedAt: 'DESC' },
-      take: 50,
+      take: 200,
     });
   }
 

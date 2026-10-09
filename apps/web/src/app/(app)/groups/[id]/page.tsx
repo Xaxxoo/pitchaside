@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
@@ -63,6 +63,7 @@ export default function GroupDetailPage() {
   const [table, setTable] = useState<LeagueTable | null>(null);
   const [billing, setBilling] = useState<GroupBilling | null>(null);
   const [transfers, setTransfers] = useState<BankTransfer[]>([]);
+  const tabsRef = useRef<HTMLDivElement>(null);
   const [balance, setBalance] = useState<number | null>(null);
 
   // Add member state
@@ -467,11 +468,15 @@ export default function GroupDetailPage() {
           billing={billing}
           balance={balance}
           onChange={setBilling}
+          onShowTransfers={() => {
+            setTab('transfers');
+            tabsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }}
         />
       )}
 
       {/* Tabs */}
-      <div className="flex p-1 bg-white border border-gray-200 rounded-2xl mb-4">
+      <div ref={tabsRef} className="scroll-mt-4 flex p-1 bg-white border border-gray-200 rounded-2xl mb-4">
         <button
           onClick={() => setTab('members')}
           className={`flex-1 py-2.5 text-sm font-bold rounded-xl transition-colors ${
