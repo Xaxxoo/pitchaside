@@ -1,15 +1,17 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useToast } from '@/components/toast';
 import { ConfirmDialog } from '@/components/confirm-dialog';
+import { Sheet } from '@/components/sheet';
 import { EmptyState } from '@/components/empty-state';
 import { BallIcon } from '@/components/illustrations';
 import {
   assignTransfer,
   formatCurrency,
+  getGroupTransfers,
   getWebhookStatus,
   ignoreTransfer,
   provisionGroupAccount,
@@ -106,7 +108,7 @@ export function GroupAccountCard({
   billing,
   balance,
   onChange,
-  onShowTransfers,
+  onMatchTransfer,
 }: {
   groupId: string;
   groupName: string;
@@ -115,8 +117,8 @@ export function GroupAccountCard({
   /** What's in the account now (the bank's figure when we can get it); null while unknown. */
   balance?: number | null;
   onChange: (b: GroupBilling) => void;
-  /** Opens the transfer history in place; without it the button goes to the group's Transfers tab. */
-  onShowTransfers?: () => void;
+  /** Opens an unmatched transfer for matching; without it, goes to the group's Transfers tab. */
+  onMatchTransfer?: (transferId: string) => void;
 }) {
   const toast = useToast();
   const { user, refreshUser } = useAuth();
@@ -124,6 +126,8 @@ export function GroupAccountCard({
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [bvnInput, setBvnInput] = useState('');
   const [showBvnPrompt, setShowBvnPrompt] = useState(false);
+  const [showRecord, setShowRecord] = useState(false);
+  const router = useRouter();
   const account = billing.account;
 
   async function retryAccount() {
@@ -202,6 +206,19 @@ export function GroupAccountCard({
         onCancel={() => setConfirmRegen(false)}
       />
 
+      {showRecord && (
+        <TransferRecordSheet
+          groupId={groupId}
+          groupName={groupName}
+          onClose={() => setShowRecord(false)}
+          onMatch={(transferId) => {
+            setShowRecord(false);
+            if (onMatchTransfer) onMatchTransfer(transferId);
+            else router.push(`/groups/${groupId}?tab=transfers&transfer=${transferId}`);
+          }}
+        />
+      )}
+
       {/* Bank-card style account */}
       <div className="relative rounded-[28px] bg-ink text-white overflow-hidden shadow-lift">
         <div className="absolute inset-0 turf-stripes" />
@@ -255,16 +272,9 @@ export function GroupAccountCard({
                   <WhatsAppIcon />
                   Share details
                 </button>
-                <Link
-                  href={`/groups/${groupId}?tab=transfers`}
-                  onClick={
-                    onShowTransfers &&
-                    ((e) => {
-                      e.preventDefault();
-                      onShowTransfers();
-                    })
-                  }
-                  className="relative flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 transition-colors"
+                <button
+                  onClick={() => setShowRecord(true)}
+                  className="flex items-center justify-center gap-2 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 transition-colors"
                 >
                   <ReceiptIcon />
                   Transfers
@@ -273,7 +283,7 @@ export function GroupAccountCard({
                       {billing.unmatchedTransfers}
                     </span>
                   )}
-                </Link>
+                </button>
               </div>
 
               <QrToggle
@@ -408,6 +418,210 @@ function dayLabel(date: Date) {
   });
 }
 
+type TransferDay = { label: string; total: number; items: BankTransfer[] };
+
+/** Newest first (the API's order), bucketed by calendar day with what came in that day. */
+function groupByDay(transfers: BankTransfer[]): TransferDay[] {
+  const days: TransferDay[] = [];
+  for (const t of transfers) {
+    const label = dayLabel(new Date(t.receivedAt));
+    let day = days[days.length - 1];
+    if (!day || day.label !== label) days.push((day = { label, total: 0, items: [] }));
+    day.items.push(t);
+    if (t.status !== 'ignored') day.total += Number(t.amount);
+  }
+  return days;
+}
+
+function payerName(t: BankTransfer) {
+  const from = t.payment?.player ?? t.player;
+  return from ? `${from.firstName} ${from.lastName}` : null;
+}
+
+function TransferDayList({ days, children }: { days: TransferDay[]; children: (t: BankTransfer) => React.ReactNode }) {
+  return (
+    <>
+      {days.map((day) => (
+        <section key={day.label}>
+          <div className="flex items-baseline justify-between px-1 mb-1.5">
+            <h3 className="text-xs font-extrabold text-gray-500">{day.label}</h3>
+            <span className="text-[11px] font-bold text-gray-500 tabular-nums">In {formatCurrency(day.total)}</span>
+          </div>
+          <div className="bg-white rounded-2xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden text-left">
+            {day.items.map((t) => (
+              <div key={t.id} id={`transfer-${t.id}`} className="scroll-mt-24">
+                {children(t)}
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+/** One line of the history, laid out like a bank app's: who, when, +amount, status. */
+function TransferRow({
+  t,
+  onClick,
+  expanded,
+  statusLabel,
+}: {
+  t: BankTransfer;
+  onClick: () => void;
+  expanded?: boolean;
+  statusLabel?: string;
+}) {
+  const who = payerName(t);
+  const status = transferStatus[t.status];
+  return (
+    <button
+      onClick={onClick}
+      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+      aria-expanded={expanded}
+    >
+      <span className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${status.avatar}`}>
+        {initials(t.senderName || who)}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold text-ink line-clamp-2 break-words">Transfer from {t.senderName || who || 'unknown sender'}</span>
+        <span className="block text-[11px] text-gray-500 mt-0.5 truncate">
+          {new Date(t.receivedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+          {who && t.status !== 'unmatched' ? ` · ${who}` : ''}
+        </span>
+      </span>
+      <span className="text-right shrink-0">
+        <span
+          className={`block text-sm font-extrabold tabular-nums ${
+            t.status === 'ignored' ? 'text-gray-400 line-through' : 'text-pitch-600'
+          }`}
+        >
+          +{formatCurrency(Number(t.amount))}
+        </span>
+        <span className={`block text-[11px] font-bold mt-0.5 ${status.text}`}>{statusLabel ?? status.label}</span>
+      </span>
+    </button>
+  );
+}
+
+/** Date, narration and what the money paid for — shown when a row is opened. */
+function TransferDetails({ t }: { t: BankTransfer }) {
+  const who = payerName(t);
+  return (
+    <>
+      <p>
+        {new Date(t.receivedAt).toLocaleString('en-GB', {
+          day: 'numeric',
+          month: 'short',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        })}
+      </p>
+      <p>
+        Narration: <span className="text-ink">{t.narration ? `“${t.narration}”` : 'none'}</span>
+      </p>
+      {who && t.payment && (
+        <p>
+          Paid for <span className="font-bold text-ink">{who}</span>
+          {t.payment.session?.label ? ` · ${t.payment.session.label}` : ''}
+        </p>
+      )}
+      {who && !t.payment && t.status !== 'unmatched' && (
+        <p>
+          From <span className="font-bold text-ink">{who}</span> · less than a due, so it&apos;s held as their credit and pays
+          their next due once it&apos;s enough
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * Read-only record of every transfer into the group account, like a bank app's transaction
+ * history. Matching happens in the group's Transfers tab; unmatched rows hand off to it.
+ */
+function TransferRecordSheet({
+  groupId,
+  groupName,
+  onClose,
+  onMatch,
+}: {
+  groupId: string;
+  groupName: string;
+  onClose: () => void;
+  onMatch: (transferId: string) => void;
+}) {
+  const [transfers, setTransfers] = useState<BankTransfer[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  useEffect(() => {
+    getGroupTransfers(groupId).then(setTransfers, () => setFailed(true));
+  }, [groupId]);
+
+  const counted = (transfers ?? []).filter((t) => t.status !== 'ignored');
+  const received = counted.reduce((sum, t) => sum + Number(t.amount), 0);
+
+  return (
+    <Sheet titleId="transfer-record-title" onClose={onClose} align="left">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="transfer-record-title" className="font-display text-xl font-extrabold text-ink">
+            Transfer record
+          </h2>
+          <p className="text-xs text-gray-500 mt-0.5 truncate">{groupName}</p>
+        </div>
+        <button onClick={onClose} className="p-1.5 -mr-1.5 text-gray-400 hover:text-ink" aria-label="Close">
+          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {transfers && transfers.length > 0 && (
+        <p className="mt-3 text-sm text-gray-600">
+          <span className="font-display text-2xl font-extrabold text-ink tabular-nums">{formatCurrency(received)}</span>{' '}
+          in {counted.length} transfer{counted.length === 1 ? '' : 's'}
+        </p>
+      )}
+
+      <div className="mt-4 space-y-4">
+        {failed ? (
+          <p className="text-sm text-gray-500 py-6 text-center">Couldn&apos;t load transfers. Try again shortly.</p>
+        ) : !transfers ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-14 bg-gray-100 rounded-2xl animate-pulse" />
+            ))}
+          </div>
+        ) : transfers.length === 0 ? (
+          <p className="text-sm text-gray-500 py-6 text-center">
+            No transfers yet. When players pay into the group account, they show up here.
+          </p>
+        ) : (
+          <TransferDayList days={groupByDay(transfers)}>
+            {(t) =>
+              t.status === 'unmatched' ? (
+                <TransferRow t={t} onClick={() => onMatch(t.id)} statusLabel="Needs matching →" />
+              ) : (
+                <>
+                  <TransferRow t={t} onClick={() => setOpenId(openId === t.id ? null : t.id)} expanded={openId === t.id} />
+                  {openId === t.id && (
+                    <div className="px-4 pb-4 -mt-1 space-y-1.5 text-xs text-gray-600">
+                      <TransferDetails t={t} />
+                    </div>
+                  )}
+                </>
+              )
+            }
+          </TransferDayList>
+        )}
+      </div>
+    </Sheet>
+  );
+}
+
 /** Money received into the group account, with manual matching for the leftovers. */
 export function TransfersPanel({
   groupId,
@@ -416,6 +630,7 @@ export function TransfersPanel({
   sessions,
   mockMode,
   onRefresh,
+  focusId,
 }: {
   groupId: string;
   fee: number;
@@ -423,6 +638,8 @@ export function TransfersPanel({
   sessions: ISessionWithDetails[];
   mockMode: boolean;
   onRefresh: () => Promise<void>;
+  /** A transfer to open and scroll to, e.g. one tapped in the transfer record. */
+  focusId?: string | null;
 }) {
   const toast = useToast();
   const [selection, setSelection] = useState<Record<string, string>>({});
@@ -433,12 +650,24 @@ export function TransfersPanel({
   const [recording, setRecording] = useState(false);
   const [showRecord, setShowRecord] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<'all' | 'unmatched'>('all');
+  // Unset = matching first: show what needs matching while there is any.
+  const [filter, setFilter] = useState<'all' | 'unmatched' | null>(null);
   const [webhookStatus, setWebhookStatus] = useState<WebhookStatus | null>(null);
 
   useEffect(() => {
     if (!mockMode) getWebhookStatus().then(setWebhookStatus).catch(() => {});
   }, [mockMode]);
+
+  const focused = transfers.find((t) => t.id === focusId);
+  useEffect(() => {
+    if (!focused) return;
+    if (focused.status !== 'unmatched') setFilter('all');
+    setOpenId(focused.id);
+    // After the list has rendered with the row in it.
+    requestAnimationFrame(() =>
+      document.getElementById(`transfer-${focused.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  }, [focused]);
 
   const pendingOptions = sessions
     .filter((s) => s.status !== 'cancelled')
@@ -511,16 +740,8 @@ export function TransfersPanel({
   const counted = transfers.filter((t) => t.status !== 'ignored');
   const received = counted.reduce((sum, t) => sum + Number(t.amount), 0);
   const unmatchedCount = transfers.filter((t) => t.status === 'unmatched').length;
-  const shown = filter === 'unmatched' ? transfers.filter((t) => t.status === 'unmatched') : transfers;
-  // Newest first (the API's order), bucketed by calendar day.
-  const days: { label: string; total: number; items: BankTransfer[] }[] = [];
-  for (const t of shown) {
-    const label = dayLabel(new Date(t.receivedAt));
-    let day = days[days.length - 1];
-    if (!day || day.label !== label) days.push((day = { label, total: 0, items: [] }));
-    day.items.push(t);
-    if (t.status !== 'ignored') day.total += Number(t.amount);
-  }
+  const activeFilter = filter ?? (unmatchedCount > 0 ? 'unmatched' : 'all');
+  const days = groupByDay(activeFilter === 'unmatched' ? transfers.filter((t) => t.status === 'unmatched') : transfers);
 
   return (
     <div className="space-y-3">
@@ -604,7 +825,7 @@ export function TransfersPanel({
                 key={f}
                 onClick={() => setFilter(f)}
                 className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors ${
-                  filter === f ? 'bg-ink text-volt-300' : 'bg-gray-100 text-gray-600 hover:text-ink'
+                  activeFilter === f ? 'bg-ink text-volt-300' : 'bg-gray-100 text-gray-600 hover:text-ink'
                 }`}
               >
                 {f === 'all' ? 'All' : `Needs matching (${unmatchedCount})`}
@@ -663,120 +884,53 @@ export function TransfersPanel({
       ) : days.length === 0 ? (
         <p className="text-sm text-gray-500 text-center py-6">Every transfer is matched.</p>
       ) : (
-        days.map((day) => (
-          <section key={day.label}>
-            <div className="flex items-baseline justify-between px-1 mb-1.5">
-              <h3 className="text-xs font-extrabold text-gray-500">{day.label}</h3>
-              <span className="text-[11px] font-bold text-gray-500 tabular-nums">In {formatCurrency(day.total)}</span>
-            </div>
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
-              {day.items.map((t) => {
-                const from = t.payment?.player ?? t.player;
-                const who = from ? `${from.firstName} ${from.lastName}` : null;
-                const status = transferStatus[t.status];
-                const open = openId === t.id;
-                return (
-                  <div key={t.id}>
-                    <button
-                      onClick={() => setOpenId(open ? null : t.id)}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
-                      aria-expanded={open}
-                    >
-                      <span className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 ${status.avatar}`}>
-                        {initials(t.senderName || who)}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-bold text-ink truncate">
-                          Transfer from {t.senderName || who || 'unknown sender'}
-                        </span>
-                        <span className="block text-[11px] text-gray-500 mt-0.5 truncate">
-                          {new Date(t.receivedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                          {who && t.status !== 'unmatched' ? ` · ${who}` : ''}
-                        </span>
-                      </span>
-                      <span className="text-right shrink-0">
-                        <span
-                          className={`block text-sm font-extrabold tabular-nums ${
-                            t.status === 'ignored' ? 'text-gray-400 line-through' : 'text-pitch-600'
-                          }`}
+        <TransferDayList days={days}>
+          {(t) => {
+            const open = openId === t.id;
+            return (
+              <>
+                <TransferRow t={t} onClick={() => setOpenId(open ? null : t.id)} expanded={open} />
+                {(open || t.status === 'unmatched') && (
+                  <div className="px-4 pb-4 -mt-1 space-y-1.5 text-xs text-gray-600">
+                    {open && <TransferDetails t={t} />}
+                    {t.status === 'unmatched' && (
+                      <div className="pt-1 flex flex-col sm:flex-row gap-2">
+                        <select
+                          value={selection[t.id] ?? ''}
+                          onChange={(e) => setSelection({ ...selection, [t.id]: e.target.value })}
+                          className={`${input} flex-1`}
                         >
-                          +{formatCurrency(Number(t.amount))}
-                        </span>
-                        <span className={`block text-[11px] font-bold mt-0.5 ${status.text}`}>{status.label}</span>
-                      </span>
-                    </button>
-
-                    {(open || t.status === 'unmatched') && (
-                      <div className="px-4 pb-4 -mt-1 space-y-1.5 text-xs text-gray-600">
-                        {open && (
-                          <>
-                            <p>
-                              {new Date(t.receivedAt).toLocaleString('en-GB', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit',
-                              })}
-                            </p>
-                            <p>
-                              Narration: <span className="text-ink">{t.narration ? `“${t.narration}”` : 'none'}</span>
-                            </p>
-                          </>
-                        )}
-                        {who && t.payment && (
-                          <p>
-                            Paid for <span className="font-bold text-ink">{who}</span>
-                            {t.payment.session?.label ? ` · ${t.payment.session.label}` : ''}
-                          </p>
-                        )}
-                        {who && !t.payment && t.status !== 'unmatched' && (
-                          <p>
-                            From <span className="font-bold text-ink">{who}</span> · less than a due, so it&apos;s held as their
-                            credit and pays their next due once it&apos;s enough
-                          </p>
-                        )}
-
-                        {t.status === 'unmatched' && (
-                          <div className="pt-1 flex flex-col sm:flex-row gap-2">
-                            <select
-                              value={selection[t.id] ?? ''}
-                              onChange={(e) => setSelection({ ...selection, [t.id]: e.target.value })}
-                              className={`${input} flex-1`}
-                            >
-                              <option value="">Match to a pending payment…</option>
-                              {pendingOptions.map((o) => (
-                                <option key={o.id} value={o.id}>
-                                  {o.label}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="flex gap-2">
-                              <button
-                                disabled={!selection[t.id] || workingId === t.id}
-                                onClick={() => run(t.id, () => assignTransfer(t.id, selection[t.id]), 'Payment matched')}
-                                className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-bold text-volt-300 bg-ink rounded-xl hover:bg-pitch-900 disabled:opacity-40 transition-colors"
-                              >
-                                Match
-                              </button>
-                              <button
-                                disabled={workingId === t.id}
-                                onClick={() => run(t.id, () => ignoreTransfer(t.id), 'Transfer ignored')}
-                                className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-ink disabled:opacity-40 transition-colors"
-                              >
-                                Ignore
-                              </button>
-                            </div>
-                          </div>
-                        )}
+                          <option value="">Match to a pending payment…</option>
+                          {pendingOptions.map((o) => (
+                            <option key={o.id} value={o.id}>
+                              {o.label}
+                            </option>
+                          ))}
+                        </select>
+                        <div className="flex gap-2">
+                          <button
+                            disabled={!selection[t.id] || workingId === t.id}
+                            onClick={() => run(t.id, () => assignTransfer(t.id, selection[t.id]), 'Payment matched')}
+                            className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-bold text-volt-300 bg-ink rounded-xl hover:bg-pitch-900 disabled:opacity-40 transition-colors"
+                          >
+                            Match
+                          </button>
+                          <button
+                            disabled={workingId === t.id}
+                            onClick={() => run(t.id, () => ignoreTransfer(t.id), 'Transfer ignored')}
+                            className="px-4 py-2.5 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-ink disabled:opacity-40 transition-colors"
+                          >
+                            Ignore
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </section>
-        ))
+                )}
+              </>
+            );
+          }}
+        </TransferDayList>
       )}
     </div>
   );
