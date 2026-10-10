@@ -9,7 +9,7 @@ import { PlayerPaymentRow } from '@/components/player-payment-row';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { useToast } from '@/components/toast';
-import { getSession, markPaid, waivePayment, bulkMarkPaid, deleteSession, updateSessionStatus, exportSessionPaymentsCsv, sendReminders, formatCurrency, type ISessionWithDetails } from '@/lib/api';
+import { getSession, markPaid, markUnpaid, waivePayment, bulkMarkPaid, deleteSession, updateSessionStatus, exportSessionPaymentsCsv, sendReminders, formatCurrency, type ISessionWithDetails } from '@/lib/api';
 import { PaymentStatus, SessionStatus } from '@pitchaside/shared';
 import { Trophy } from '@/components/illustrations';
 import { BallSpinner } from '@/components/skeleton';
@@ -108,6 +108,19 @@ export default function SessionDetailPage() {
       toast.success('Payment waived');
     } catch {
       toast.error('Failed to waive payment');
+    } finally {
+      setMarkingId(null);
+    }
+  }
+
+  async function handleMarkUnpaid(paymentId: string) {
+    setMarkingId(paymentId);
+    try {
+      await markUnpaid(paymentId);
+      await fetchSession();
+      toast.success('Payment marked as unpaid');
+    } catch {
+      toast.error('Failed to mark payment as unpaid');
     } finally {
       setMarkingId(null);
     }
@@ -581,6 +594,7 @@ export default function SessionDetailPage() {
               status={payment.status}
               viaTransfer={payment.source === 'transfer'}
               onMarkPaid={() => handleMarkPaid(payment.id)}
+              onMarkUnpaid={() => handleMarkUnpaid(payment.id)}
               onWaive={() => handleWaive(payment.id)}
               loading={markingId === payment.id}
               selected={selectedIds.has(payment.id)}

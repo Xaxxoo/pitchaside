@@ -59,6 +59,20 @@ export class PaymentsController {
     return result;
   }
 
+  @Patch(':id/mark-unpaid')
+  async markAsUnpaid(@Param('id') id: string, @CurrentUser() user: User) {
+    const result = await this.paymentsService.markAsUnpaid(id, user.organizationId);
+    await this.auditService.log({
+      action: AuditAction.PAYMENT_MARKED_UNPAID,
+      entityType: 'payment',
+      entityId: id,
+      userId: user.id,
+      organizationId: user.organizationId,
+      metadata: { amount: result.amount, playerId: result.playerId },
+    });
+    return result;
+  }
+
   @Patch(':id/waive')
   async waive(@Param('id') id: string, @CurrentUser() user: User) {
     const result = await this.paymentsService.waive(

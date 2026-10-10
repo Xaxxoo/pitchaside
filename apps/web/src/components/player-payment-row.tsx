@@ -10,6 +10,7 @@ interface PlayerPaymentRowProps {
   amount: number;
   status: PaymentStatus;
   onMarkPaid: () => void;
+  onMarkUnpaid?: () => void;
   onWaive?: () => void;
   loading?: boolean;
   selected?: boolean;
@@ -53,6 +54,7 @@ export function PlayerPaymentRow({
   amount,
   status,
   onMarkPaid,
+  onMarkUnpaid,
   onWaive,
   loading,
   selected,
@@ -121,10 +123,21 @@ export function PlayerPaymentRow({
             )}
           </div>
         ) : (
-          <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full uppercase tracking-wide ${config.badge}`}>
-            {config.icon}
-            {config.label}
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full uppercase tracking-wide ${config.badge}`}>
+              {config.icon}
+              {config.label}
+            </span>
+            {onMarkUnpaid && (
+              <button
+                onClick={onMarkUnpaid}
+                className="px-2 py-1 text-[10px] font-medium text-gray-400 hover:text-kit-600 hover:bg-gray-100 rounded-lg transition-colors"
+                title="Undo — mark as unpaid"
+              >
+                Undo
+              </button>
+            )}
+          </div>
         )}
       </div>
     </div>

@@ -222,6 +222,10 @@ export function markPaid(paymentId: string): Promise<IPayment> {
   return http.patch<IPayment>(`/payments/${paymentId}/mark-paid`);
 }
 
+export function markUnpaid(paymentId: string): Promise<IPayment> {
+  return http.patch<IPayment>(`/payments/${paymentId}/mark-unpaid`);
+}
+
 export function waivePayment(paymentId: string): Promise<IPayment> {
   return http.patch<IPayment>(`/payments/${paymentId}/waive`);
 }

@@ -8,6 +8,7 @@ import {
 export enum AuditAction {
   PAYMENT_MARKED_PAID = 'payment_marked_paid',
   PAYMENT_WAIVED = 'payment_waived',
+  PAYMENT_MARKED_UNPAID = 'payment_marked_unpaid',
   PAYMENT_BULK_MARKED_PAID = 'payment_bulk_marked_paid',
   SESSION_CREATED = 'session_created',
   SESSION_STATUS_CHANGED = 'session_status_changed',

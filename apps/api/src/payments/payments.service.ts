@@ -88,6 +88,27 @@ export class PaymentsService {
     return saved;
   }
 
+  async markAsUnpaid(id: string, organizationId: string) {
+    const payment = await this.paymentsRepo
+      .createQueryBuilder('payment')
+      .innerJoin('payment.session', 'session')
+      .innerJoin('session.group', 'group')
+      .where('payment.id = :id', { id })
+      .andWhere('group.organizationId = :organizationId', { organizationId })
+      .getOne();
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status === PaymentStatus.PENDING) return payment;
+
+    payment.status = PaymentStatus.PENDING;
+    payment.paidAt = null as any;
+    payment.source = null as any;
+    payment.markedBy = null as any;
+    const saved = await this.paymentsRepo.save(payment);
+
+    await this.recalculateSessionTotal(payment.sessionId);
+    return saved;
+  }
+
   async findBySession(sessionId: string, organizationId: string) {
     return this.paymentsRepo
       .createQueryBuilder('payment')
