@@ -199,6 +199,10 @@ export type PlayerGroup = {
   paidAhead: number;
   /** Their money the organiser has to sort: more than was owed, or a game they paid for called off. */
   extra: number;
+  /** What they asked about that extra, waiting for the organiser: keep it for the group, or send it back. */
+  extraRequest?: 'give' | 'refund' | null;
+  /** How much they asked about: less than `extra` if more came in after they asked. */
+  extraRequestAmount?: number;
   account: GroupAccount | null;
 };
 
@@ -367,6 +371,20 @@ export interface GameLineup {
   squad: { name: string; me: boolean; team: TeamKey | null; captain: boolean; paid: GamePaid | null }[];
   /** They captain a side today, so they can keep the score from their phone. */
   canKeepScore?: boolean;
+}
+
+/** Money the organiser holds for them pays what they owe now; the rest is kept for their next games. */
+export function spendHeldMoney(groupId: string) {
+  return request<{ kept: number }>('POST', `/me/groups/${groupId}/held-money/use`);
+}
+
+/** Ask the organiser to keep it for the group (`give`) or send it back (`refund`). */
+export function requestHeldMoney(groupId: string, kind: 'give' | 'refund') {
+  return request<{ request: string; amount: number }>('POST', `/me/groups/${groupId}/held-money/request`, { kind });
+}
+
+export function cancelHeldMoneyRequest(groupId: string) {
+  return request<{ request: null }>('DELETE', `/me/groups/${groupId}/held-money/request`);
 }
 
 export function getGameLineup(sessionId: string) {

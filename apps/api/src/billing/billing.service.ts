@@ -1266,6 +1266,10 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
           extra: Number(m.extra),
           waiting: Number(m.waiting ?? 0),
           waitingNote: m.waitingNote ?? null,
+          request:
+            m.extraRequest && Number(m.extra) > 0.001
+              ? { kind: m.extraRequest, amount: Math.min(Number(m.extra), Number(m.extraRequestAmount ?? 0)), at: m.extraRequestAt }
+              : null,
           lastTransfer: last ? { id: last.id, amount: Number(last.amount), receivedAt: last.receivedAt } : null,
         };
       }),
@@ -1379,6 +1383,19 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   /** The extra really was paid ahead: kept for their next game (and paid towards it once it's next). */
   async keepExtra(groupId: string, playerId: string, organizationId: string) {
     await this.findGroup(groupId, organizationId);
+    return this.keepExtraFor(groupId, playerId);
+  }
+
+  /**
+   * The member's own choice from the player app: their extra pays what they owe now and the rest
+   * is kept for their next games. Only ever their own games, so nothing can go to the wrong place.
+   * The caller has checked they're in the group.
+   */
+  async useOwnExtra(groupId: string, playerId: string) {
+    return this.keepExtraFor(groupId, playerId);
+  }
+
+  private async keepExtraFor(groupId: string, playerId: string) {
     const kept = await this.membershipsRepo.manager.transaction(async (tx) => {
       const m = await tx.findOne(GroupMembership, { where: { groupId, playerId }, lock: { mode: 'pessimistic_write' } });
       if (!m) throw new NotFoundException("That player isn't in this group");
@@ -1420,6 +1437,47 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
         tx.create(GroupKeptMoney, { groupId, playerId, amount: extra.toFixed(2), reason: input.reason, note, recordedBy: input.recordedBy ?? null }),
       );
       return { kept: extra };
+    });
+  }
+
+  /**
+   * A member asks about their extra from the player app: let the group keep it (`give`) or send it
+   * back (`refund`). Nothing moves; the organiser sees it and decides. The caller has checked
+   * they're in the group.
+   */
+  async requestAboutExtra(groupId: string, playerId: string, kind: 'give' | 'refund' | null) {
+    return this.membershipsRepo.manager.transaction(async (tx) => {
+      const m = await tx.findOne(GroupMembership, { where: { groupId, playerId }, lock: { mode: 'pessimistic_write' } });
+      if (!m) throw new NotFoundException("You're not in this group");
+      const extra = Number(m.extra ?? 0);
+      if (kind && extra <= 0.001) throw new BadRequestException('Your organiser isn’t holding any money of yours now.');
+      m.extraRequest = kind;
+      m.extraRequestAmount = kind ? extra.toFixed(2) : null;
+      m.extraRequestAt = kind ? new Date() : null;
+      await tx.save(m);
+      return { request: m.extraRequest, amount: kind ? extra : 0 };
+    });
+  }
+
+  /**
+   * The organiser accepts a member's offer: the group keeps what they offered (never more, even if
+   * more extra came in since), recorded as given by the player.
+   */
+  async acceptGift(groupId: string, playerId: string, organizationId: string, recordedBy?: string) {
+    await this.findGroup(groupId, organizationId);
+    return this.membershipsRepo.manager.transaction(async (tx) => {
+      const m = await tx.findOne(GroupMembership, { where: { groupId, playerId }, lock: { mode: 'pessimistic_write' } });
+      if (!m) throw new NotFoundException("That player isn't in this group");
+      if (m.extraRequest !== 'give') throw new BadRequestException('They haven’t offered it to the group (or they took the offer back).');
+      const amount = Math.min(Number(m.extra ?? 0), Number(m.extraRequestAmount ?? 0));
+      if (amount <= 0.001) throw new BadRequestException('There’s no extra left to sort.');
+      m.extra = (Number(m.extra) - amount).toFixed(2);
+      m.extraRequest = null;
+      m.extraRequestAmount = null;
+      m.extraRequestAt = null;
+      await tx.save(m);
+      await tx.save(tx.create(GroupKeptMoney, { groupId, playerId, amount: amount.toFixed(2), reason: 'player_gave', note: null, recordedBy: recordedBy ?? null }));
+      return { kept: amount };
     });
   }
 

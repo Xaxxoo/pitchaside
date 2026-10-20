@@ -106,7 +106,7 @@ export default function PlayerHomePage() {
             {extra > 0 && (
               <span className="mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-sun-400">
                 <span className="w-2 h-2 rounded-full bg-sun-400" aria-hidden />
-                {formatCurrency(extra)} of yours is with your organiser to sort
+                {formatCurrency(extra)} of yours is with your organiser{home.groups.some((g) => g.extra > 0 && !g.extraRequest) ? ' · choose what happens' : ''}
               </span>
             )}
           </span>

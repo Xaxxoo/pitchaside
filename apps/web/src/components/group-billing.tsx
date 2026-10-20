@@ -28,6 +28,7 @@ import {
   giveExtra,
   keepExtra,
   keepExtraForGroup,
+  acceptExtraGift,
   KEPT_REASON_WORDS,
   type KeptReason,
   holdExtra,
@@ -705,7 +706,7 @@ function TransferRecordSheet({
 }
 
 /** One amount in "Money to sort": who or what, where it came from, and what tapping it does. */
-function SortRow({ avatar, title, sub, amount, cta, busy, onClick }: { avatar: React.ReactNode; title: string; sub: string; amount: number; cta: string; busy: boolean; onClick: () => void }) {
+function SortRow({ avatar, title, sub, amount, cta, busy, asked, onClick }: { avatar: React.ReactNode; title: string; sub: string; amount: number; cta: string; busy: boolean; /** The player asked for something: the line says what, in bold. */ asked?: boolean; onClick: () => void }) {
   return (
     <button
       disabled={busy}
@@ -716,7 +717,7 @@ function SortRow({ avatar, title, sub, amount, cta, busy, onClick }: { avatar: R
       {avatar}
       <span className="flex-1 min-w-0">
         <span className="block text-[15px] font-bold text-ink truncate">{title}</span>
-        <span className="block text-[13px] text-gray-500 truncate">{sub}</span>
+        <span className={`block text-[13px] truncate ${asked ? 'font-bold text-pitch-700' : 'text-gray-500'}`}>{sub}</span>
       </span>
       <span className="shrink-0 font-display text-[16px] font-extrabold tabular-nums text-ink">{formatCurrency(amount)}</span>
       <svg className="w-4 h-4 shrink-0 -mr-1 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
@@ -1030,6 +1031,17 @@ export function TransfersPanel({
             await run(`extra-${item.playerId}`, () => holdExtra(groupId, item.playerId, note || undefined), `${formatCurrency(item.extra)} is waiting for a player`);
             loadExtras();
           }}
+          onAcceptGift={
+            user?.role === UserRole.TREASURER
+              ? undefined
+              : async () => {
+                  const item = sorting;
+                  setSorting(null);
+                  const amt = Math.min(item.request?.amount ?? item.extra, item.extra);
+                  await run(`extra-${item.playerId}`, () => acceptExtraGift(groupId, item.playerId), `${formatCurrency(amt)} from ${item.name.split(' ')[0]} kept for the group`);
+                  loadExtras();
+                }
+          }
           onKeepForGroup={
             user?.role === UserRole.TREASURER
               ? undefined
@@ -1093,13 +1105,18 @@ export function TransfersPanel({
                         avatar={<Avatar name={x.name} className="w-10 h-10 text-[13px]" />}
                         title={x.name}
                         sub={
-                          one
+                          x.request
+                            ? x.request.kind === 'give'
+                              ? `Offered ${formatCurrency(Math.min(x.request.amount, x.extra))} to the group`
+                              : `Asked for ${formatCurrency(Math.min(x.request.amount, x.extra))} back`
+                            : one
                             ? `Sent ${formatCurrency(one.amount)} · ${new Date(one.receivedAt).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}`
                             : 'From earlier payments'
                         }
                         amount={x.extra}
-                        cta="What was it for?"
+                        cta={x.request ? (x.request.kind === 'give' ? 'Accept their offer' : 'Send it back') : 'What was it for?'}
                         busy={workingId === `extra-${x.playerId}`}
+                        asked={!!x.request}
                         onClick={() => setSorting({ ...x, source: 'extra' })}
                       />
                     </li>
