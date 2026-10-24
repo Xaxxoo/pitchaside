@@ -1,7 +1,9 @@
+import { Transform } from 'class-transformer';
 import { IsString, IsOptional, IsEmail, IsIn, IsNotEmpty, MinLength, MaxLength, Matches } from 'class-validator';
 import { PLAYER_LEVELS, type PlayerLevel } from '../../ratings/skill';
 import { KEEPER_PREFS } from '../../ratings/plan';
 import type { KeeperPref } from '@pitchaside/shared';
+import { tidyPhone } from '../../common/phone';
 
 export class CreatePlayerDto {
   @IsString()
@@ -21,6 +23,7 @@ export class CreatePlayerDto {
   nickname?: string;
 
   @IsOptional()
+  @Transform(({ value }) => tidyPhone(value))
   @Matches(/^[+\d][\d\s\-().]{6,}$/, { message: 'Phone number format is invalid' })
   phone?: string;
 
@@ -58,6 +61,7 @@ export class UpdatePlayerDto {
   nickname?: string;
 
   @IsOptional()
+  @Transform(({ value }) => tidyPhone(value))
   @Matches(/^[+\d][\d\s\-().]{6,}$/, { message: 'Phone number format is invalid' })
   phone?: string;
 

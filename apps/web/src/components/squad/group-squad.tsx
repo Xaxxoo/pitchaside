@@ -10,7 +10,7 @@ import { kitFor } from '@/components/illustrations';
 import { PlusIcon, daysFromToday, gameDay, gameStatusOf } from '@/components/money-card';
 import { QuickAddPlayers } from '@/components/group/quick-add-players';
 import { PlayerSheet, type MemberDue } from '@/components/group/member-sheet';
-import { openWhatsApp, paymentDetailsMessage } from '@/lib/whatsapp';
+import { openWhatsApp, paymentDetailsMessage, pickWhy, whatsappNumber } from '@/lib/whatsapp';
 import { useAuth } from '@/lib/auth';
 import {
   addMember,
@@ -59,7 +59,7 @@ export function GroupSquad({
   const { user } = useAuth();
   const id = group.id;
   const [query, setQuery] = useState('');
-  const [memberFilter, setMemberFilter] = useState<'all' | 'in' | 'out' | 'new'>('all');
+  const [memberFilter, setMemberFilter] = useState<'all' | 'in' | 'out' | 'new' | 'fix' | 'none'>('all');
   const [sort, setSort] = useState<'name' | 'rating' | 'games'>('name');
   // Ratings and games played, from the season table: how the squad is made up.
   const [table, setTable] = useState<LeagueTable | null>(null);
@@ -221,22 +221,44 @@ export function GroupSquad({
   const inCount = members.filter((m) => m.coming).length;
   const outCount = members.filter((m) => m.coming === false).length;
   const newCount = members.filter((m) => m.fresh).length;
+  // Who WhatsApp can't reach: a number it can't open (worth fixing), or no number at all.
+  const badNumber = (m: (typeof members)[number]) => !!m.player.phone?.trim() && !whatsappNumber(m.player.phone);
+  const noNumber = (m: (typeof members)[number]) => !m.player.phone?.trim();
+  const fixCount = members.filter(badNumber).length;
+  const noneCount = members.filter(noNumber).length;
   const filterOptions = (
     [
       { value: 'all', label: `Everyone · ${memberCount}`, show: true },
       { value: 'in', label: `Coming · ${inCount}`, show: !!nextGame },
       { value: 'out', label: `Not in yet · ${outCount}`, show: !!nextGame && outCount > 0 },
       { value: 'new', label: `New · ${newCount}`, show: newCount > 0 },
+      { value: 'fix', label: `Number to fix · ${fixCount}`, show: fixCount > 0 },
+      { value: 'none', label: `No number · ${noneCount}`, show: noneCount > 0 && noneCount < memberCount },
     ] as { value: typeof memberFilter; label: string; show: boolean }[]
   ).filter((f) => f.show);
-  const filterSays = { all: '', in: `${inCount} coming to ${nextLabel}`, out: `${outCount} not in yet for ${nextLabel}`, new: `${newCount} new in the last 30 days` }[memberFilter];
+  const filterSays = { all: '', in: `${inCount} coming to ${nextLabel}`, out: `${outCount} not in yet for ${nextLabel}`, new: `${newCount} new in the last 30 days`,
+    fix: `${fixCount} with a number WhatsApp can’t open`,
+    none: `${noneCount} with no number`,
+  }[memberFilter];
   const sentence = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
   const LEVEL: Record<string, string> = { beginner: 'Beginner', average: 'Average', good: 'Good', strong: 'Strong' };
   const q = query.trim().toLowerCase();
   const byName = (a: (typeof members)[number], b: (typeof members)[number]) =>
     `${a.player.firstName} ${a.player.lastName}`.localeCompare(`${b.player.firstName} ${b.player.lastName}`);
   const shown = members
-    .filter((m) => (memberFilter === 'in' ? m.coming : memberFilter === 'out' ? m.coming === false : memberFilter === 'new' ? m.fresh : true))
+    .filter((m) =>
+      memberFilter === 'in'
+        ? m.coming
+        : memberFilter === 'out'
+          ? m.coming === false
+          : memberFilter === 'new'
+            ? m.fresh
+            : memberFilter === 'fix'
+              ? badNumber(m)
+              : memberFilter === 'none'
+                ? noNumber(m)
+                : true,
+    )
     .filter((m) => !q || `${m.player.firstName} ${m.player.lastName} ${m.player.nickname ?? ''}`.toLowerCase().includes(q))
     .sort((a, b) =>
       sort === 'rating'
@@ -272,8 +294,8 @@ export function GroupSquad({
           }
           onSendDetails={
             billing?.account
-              ? () =>
-                  openWhatsApp(
+              ? () => {
+                  const went = openWhatsApp(
                     paymentDetailsMessage({
                       firstName: opened.player.firstName,
                       groupName: group.name,
@@ -283,7 +305,10 @@ export function GroupSquad({
                       forWhat: opened.due?.state === 'owes' ? opened.due.label : undefined,
                     }),
                     opened.player.phone,
-                  )
+                  );
+                  const why = pickWhy(opened.player.firstName, opened.player.phone, went);
+                  if (why) toast.success(why);
+                }
               : undefined
           }
           onRemove={() => {
@@ -448,6 +473,17 @@ export function GroupSquad({
             </p>
           )}
 
+          {/* Numbers WhatsApp can't open: said once, a tap away from the list of who */}
+          {memberFilter === 'all' && fixCount > 0 && (
+            <p className="mt-2 px-1 flex items-center justify-between gap-3 text-[13px] text-kit-600 animate-rise" role="status">
+              <span className="min-w-0 font-semibold">
+                {fixCount === 1 ? '1 number won’t open WhatsApp' : `${fixCount} numbers won’t open WhatsApp`}
+              </span>
+              <button onClick={() => setMemberFilter('fix')} className="shrink-0 min-h-11 px-1 font-bold text-ink hover:text-pitch-700">
+                See who
+              </button>
+            </p>
+          )}
           {memberFilter !== 'all' && (
             <p className="mt-2 px-1 flex items-center justify-between gap-3 text-[13px] text-gray-600" role="status">
               <span className="min-w-0">
@@ -467,7 +503,9 @@ export function GroupSquad({
                   ? `No one’s said they’re coming to ${nextLabel} yet.`
                   : memberFilter === 'out'
                     ? `Everyone’s coming to ${nextLabel}.`
-                    : 'No one here.'}
+                    : memberFilter === 'fix'
+                      ? 'Every number opens WhatsApp now.'
+                      : 'No one here.'}
             </p>
           ) : (
             <ul className="mt-2 bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
