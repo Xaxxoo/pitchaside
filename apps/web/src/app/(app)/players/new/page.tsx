@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BackButton } from '@/components/back-button';
@@ -16,7 +17,6 @@ function validate(form: FormData): Errors | null {
   const errors: Errors = {};
   const firstName = (form.get('firstName') as string).trim();
   const lastName = (form.get('lastName') as string).trim();
-  const phone = (form.get('phone') as string).trim();
   const email = (form.get('email') as string).trim();
 
   if (!firstName) errors.firstName = 'First name is required';
@@ -25,7 +25,7 @@ function validate(form: FormData): Errors | null {
   if (!lastName) errors.lastName = 'Last name is required';
   else if (lastName.length < 2) errors.lastName = 'Must be at least 2 characters';
 
-  if (phone && (!/^[+\d]/.test(phone) || phone.length < 7)) errors.phone = 'Enter a valid phone number (min 7 characters)';
+  // A number WhatsApp can't open is said under the box, not refused: it can be fixed later.
 
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errors.email = 'Enter a valid email address';
 
@@ -37,6 +37,8 @@ export default function NewPlayerPage() {
   const toast = useToast();
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
+  const [phone, setPhone] = useState('');
+  const phoneSeen = useTouched();
   const [groups, setGroups] = useState<IGroupWithMembers[]>([]);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [level, setLevel] = useState<PlayerLevel>('average');
@@ -172,9 +174,14 @@ export default function NewPlayerPage() {
             id="phone"
             name="phone"
             type="tel"
-            placeholder="+234..."
+            inputMode="tel"
+            placeholder="0803 123 4567"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+            onBlur={phoneSeen.onBlur}
             className={inputClass('phone')}
           />
+          {!errors.phone && <PhoneHint value={phone} touched={phoneSeen.touched}>For WhatsApp messages.</PhoneHint>}
           {errors.phone && <p className="text-xs text-kit-600 mt-1">{errors.phone}</p>}
         </div>
 

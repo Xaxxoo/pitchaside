@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
@@ -14,6 +15,7 @@ export default function SettingsPage() {
   const toast = useToast();
 
   // Profile state
+  const phoneSeen = useTouched();
   const [profileData, setProfileData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -190,10 +192,11 @@ export default function SettingsPage() {
             type="tel"
             value={profileData.phone}
             onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+            onBlur={phoneSeen.onBlur}
             placeholder="0803 123 4567"
             className={inputClass}
           />
-          <p className="text-[11px] text-gray-500 mt-1">Optional — so your players and co-organisers can reach you.</p>
+          <PhoneHint value={profileData.phone ?? ''} touched={phoneSeen.touched}>Optional: so your players and co-organisers can reach you.</PhoneHint>
         </div>
         <VerifyEmailRow email={user.email} verified={!!user.emailVerified} onCheck={refreshUser} />
         <button

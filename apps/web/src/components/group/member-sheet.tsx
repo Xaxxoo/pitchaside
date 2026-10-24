@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useId, useState } from 'react';
 import Link from 'next/link';
 import { Sheet } from '@/components/sheet';
@@ -70,6 +71,7 @@ export function PlayerSheet({
     keeper: (player.keeper ?? '') as Exclude<KeeperPref, null> | '',
   };
   const [form, setForm] = useState(initial);
+  const phoneSeen = useTouched();
   const [editing, setEditing] = useState(startEditing && canEdit);
   const [saving, setSaving] = useState(false);
   const name = `${player.firstName} ${player.lastName}`;
@@ -251,7 +253,8 @@ export function PlayerSheet({
                 <span className="block text-xs font-bold text-gray-700 mb-1">
                   Phone <span className="font-semibold text-gray-500">(for WhatsApp)</span>
                 </span>
-                <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="Optional" className={input} autoComplete="off" />
+                <input type="tel" inputMode="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} onBlur={phoneSeen.onBlur} placeholder="0803 123 4567" className={input} autoComplete="off" />
+                <PhoneHint value={form.phone} touched={phoneSeen.touched}>Optional. For WhatsApp messages.</PhoneHint>
               </label>
               <label className="block">
                 <span className="block text-xs font-bold text-gray-700 mb-1">

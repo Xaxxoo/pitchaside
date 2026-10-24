@@ -1,3 +1,5 @@
+import { Transform } from 'class-transformer';
+import { tidyPhone } from '../../common/phone';
 import { IsString, IsNotEmpty, MinLength, IsOptional, Matches } from 'class-validator';
 
 export class UpdateProfileDto {
@@ -13,6 +15,7 @@ export class UpdateProfileDto {
 
   /** Links this organiser account to their player side. Empty string clears it. */
   @IsOptional()
+  @Transform(({ value }) => tidyPhone(value))
   @Matches(/^$|^[+\d][\d\s\-().]{6,}$/, { message: 'Phone number format is invalid' })
   phone?: string;
 
