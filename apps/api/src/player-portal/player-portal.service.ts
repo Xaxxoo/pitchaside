@@ -319,6 +319,8 @@ export class PlayerPortalService {
       nickname: person.players.find((p) => p.nickname)?.nickname ?? null,
       photoKey: person.players.find((p) => p.photoKey)?.photoKey ?? null,
       keeper: person.players.find((p) => p.keeper)?.keeper ?? null,
+      // Off only once they've switched it off (on every club's record of them).
+      emailNotices: !person.players.some((p) => p.emailNotices === false),
       email: person.email,
       phone: person.phone,
       id: person.players[0]?.id ?? person.key,

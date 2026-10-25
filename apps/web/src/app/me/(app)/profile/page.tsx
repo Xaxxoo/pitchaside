@@ -1,17 +1,18 @@
 'use client';
 
+import { NotificationSettings } from '@/components/notify';
 import { ShareCardButton, ShareIcon, shareIconDark } from '@/components/share-card';
 import { PageHeader } from '@/components/brand';
 import Link from 'next/link';
 import { useState } from 'react';
 import { RatingBreakdownSheet } from '@/components/rating-breakdown-sheet';
 import { useRouter } from 'next/navigation';
-import { InstallCard, PushToggle } from '@/components/pwa';
+import { InstallCard } from '@/components/pwa';
 import { PlayerCardHero, Section } from '@/components/player-ui';
 import { PlayerStats } from '@/components/player-stats';
 import { usePlayerProfile } from '@/components/player-shell';
 import { PlayerAccountSettings } from '@/components/player-account';
-import { getPlayerRatingBreakdown, logoutPlayer, removeMyPhoto, setMyPhoto, subscribePlayerPush } from '@/lib/player';
+import { getPlayerRatingBreakdown, logoutPlayer, removeMyPhoto, setMyPhoto } from '@/lib/player';
 import { CardPhotoButton } from '@/components/photo-picker';
 import { btnSecondary } from '@/components/buttons';
 import { openTour } from '@/lib/onboarding';
@@ -162,7 +163,7 @@ export default function PlayerProfilePage() {
       <Section title="App">
         <div className="space-y-2">
           <InstallCard />
-          <PushToggle save={subscribePlayerPush} />
+          <NotificationSettings side="player" emailOn={profile.player.emailNotices !== false} email={profile.player.email} onEmailChanged={() => refresh()} />
           <button onClick={openTour} className={`${btnSecondary} w-full`}>
             How PitchAside works
           </button>

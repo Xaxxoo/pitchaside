@@ -435,8 +435,8 @@ export class PlatformService {
       messaging: this.config.get('MESSAGING_MODE', 'mock') === 'live' ? 'live' : 'mock',
       push: Boolean(this.config.get('VAPID_PUBLIC_KEY') && this.config.get('VAPID_PRIVATE_KEY')),
       email: Boolean(this.config.get('RESEND_API_KEY') || this.config.get('SMTP_HOST')),
-      fallback: ['email', 'whatsapp'].includes(this.config.get('NOTIFY_FALLBACK', 'none'))
-        ? this.config.get<string>('NOTIFY_FALLBACK')
+      fallback: ['email', 'whatsapp'].includes(this.config.get('NOTIFY_FALLBACK', 'email'))
+        ? this.config.get<string>('NOTIFY_FALLBACK', 'email')
         : 'none',
     };
   }

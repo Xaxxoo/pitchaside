@@ -38,7 +38,7 @@ function setup(fallback: string, mailMode: 'live' | 'mock' = 'live') {
     { find: async () => [withEmail, withoutEmail] } as unknown as Repository<Player>,
     {} as Repository<User>,
     new MockMessagingProvider(),
-    { get: (key: string, fallbackValue?: unknown) => (key === 'NOTIFY_FALLBACK' ? fallback : fallbackValue) } as unknown as ConfigService,
+    { get: (key: string, fallbackValue?: unknown) => (key === 'NOTIFY_FALLBACK' ? (fallback ?? fallbackValue) : fallbackValue) } as unknown as ConfigService,
     mail as unknown as MailService,
   );
   return { service, mail, saved, emails: () => saved.filter((m) => m.channel === 'email') };
@@ -81,5 +81,43 @@ describe('NotificationsService email fallback', () => {
     const { service, emails } = setup('email', 'mock');
     await service.notifyPlayers(['p1'], notice);
     expect(emails()[0].status).toBe('mock');
+  });
+});
+
+describe('Notifications on by default', () => {
+  it('with nothing set on the server, people a notification can’t reach get an email', async () => {
+    const { service, mail } = setup(undefined as unknown as string);
+    expect(service.fallback).toBe('email');
+    await service.notifyPlayers(['p1'], notice);
+    expect(mail.sendNotice).toHaveBeenCalledTimes(1);
+  });
+
+  it('a player who switched emails off gets none', async () => {
+    const off = { ...withEmail, emailNotices: false } as Player;
+    const { service, mail, saved } = setup('email');
+    (service as any).playersRepo = { find: async () => [off] };
+    await service.notifyPlayers(['p1'], notice);
+    expect(mail.sendNotice).not.toHaveBeenCalled();
+    expect(saved.map((m) => m.channel)).toEqual(['push']);
+  });
+
+  it('organisers: email only when no device got it, and not when they switched emails off', async () => {
+    const { service, mail } = setup('email');
+    (service as any).usersRepo = {
+      find: async () => [
+        { id: 'u1', email: 'tunde@example.com', firstName: 'Tunde', emailNotices: true },
+        { id: 'u2', email: 'co@example.com', firstName: 'Co', emailNotices: false },
+      ],
+    };
+    await service.notifyOrganisers('org1', { kind: 'share_invite', title: 'Send Saturday’s link', body: 'x', url: '/sessions/s' }, { email: true });
+    expect(mail.sendNotice).toHaveBeenCalledTimes(1);
+    expect(mail.sendNotice.mock.calls[0][0]).toBe('tunde@example.com');
+  });
+
+  it('organiser notices that aren’t meant for email stay push-only', async () => {
+    const { service, mail } = setup('email');
+    (service as any).usersRepo = { find: async () => [{ id: 'u1', email: 'tunde@example.com', firstName: 'Tunde' }] };
+    await service.notifyOrganisers('org1', { kind: 'payment_received', title: 'x', body: 'y' });
+    expect(mail.sendNotice).not.toHaveBeenCalled();
   });
 });

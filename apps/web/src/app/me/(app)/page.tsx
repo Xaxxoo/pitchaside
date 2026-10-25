@@ -1,15 +1,15 @@
 'use client';
 
+import { NotifyPrompt } from '@/components/notify';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FaceStack } from '@/components/people-row';
 import { Avatar, VoteClock } from '@/components/ratings';
-import { PushToggle } from '@/components/pwa';
 import { DidYouKnow } from '@/components/onboarding/did-you-know';
 import { GameCard, GameRow, LoadError, Section, niceDate } from '@/components/player-ui';
 import { CountUpNaira } from '@/components/motion';
 import { formatCurrency } from '@/lib/api';
-import { getPlayerHome, subscribePlayerPush, type PlayerHome } from '@/lib/player';
+import { getPlayerHome, type PlayerHome } from '@/lib/player';
 import { ModeSwitch, usePlayerProfile } from '@/components/player-shell';
 import { PlayerGroupSwitch } from '@/components/player-group-switch';
 import { usePlayerGroup } from '@/lib/player-group';
@@ -145,6 +145,11 @@ export default function PlayerHomePage() {
         </span>
       </Link>
 
+      {/* Notifications on by default: one tap, once, for a phone that hasn't allowed them */}
+      <div className="mt-3">
+        <NotifyPrompt side="player" />
+      </div>
+
       {/* This week's game, in the organiser's match-day card */}
       <div className="mt-3">
         {upcoming.length === 0 ? (
@@ -271,11 +276,6 @@ export default function PlayerHomePage() {
 
       </div>
 
-      <div>
-      <div className="mt-6 space-y-2">
-        <PushToggle save={subscribePlayerPush} />
-      </div>
-      </div>
     </div>
     </>
   );

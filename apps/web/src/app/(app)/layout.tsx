@@ -1,5 +1,6 @@
 'use client';
 
+import { PushKeeper } from '@/components/notify';
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Nav } from '@/components/nav';
@@ -58,6 +59,7 @@ export default function AppLayout({
       </div>
       <Nav />
       <TourHost side="organiser" />
+      <PushKeeper side="organiser" />
     </CurrentGroupProvider>
   );
 }

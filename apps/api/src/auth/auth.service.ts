@@ -273,6 +273,7 @@ export class AuthService {
         : undefined,
       twoFactorEnabled: user.twoFactorEnabled || false,
       emailVerified: user.emailVerified || false,
+      emailNotices: user.emailNotices !== false,
       createdAt: user.createdAt,
     };
   }

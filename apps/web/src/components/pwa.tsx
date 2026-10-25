@@ -4,7 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { btnPrimary } from '@/components/buttons';
-import { getPushState, registerServiceWorker, requestPushPermission, subscribePush, type PushState } from '@/lib/push';
+import { registerServiceWorker } from '@/lib/push';
 
 /** Registers the service worker once per page load. */
 export function PwaRegister() {
@@ -22,7 +22,7 @@ interface BeforeInstallPromptEvent extends Event {
 const INSTALLED = 'pa_installed';
 const CLOSED = 'pa_install_closed';
 
-function isStandalone() {
+export function isStandalone() {
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     // iOS Safari
@@ -31,8 +31,8 @@ function isStandalone() {
 }
 
 /** Which phone and browser, for the right "how to add it" steps. */
-type Platform = 'ios-safari' | 'ios-other' | 'ios-inapp' | 'android' | 'other';
-function platformOf(ua: string): Platform {
+export type Platform = 'ios-safari' | 'ios-other' | 'ios-inapp' | 'android' | 'other';
+export function platformOf(ua: string): Platform {
   if (/iphone|ipad|ipod/i.test(ua)) {
     // WhatsApp, Instagram, Facebook and the like open links inside themselves: no Add to Home Screen there.
     if (/FBAN|FBAV|Instagram|WhatsApp|Line\/|Snapchat|Twitter/i.test(ua) || !/Safari/i.test(ua)) return 'ios-inapp';
@@ -139,7 +139,7 @@ const STEPS: Record<Platform, { icon: React.ReactNode; text: React.ReactNode }[]
   other: [],
 };
 
-function HowSheet({ platform, onClose }: { platform: Platform; onClose: () => void }) {
+export function HowSheet({ platform, onClose }: { platform: Platform; onClose: () => void }) {
   const titleId = useId();
   return (
     <Sheet titleId={titleId} onClose={onClose} align="left" footer={<button onClick={onClose} className={`${btnPrimary} w-full`}>Got it</button>}>
@@ -250,74 +250,6 @@ export function InstallCard() {
         </button>
       </div>
       {how && <HowSheet platform={platform} onClose={() => setHow(false)} />}
-    </>
-  );
-}
-
-const pushCopy: Record<PushState, string> = {
-  on: 'Notifications are on for this device.',
-  off: 'Get a ping for new games, receipts and votes.',
-  denied: 'Notifications are blocked — allow them in your browser settings.',
-  unsupported: 'This browser can’t do notifications. On iPhone, add PitchAside to your home screen first.',
-  insecure: 'Notifications need the secure (https) version of PitchAside.',
-  ready: 'Permission allowed — tap Finish setup to complete notifications.',
-  unconfigured: 'Push notifications are not configured on the server yet.',
-};
-
-/** Toggle row for push notifications. `save` stores the subscription for a player or an organiser. */
-export function PushToggle({
-  save,
-  tone = 'light',
-}: {
-  save: (sub: PushSubscriptionJSON) => Promise<unknown>;
-  tone?: 'light' | 'dark';
-}) {
-  const [state, setState] = useState<PushState | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    getPushState().then(setState);
-  }, []);
-
-  if (!state) return null;
-  const dark = tone === 'dark';
-
-  return (
-    <>
-      <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 border ${dark ? 'bg-white/5 border-white/10' : 'bg-white border-gray-100 shadow-card'}`}>
-      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${state === 'on' ? 'bg-volt-400 text-ink' : dark ? 'bg-white/10 text-white' : 'bg-chalk text-ink'}`}>
-        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
-        </svg>
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className={`text-sm font-bold ${dark ? 'text-white' : 'text-ink'}`}>Notifications</p>
-        <p className={`text-xs ${dark ? 'text-white/60' : 'text-gray-500'}`}>{pushCopy[state]}</p>
-      </div>
-      {(state === 'off' || state === 'ready') && (
-        <button
-          disabled={busy}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              // iOS can require the permission prompt and push subscription to
-              // happen in separate user gestures. Once permission is granted,
-              // keep the row actionable so the next tap can subscribe.
-              if (state === 'ready' || Notification.permission === 'granted') {
-                setState(await subscribePush(save));
-              } else {
-                setState(await requestPushPermission());
-              }
-            } finally {
-              setBusy(false);
-            }
-          }}
-          className="px-3 py-2 text-xs font-bold text-ink bg-volt-400 rounded-lg shrink-0 disabled:opacity-50"
-        >
-          {busy ? '…' : state === 'ready' ? 'Finish setup' : 'Turn on'}
-        </button>
-      )}
-      </div>
     </>
   );
 }

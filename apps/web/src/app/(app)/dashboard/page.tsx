@@ -1,5 +1,6 @@
 'use client';
 
+import { NotifyPrompt } from '@/components/notify';
 import { Avatar } from '@/components/ratings';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
@@ -413,6 +414,10 @@ export default function Dashboard() {
         </>
       )}
 
+      {/* Notifications on by default: one tap, once, for a phone that hasn't allowed them */}
+      <div className="mb-3">
+        <NotifyPrompt side="organiser" />
+      </div>
       {/* Once, for groups made before match-day settings: where to set bibs and the timer */}
       {group && canManage && <MatchDayNews group={group} onSetUp={() => setSettingUp(true)} />}
       {settingUp && group && (
