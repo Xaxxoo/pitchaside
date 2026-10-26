@@ -107,7 +107,7 @@ const clubTabs = [
 
 const adminTab = {
   label: 'Admin',
-  href: '/admin',
+  href: '/office',
   icon: (active: boolean) => (
     <svg className="w-5 h-5" fill={active ? 'currentColor' : 'none'} viewBox="0 0 24 24" strokeWidth={active ? 0 : 1.5} stroke="currentColor">
       {active ? (
@@ -180,7 +180,7 @@ export function Nav() {
 
   const settingsActive = pathname.startsWith('/settings');
   // On phones the bar keeps four tabs plus More; Admin lives in More (the sidebar has room for it).
-  const moreActive = settingsActive || pathname.startsWith('/admin') || clubTabs.some((t) => pathname.startsWith(t.href));
+  const moreActive = settingsActive || pathname.startsWith('/office') || clubTabs.some((t) => pathname.startsWith(t.href));
 
   return (
     <>

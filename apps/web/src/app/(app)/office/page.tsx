@@ -152,7 +152,7 @@ export default function AdminPage() {
         subtitle={isSuperAdmin ? 'Platform administration' : 'Organization management'}
         actions={
           <Link
-            href="/admin/messages"
+            href="/office/messages"
             className="px-3.5 py-2 text-sm font-bold text-ink bg-white border border-gray-200 rounded-xl hover:border-ink transition-colors"
           >
             Notifications
@@ -163,7 +163,7 @@ export default function AdminPage() {
       {/* Super admin: the cross-club view lives in HQ */}
       {isSuperAdmin && (
         <Link
-          href="/hq"
+          href="/admin"
           className="mb-8 flex items-center justify-between gap-4 rounded-2xl bg-ink text-white p-4 hover:bg-pitch-900 transition-colors"
         >
           <span>

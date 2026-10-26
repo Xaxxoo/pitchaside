@@ -12,7 +12,7 @@ export function photoUrl(key?: string | null) {
  * player app) being signed out as an organiser is normal, so a 401 there must
  * not throw the visitor onto the organiser sign-in page.
  */
-const ORGANISER_PAGES = /^\/(dashboard|groups|players|sessions|competitions|admin|settings|hq)(\/|$)/;
+const ORGANISER_PAGES = /^\/(dashboard|groups|players|sessions|competitions|office|settings)(\/|$)/;
 
 /** Signing in (or up) has no session to refresh: a 401 there is the answer itself ("Invalid credentials"). */
 const SIGN_IN_CALLS = /^\/auth\/(login|register|2fa\/validate|refresh)$/;

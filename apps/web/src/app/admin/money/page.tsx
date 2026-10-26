@@ -94,7 +94,7 @@ export default function HqMoneyPage() {
                     <td className="px-4 py-3">
                       <p className="text-ink">{t.groupName ?? '—'}</p>
                       {t.clubId && (
-                        <Link href={`/hq/clubs/${t.clubId}`} className="text-xs text-gray-500 hover:text-pitch-600">
+                        <Link href={`/admin/clubs/${t.clubId}`} className="text-xs text-gray-500 hover:text-pitch-600">
                           {t.clubName}
                         </Link>
                       )}

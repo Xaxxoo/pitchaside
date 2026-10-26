@@ -60,7 +60,7 @@ export default function HqClubsPage() {
             {data.data.map((c) => (
               <tr key={c.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3">
-                  <Link href={`/hq/clubs/${c.id}`} className="font-bold text-ink hover:text-pitch-600">
+                  <Link href={`/admin/clubs/${c.id}`} className="font-bold text-ink hover:text-pitch-600">
                     {c.name}
                   </Link>
                   <p className="text-xs text-gray-500">

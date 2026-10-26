@@ -94,7 +94,7 @@ export default function Dashboard() {
 
   // The PitchAside team doesn't run a club — their home is HQ.
   useEffect(() => {
-    if (user?.role === UserRole.SUPER_ADMIN) router.replace('/hq');
+    if (user?.role === UserRole.SUPER_ADMIN) router.replace('/admin');
   }, [user, router]);
 
   const loadAll = () => {
