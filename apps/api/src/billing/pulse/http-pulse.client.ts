@@ -118,7 +118,7 @@ export class HttpPulseClient implements PulseClient {
       customer_name: input.accountName,
       ...(input.phone ? { customer_phone: input.phone } : {}),
       ...(input.email ? { customer_email: input.email } : {}),
-      ...(input.bvn ? { bvn: input.bvn } : {}),
+      ...(input.bvn ? { bvn: input.bvn } : input.nin ? { nin: input.nin } : {}),
       sweep_mode: 'manual',
       use_prefix: true,
       prefix_id: prefixId,

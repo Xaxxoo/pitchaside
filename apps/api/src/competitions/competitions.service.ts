@@ -116,7 +116,7 @@ export class CompetitionsService {
 
   // ── Account provisioning ──
 
-  async provisionAccount(id: string, organizationId: string, bvn?: string): Promise<Competition> {
+  async provisionAccount(id: string, organizationId: string, ids: { bvn?: string; nin?: string } = {}): Promise<Competition> {
     const comp = await this.findOne(id, organizationId);
     if (comp.accountNumber) {
       throw new BadRequestException('Competition already has a collection account');
@@ -128,7 +128,8 @@ export class CompetitionsService {
       accountName: accountNameFor(comp.name),
       email: contact?.email,
       phone: contact?.phone ?? undefined,
-      bvn,
+      bvn: ids.bvn,
+      nin: ids.nin,
     });
 
     comp.accountNumber = account.accountNumber;

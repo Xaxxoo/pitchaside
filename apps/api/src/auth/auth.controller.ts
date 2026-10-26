@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, UseGuards, Req, Res, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Put, Body, UseGuards, Req, Res, Query, BadRequestException } from '@nestjs/common';
 import { ThrottlerGuard, Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
@@ -9,6 +9,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { IdentityDto } from './dto/identity.dto';
+import { assertClubAdmin } from './club-admin';
 import { TwoFactorVerifyDto, TwoFactorValidateDto } from './dto/two-factor.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AllowTreasurer } from './decorators/allow-treasurer.decorator';
@@ -56,6 +58,14 @@ export class AuthController {
   @Patch('profile')
   updateProfile(@Body() dto: UpdateProfileDto, @CurrentUser() user: any) {
     return this.authService.updateProfile(user.id, dto);
+  }
+
+  /** The club admin's BVN and/or NIN: either one unlocks a group collection account. */
+  @UseGuards(JwtAuthGuard)
+  @Put('identity')
+  setIdentity(@Body() dto: IdentityDto, @CurrentUser() user: any) {
+    assertClubAdmin(user);
+    return this.authService.setIdentity(user.id, dto);
   }
 
   @UseGuards(JwtAuthGuard)

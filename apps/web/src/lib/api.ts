@@ -334,8 +334,13 @@ export function getPlayersPaginated(
 
 // ── Profile / Auth ──
 
-export function updateProfile(data: { firstName: string; lastName: string; phone?: string; bvn?: string }): Promise<any> {
+export function updateProfile(data: { firstName: string; lastName: string; phone?: string }): Promise<any> {
   return http.patch('/auth/profile', data);
+}
+
+/** The organiser's BVN and/or NIN; either one unlocks a group collection account. */
+export function setIdentity(data: { bvn?: string; nin?: string }): Promise<any> {
+  return http.put('/auth/identity', data);
 }
 
 export function changePassword(data: { currentPassword: string; newPassword: string }): Promise<any> {

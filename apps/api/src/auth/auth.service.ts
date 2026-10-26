@@ -27,6 +27,11 @@ import { UserRole } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+/** An identity number as the browser sees it: `•••••••4521`, or null. */
+function maskId(value?: string | null) {
+  return value ? `${'•'.repeat(value.length - 4)}${value.slice(-4)}` : null;
+}
+
 /** `typ` of the token login hands out between the password and the 2FA code. */
 export const TWO_FACTOR_CHALLENGE = '2fa';
 
@@ -140,7 +145,14 @@ export class AuthService {
     return { message: 'If that email exists, a reset link has been sent.' };
   }
 
-  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string; bvn?: string }) {
+  async setIdentity(userId: string, ids: { bvn?: string; nin?: string }) {
+    if (!ids.bvn && !ids.nin) throw new BadRequestException('Enter your BVN or your NIN');
+    const user = await this.usersService.setIdentity(userId, ids);
+    if (!user) throw new UnauthorizedException('User not found');
+    return this.sanitizeUser(user, user.organization);
+  }
+
+  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string }) {
     const user = await this.usersService.updateProfile(userId, data);
     if (!user) throw new UnauthorizedException('User not found');
     return this.sanitizeUser(user, user.organization);
@@ -286,7 +298,9 @@ export class AuthService {
       lastName: user.lastName,
       email: user.email,
       phone: user.phone ?? null,
-      bvn: user.bvn ?? null,
+      // Never the full number: the app only needs to know there is one, and which.
+      bvn: maskId(user.bvn),
+      nin: maskId(user.nin),
       role: user.role,
       organizationId: user.organizationId,
       organization: organization

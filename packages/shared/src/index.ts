@@ -167,7 +167,10 @@ export interface IUser {
   lastName: string;
   email: string;
   phone?: string | null;
+  /** Masked (`•••••••4521`): only whether there is one, and its last digits. */
   bvn?: string | null;
+  /** Masked like bvn. A BVN or a NIN unlocks a group collection account. */
+  nin?: string | null;
   role: UserRole;
   organizationId: string;
   organization?: IOrganization;

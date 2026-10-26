@@ -41,6 +41,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { AllowTreasurer } from '../auth/decorators/allow-treasurer.decorator';
 import { SkipCsrf } from '../auth/decorators/skip-csrf.decorator';
 import { User } from '../users/entities/user.entity';
+import { assertClubAdmin } from '../auth/club-admin';
 import { UsersService } from '../users/users.service';
 
 /** Routes that check the transfer PIN: on top of the per-account lockout, a per-client cap. */
@@ -73,11 +74,12 @@ export class BillingController {
   /** Retry account provisioning (e.g. if PulseMFB was down when the group was created). */
   @Post('groups/:id/account')
   async provisionAccount(@Param('id') id: string, @CurrentUser() user: User) {
+    assertClubAdmin(user);
     const fresh = await this.users.findById(user.id);
-    if (!fresh?.bvn) {
-      throw new BadRequestException('A BVN is required before creating a collection account. Please add your BVN in settings first.');
+    if (!fresh?.bvn && !fresh?.nin) {
+      throw new BadRequestException('Add your BVN or NIN before opening a collection account (Settings → Identity).');
     }
-    const billing = await this.billing.createGroupAccount(id, user.organizationId, fresh.bvn);
+    const billing = await this.billing.createGroupAccount(id, user.organizationId, { bvn: fresh.bvn ?? undefined, nin: fresh.nin ?? undefined });
     return { ...billing, link: this.link(billing.inviteCode) };
   }
 

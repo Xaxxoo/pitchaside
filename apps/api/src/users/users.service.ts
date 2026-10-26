@@ -1,6 +1,6 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { IsNull, Not, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole } from './entities/user.entity';
 import { PasswordReset } from './entities/password-reset.entity';
@@ -50,6 +50,24 @@ export class UsersService {
     await this.revokeAllRefreshTokens(userId);
   }
 
+  /**
+   * Saves an organiser's BVN and/or NIN. A number already on another organiser's account is
+   * refused, so one person's identity can't open accounts for several unrelated clubs.
+   */
+  async setIdentity(userId: string, ids: { bvn?: string; nin?: string }) {
+    for (const field of ['bvn', 'nin'] as const) {
+      const value = ids[field];
+      if (!value) continue;
+      const taken = await this.usersRepo.findOne({ where: { [field]: value, id: Not(userId) }, select: ['id'] });
+      if (taken) throw new ConflictException(`That ${field.toUpperCase()} is already on another PitchAside organiser account`);
+    }
+    const update: Partial<User> = {};
+    if (ids.bvn) update.bvn = ids.bvn;
+    if (ids.nin) update.nin = ids.nin;
+    if (Object.keys(update).length) await this.usersRepo.update(userId, update);
+    return this.findById(userId);
+  }
+
   async setRole(userId: string, role: UserRole) {
     await this.usersRepo.update(userId, { role });
   }
@@ -93,11 +111,10 @@ export class UsersService {
     return this.usersRepo.count({ where: { organizationId } });
   }
 
-  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string; bvn?: string }) {
-    const { phone, bvn, ...names } = data;
+  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string }) {
+    const { phone, ...names } = data;
     const update: Partial<User> = { ...names };
     if (phone !== undefined) update.phone = phone.trim() || null;
-    if (bvn !== undefined) update.bvn = bvn;
     await this.usersRepo.update(userId, update);
     return this.findById(userId);
   }

@@ -177,14 +177,15 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     return group;
   }
 
-  async provisionAccount(group: Group, bvn?: string): Promise<Group> {
+  async provisionAccount(group: Group, ids: { bvn?: string; nin?: string } = {}): Promise<Group> {
     const contact = await this.organiserContact(group.organizationId);
     const account = await this.pulse.createAccount({
       reference: group.id,
       accountName: accountNameFor(group.name),
       email: contact?.email,
       phone: contact?.phone ?? undefined,
-      bvn,
+      bvn: ids.bvn,
+      nin: ids.nin,
     });
     group.accountNumber = account.accountNumber;
     group.accountName = account.accountName;
@@ -204,11 +205,11 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * The organiser's "Create account" button. Unlike setupGroup, a failure comes back to
    * them with Pulse's reason, so it can be fixed instead of silently retried.
    */
-  async createGroupAccount(groupId: string, organizationId: string, bvn?: string) {
+  async createGroupAccount(groupId: string, organizationId: string, ids: { bvn?: string; nin?: string } = {}) {
     const group = await this.findGroup(groupId, organizationId);
     if (!group.accountNumber) {
       try {
-        await this.provisionAccount(group, bvn);
+        await this.provisionAccount(group, ids);
       } catch (err: any) {
         this.logger.warn(`Account provisioning failed for group ${group.id}: ${err.message}`);
         throw new BadGatewayException(`Couldn't create the account. ${err.message}`);

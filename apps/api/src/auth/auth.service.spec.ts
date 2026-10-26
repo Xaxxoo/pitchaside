@@ -160,6 +160,19 @@ describe('AuthService', () => {
     });
   });
 
+  describe('setIdentity', () => {
+    it('needs a BVN or a NIN', async () => {
+      await expect(service.setIdentity('user-1', {})).rejects.toThrow('Enter your BVN or your NIN');
+    });
+
+    it('saves a NIN and only ever returns the numbers masked', async () => {
+      usersService.setIdentity = jest.fn().mockResolvedValue({ ...mockUser, bvn: '22212345678', nin: '12345678901', organization: mockOrg });
+      const user = await service.setIdentity('user-1', { nin: '12345678901' });
+      expect(usersService.setIdentity).toHaveBeenCalledWith('user-1', { nin: '12345678901' });
+      expect(user).toMatchObject({ bvn: '•••••••5678', nin: '•••••••8901' });
+    });
+  });
+
   describe('validate2FALogin', () => {
     it("refuses a bare user id: the code step only follows a correct password", async () => {
       mockJwtVerify.mockImplementation(() => {

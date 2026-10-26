@@ -19,6 +19,8 @@ export interface CreateAccountInput {
   phone?: string;
   /** BVN for KYC (PulseMFB requires this). */
   bvn?: string;
+  /** NIN for KYC, sent when the organiser gave a NIN and no BVN. */
+  nin?: string;
 }
 
 export interface ProvisionedAccount {
