@@ -12,9 +12,10 @@ export class ClearColabDebt1795900000000 implements MigrationInterface {
     // Mark all pending payments for sessions in the Colab group as paid.
     await q.query(`
       UPDATE payments
-      SET status   = 'paid',
-          paid_at  = NOW(),
-          source   = 'manual'
+      SET status     = 'paid',
+          "paidAt"   = NOW(),
+          source     = 'manual',
+          "markedBy" = 'migration'
       WHERE status = 'pending'
         AND session_id IN (
           SELECT s.id FROM sessions s
@@ -23,10 +24,10 @@ export class ClearColabDebt1795900000000 implements MigrationInterface {
         )
     `);
 
-    // Recalculate each session's collected_amount to match.
+    // Recalculate each session's collectedAmount to match.
     await q.query(`
       UPDATE sessions s
-      SET collected_amount = (
+      SET "collectedAmount" = (
         SELECT COALESCE(SUM(p.amount), 0)
         FROM payments p
         WHERE p.session_id = s.id
