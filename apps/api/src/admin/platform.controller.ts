@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Inject, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { PlatformService } from './platform.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,6 +8,8 @@ import { PaginationDto } from '../common/dto/pagination.dto';
 import { ClubsQueryDto, StatusQueryDto } from './dto/platform-query.dto';
 import { PushBroadcastDto } from './dto/push-broadcast.dto';
 import { NotificationsService } from '../notifications/notifications.service';
+import { BillingService } from '../billing/billing.service';
+import { PULSE_CLIENT, PulseClient } from '../billing/pulse/pulse.client';
 
 /** HQ: the PitchAside team's view across every club. Super admins only. */
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -17,6 +19,8 @@ export class PlatformController {
   constructor(
     private readonly platform: PlatformService,
     private readonly notifications: NotificationsService,
+    private readonly billing: BillingService,
+    @Inject(PULSE_CLIENT) private readonly pulse: PulseClient,
   ) {}
 
   @Get('overview')
@@ -62,6 +66,12 @@ export class PlatformController {
   @Get('activity')
   activity(@Query() query: PaginationDto) {
     return this.platform.getActivity(query);
+  }
+
+  /** Diagnostic: check a group's bank balance, ledger balance, account status, and recent payouts. */
+  @Get('groups/:id/diagnostics')
+  async groupDiagnostics(@Param('id') groupId: string) {
+    return this.platform.groupDiagnostics(groupId, this.pulse);
   }
 
   /** Send a push + email to every organiser who hasn't added their BVN/NIN yet. */

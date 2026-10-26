@@ -4,6 +4,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 import { ClubsQueryDto, ClubSort, StatusQueryDto } from './dto/platform-query.dto';
+import { PulseClient } from '../billing/pulse/pulse.client';
 
 /**
  * The PitchAside team's own organisation (whoever holds a super-admin login)
@@ -370,6 +371,119 @@ export class PlatformService {
     const { page, limit, offset } = this.paging(query);
     const rows = await this.activityRows('true', [], limit, offset);
     return this.paginated(rows, page, limit);
+  }
+
+  // ── Diagnostics ──
+
+  async groupDiagnostics(groupId: string, pulse: PulseClient) {
+    const group = await this.one(
+      `SELECT g.id, g.name, g.account_number AS "accountNumber", g.bank_name AS "bankName",
+        g."paymentType", g."feePerPlayer"::float8 AS "feePerPlayer",
+        o.id AS "clubId", o.name AS "clubName"
+      FROM groups g
+      JOIN organizations o ON o.id = g.organization_id
+      WHERE g.id::text = $1`,
+      [groupId],
+    );
+    if (!group) throw new NotFoundException('Group not found');
+
+    // Ledger balance
+    const ledger = await this.one(
+      `SELECT
+        COALESCE(SUM(t.amount) FILTER (WHERE t.status IN ('matched','assigned','unmatched','other')), 0)::float8 AS "totalIn",
+        COALESCE(SUM(t.amount) FILTER (WHERE t.status IN ('matched','assigned','unmatched','other')
+          AND LEFT(t.provider_transaction_id, 7) = 'manual_'), 0)::float8 AS "manualIn"
+      FROM bank_transfers t
+      WHERE t.group_id::text = $1`,
+      [groupId],
+    );
+    const payouts = await this.one(
+      `SELECT
+        count(*)::int AS "payoutCount",
+        count(*) FILTER (WHERE p.status = 'failed')::int AS "failedPayouts",
+        count(*) FILTER (WHERE p.status = 'completed')::int AS "completedPayouts",
+        count(*) FILTER (WHERE p.status = 'processing')::int AS "processingPayouts",
+        count(*) FILTER (WHERE p.status = 'pending')::int AS "pendingPayouts",
+        count(*) FILTER (WHERE p.status = 'cancelled')::int AS "cancelledPayouts"
+      FROM outgoing_transfers p
+      WHERE p.group_id::text = $1`,
+      [groupId],
+    );
+    const totalOut = await this.one(
+      `SELECT COALESCE(SUM(p.amount + p.fee), 0)::float8 AS "totalOut"
+      FROM outgoing_transfers p
+      WHERE p.group_id::text = $1 AND p.status NOT IN ('failed','cancelled')`,
+      [groupId],
+    );
+
+    const available = Number(ledger?.totalIn ?? 0) - Number(ledger?.manualIn ?? 0) - Number(totalOut?.totalOut ?? 0);
+
+    // Bank balance from Payrep
+    let bankBalance: number | string | null = 'unavailable';
+    const accountNumber = group.accountNumber as string | null;
+    if (accountNumber) {
+      try {
+        bankBalance = await pulse.getBalance(accountNumber);
+      } catch (err: any) {
+        bankBalance = `error: ${err.message}`;
+      }
+    }
+
+    // Recent payouts (last 10)
+    const recentPayouts = await this.many(
+      `SELECT p.id, p.amount::float8 AS amount, p.fee::float8 AS fee, p.status,
+        p.beneficiary_name AS "beneficiaryName", p.beneficiary_account AS "beneficiaryAccount",
+        p.beneficiary_bank_name AS "beneficiaryBankName",
+        p.provider_reference AS "providerReference",
+        p.error_message AS "errorMessage",
+        p."createdAt"
+      FROM outgoing_transfers p
+      WHERE p.group_id::text = $1
+      ORDER BY p."createdAt" DESC
+      LIMIT 10`,
+      [groupId],
+    );
+
+    // Recent incoming transfers (last 10)
+    const recentTransfers = await this.many(
+      `SELECT t.id, t.amount::float8 AS amount, t.sender_name AS "senderName",
+        t.narration, t.status, t.received_at AS "receivedAt"
+      FROM bank_transfers t
+      WHERE t.group_id::text = $1
+      ORDER BY t.received_at DESC
+      LIMIT 10`,
+      [groupId],
+    );
+
+    // Member balances
+    const members = await this.many(
+      `SELECT m.player_id AS "playerId",
+        p."firstName" || ' ' || p."lastName" AS name,
+        m.credit::float8 AS credit,
+        m.extra::float8 AS extra,
+        m.waiting::float8 AS waiting
+      FROM group_memberships m
+      JOIN players p ON p.id = m.player_id
+      WHERE m.group_id::text = $1
+      ORDER BY (m.credit + m.extra + m.waiting) DESC
+      LIMIT 20`,
+      [groupId],
+    );
+
+    return {
+      group,
+      balance: {
+        bankBalance,
+        ledgerIn: Number(ledger?.totalIn ?? 0),
+        manualIn: Number(ledger?.manualIn ?? 0),
+        ledgerOut: Number(totalOut?.totalOut ?? 0),
+        available,
+      },
+      payoutStats: payouts,
+      recentPayouts,
+      recentTransfers,
+      members,
+    };
   }
 
   // ── Helpers ──
