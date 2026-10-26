@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { Logo } from '@/components/brand';
+import { http } from '@/lib/http';
 import { UserRole } from '@pitchaside/shared';
 
 export default function AdminLoginPage() {
@@ -37,7 +38,7 @@ export default function AdminLoginPage() {
         setTwoFA({ required: true, challenge: result.challenge });
       } else {
         // login() sets the user in context — check the role from /auth/me
-        const me = await fetch('/api/auth/me', { credentials: 'include' }).then((r) => r.json());
+        const me = await http.get<{ role: string }>('/auth/me');
         if (me.role !== UserRole.SUPER_ADMIN) {
           toast.error('This login is for PitchAside staff only.');
           return;
@@ -56,7 +57,7 @@ export default function AdminLoginPage() {
     setSubmitting(true);
     try {
       await validate2FA(twoFA.challenge, code);
-      const me = await fetch('/api/auth/me', { credentials: 'include' }).then((r) => r.json());
+      const me = await http.get<{ role: string }>('/auth/me');
       if (me.role !== UserRole.SUPER_ADMIN) {
         toast.error('This login is for PitchAside staff only.');
         return;

@@ -1,13 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { NightStadium } from '@/components/illustrations';
 import { BallLoader } from '@/components/skeleton';
-
-/** Pages that should stay accessible even when already signed in. */
-const ALLOW_LOGGED_IN = ['/forgot-password', '/reset-password'];
 
 export default function AuthLayout({
   children,
@@ -16,14 +13,12 @@ export default function AuthLayout({
 }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
-  const skipRedirect = ALLOW_LOGGED_IN.some((p) => pathname.startsWith(p));
 
   useEffect(() => {
-    if (!loading && user && !skipRedirect) {
+    if (!loading && user) {
       router.replace('/dashboard');
     }
-  }, [user, loading, router, skipRedirect]);
+  }, [user, loading, router]);
 
   if (loading) {
     return (
@@ -33,7 +28,7 @@ export default function AuthLayout({
     );
   }
 
-  if (user && !skipRedirect) return null;
+  if (user) return null;
 
   return (
     <div className="min-h-screen bg-white lg:grid lg:grid-cols-[1fr_1.05fr]">
