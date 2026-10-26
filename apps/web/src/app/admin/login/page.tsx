@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
@@ -152,9 +153,14 @@ export default function AdminLoginPage() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label htmlFor="password" className="block text-xs font-bold text-gray-700">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-xs text-pitch-600 font-medium hover:text-pitch-700">
+                Forgot?
+              </Link>
+            </div>
             <input
               id="password"
               name="password"
