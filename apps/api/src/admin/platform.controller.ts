@@ -63,4 +63,25 @@ export class PlatformController {
   activity(@Query() query: PaginationDto) {
     return this.platform.getActivity(query);
   }
+
+  /** Send a push + email to every organiser who hasn't added their BVN/NIN yet. */
+  @Post('notify-identity')
+  async notifyIdentity() {
+    const users = await this.platform.organisersWithoutIdentity();
+    let sent = 0;
+    for (const user of users) {
+      await this.notifications.notifyOrganisers(
+        user.organizationId,
+        {
+          kind: 'identity_required',
+          title: 'Add your BVN and NIN to unlock transfers',
+          body: 'The bank needs your BVN and NIN before your group can receive or send money. Open Settings to add them now.',
+          url: '/settings',
+        },
+        { email: true },
+      );
+      sent++;
+    }
+    return { notified: sent };
+  }
 }

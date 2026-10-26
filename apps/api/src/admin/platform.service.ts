@@ -457,6 +457,21 @@ export class PlatformService {
     };
   }
 
+  /**
+   * Org admins who have at least one group but are missing BVN, NIN, or both.
+   * Returns each user's id, organizationId, firstName, and email.
+   */
+  async organisersWithoutIdentity(): Promise<{ id: string; organizationId: string; firstName: string; email: string }[]> {
+    return this.db.query(`
+      SELECT u.id, u.organization_id AS "organizationId", u."firstName", u.email
+      FROM users u
+      WHERE u.role = 'org_admin'
+        AND (u.bvn IS NULL OR u.nin IS NULL)
+        AND u.removed_at IS NULL
+        AND EXISTS (SELECT 1 FROM groups g WHERE g.organization_id = u.organization_id)
+    `);
+  }
+
   private many(sql: string, params: unknown[] = [], cte = ''): Promise<Row[]> {
     return this.db.query(`${cte} ${sql}`, params);
   }

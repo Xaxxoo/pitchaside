@@ -35,6 +35,9 @@ export interface HttpPulseConfig {
   webhookSecret: string;
 }
 
+/** How long we wait for any single Payrep API call before giving up. */
+const API_TIMEOUT_MS = 30_000;
+
 /**
  * Live PulseMFB client.
  *
@@ -89,6 +92,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`PulseMFB getPrefixes failed (${res.status}): ${await pulseReason(res)}`);
@@ -129,6 +133,7 @@ export class HttpPulseClient implements PulseClient {
       method: 'POST',
       headers: this.authHeaders('POST', path, body),
       body,
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`Payrep MFB createAccount failed (${res.status}): ${await pulseReason(res)}`);
@@ -153,6 +158,7 @@ export class HttpPulseClient implements PulseClient {
       method: 'POST',
       headers: this.authHeaders('POST', path, body),
       body,
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`Payrep MFB name enquiry failed (${res.status}): ${await pulseReason(res)}`);
@@ -181,6 +187,7 @@ export class HttpPulseClient implements PulseClient {
       method: 'POST',
       headers: this.authHeaders('POST', path, body),
       body,
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`Payrep MFB transfer failed (${res.status}): ${await pulseReason(res)}`);
@@ -199,6 +206,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`Payrep MFB transfer lookup failed (${res.status}): ${await pulseReason(res)}`);
@@ -217,6 +225,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`PulseMFB balance failed (${res.status}): ${await pulseReason(res)}`);
@@ -233,6 +242,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`PulseMFB webhook info failed (${res.status}): ${await pulseReason(res)}`);
@@ -275,7 +285,7 @@ export class HttpPulseClient implements PulseClient {
     // Logs come newest first; stop at the first page that reaches back past `since`.
     for (let page = 1; page <= 10; page++) {
       const path = `/api/v1/external-api/webhooks/logs?page=${page}&limit=50`;
-      const res = await fetch(`${this.baseUrl}${path}`, { method: 'GET', headers: this.authHeaders('GET', path, '') });
+      const res = await fetch(`${this.baseUrl}${path}`, { method: 'GET', headers: this.authHeaders('GET', path, ''), signal: AbortSignal.timeout(API_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`PulseMFB webhook logs failed (${res.status}): ${await pulseReason(res)}`);
       const json = (await res.json()) as Record<string, any>;
       const d = json.data ?? json;
@@ -302,7 +312,7 @@ export class HttpPulseClient implements PulseClient {
       // Once each: Pulse may keep the original entry marked failed after a resend succeeds.
       if (/^(vas|webhook\.test)/.test(log.event) || this.resentLogs.has(log.id)) continue;
       const path = `/api/v1/external-api/webhooks/logs/${encodeURIComponent(log.id)}/resend`;
-      const res = await fetch(`${this.baseUrl}${path}`, { method: 'POST', headers: this.authHeaders('POST', path, '') });
+      const res = await fetch(`${this.baseUrl}${path}`, { method: 'POST', headers: this.authHeaders('POST', path, ''), signal: AbortSignal.timeout(API_TIMEOUT_MS) });
       if (res.ok) {
         this.resentLogs.add(log.id);
         resent++;

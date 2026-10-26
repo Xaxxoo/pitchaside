@@ -376,6 +376,20 @@ export default function Dashboard() {
         </div>
         <UpdatesBell needs={bellNeeds} latest={bellLatest} />
       </div>
+      {/* Banner: organiser needs BVN/NIN to make transfers */}
+      {user && (user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) && (!user.bvn || !user.nin) && groups.length > 0 && (
+        <Link
+          href="/settings"
+          className="mb-3 flex items-center gap-3 rounded-2xl bg-sun-400/20 border border-sun-400/40 p-3.5 hover:border-sun-400 transition-colors"
+        >
+          <span className="w-9 h-9 rounded-full bg-sun-400 text-ink flex items-center justify-center shrink-0 text-lg font-extrabold">!</span>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-ink">Add your BVN and NIN to make transfers</span>
+            <span className="block text-xs text-gray-600 mt-0.5">The bank needs them before your group can receive or send money. Tap to add in Settings.</span>
+          </span>
+        </Link>
+      )}
+
       {showNewGame && (
         <NewSessionSheet
           groups={group ? [group, ...groups.filter((g) => g.id !== group.id)] : groups}
