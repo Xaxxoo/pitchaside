@@ -1,7 +1,9 @@
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
 /**
- * Mark all pending payments for the "Colab" group as paid and update session totals.
+ * Mark all pending payments for the "Colab" group as paid, update session totals,
+ * and zero out every member's credit, extra and waiting money so no player shows
+ * money sitting with the organiser.
  */
 export class ClearColabDebt1795900000000 implements MigrationInterface {
   name = 'ClearColabDebt1795900000000';
@@ -31,6 +33,19 @@ export class ClearColabDebt1795900000000 implements MigrationInterface {
           AND p.status = 'paid'
       )
       WHERE s.group_id IN (
+        SELECT id FROM groups WHERE name ILIKE 'Colab'
+      )
+    `);
+
+    // Zero out credit, extra and waiting on every membership so no player
+    // appears to have money sitting with the organiser.
+    await q.query(`
+      UPDATE group_memberships
+      SET credit  = 0,
+          extra   = 0,
+          waiting = 0,
+          waiting_note = NULL
+      WHERE group_id IN (
         SELECT id FROM groups WHERE name ILIKE 'Colab'
       )
     `);
