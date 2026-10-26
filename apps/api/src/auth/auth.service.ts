@@ -146,7 +146,7 @@ export class AuthService {
   }
 
   async setIdentity(userId: string, ids: { bvn?: string; nin?: string }) {
-    if (!ids.bvn && !ids.nin) throw new BadRequestException('Enter your BVN or your NIN');
+    if (!ids.bvn && !ids.nin) throw new BadRequestException('Enter your BVN and NIN');
     const user = await this.usersService.setIdentity(userId, ids);
     if (!user) throw new UnauthorizedException('User not found');
     return this.sanitizeUser(user, user.organization);

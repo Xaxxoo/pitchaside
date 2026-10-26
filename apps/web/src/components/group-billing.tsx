@@ -176,8 +176,8 @@ export function GroupAccountCard({
   const [busy, setBusy] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [showIdPrompt, setShowIdPrompt] = useState(false);
-  // A BVN or a NIN opens the account (the bank needs to know whose it is), and only the club admin's.
-  const hasId = !!(user?.bvn || user?.nin);
+  // Both a BVN and a NIN are needed to open the account (the bank needs to know whose it is), and only the club admin's.
+  const hasId = !!(user?.bvn && user?.nin);
   const canOpen = user?.role === UserRole.ORG_ADMIN || user?.role === UserRole.SUPER_ADMIN;
   const [showRecord, setShowRecord] = useState(false);
   const router = useRouter();
@@ -330,10 +330,10 @@ export function GroupAccountCard({
             <div className="mt-5">
               <p className="text-sm text-white/70">
                 {!canOpen
-                  ? 'The group’s bank account isn’t open yet. Ask your club admin to open it: it’s in their name, with their BVN or NIN.'
+                  ? 'The group’s bank account isn’t open yet. Ask your club admin to open it: it’s in their name, with their BVN and NIN.'
                   : hasId
                     ? 'The group’s account isn’t open yet: the bank didn’t answer when the group was made. Try again.'
-                    : 'Add your BVN or NIN to open the group’s bank account. Players pay into it, and it’s in your name as the organiser.'}
+                    : 'Add your BVN and NIN to open the group’s bank account. Players pay into it, and it’s in your name as the organiser.'}
               </p>
               {!canOpen ? null : showIdPrompt ? (
                 <div className="mt-4 bg-white rounded-2xl p-4">
@@ -359,7 +359,7 @@ export function GroupAccountCard({
                   disabled={busy}
                   className="mt-4 px-4 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 disabled:opacity-50 transition-colors"
                 >
-                  {busy ? 'Opening…' : hasId ? 'Try again' : 'Add BVN or NIN and open account'}
+                  {busy ? 'Opening…' : hasId ? 'Try again' : 'Add BVN/NIN and open account'}
                 </button>
               )}
             </div>

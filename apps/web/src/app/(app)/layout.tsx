@@ -52,7 +52,7 @@ export default function AppLayout({
     <CurrentGroupProvider>
       {!user.emailVerified && <VerifyEmailModal email={user.email} onCheck={refreshUser} />}
       {/* After the email one, so they never stack. Only the club admin opens accounts, so only they're asked. */}
-      {user.emailVerified && !user.bvn && !user.nin && user.role === UserRole.ORG_ADMIN && <VerifyIdentityModal />}
+      {user.emailVerified && (!user.bvn || !user.nin) && user.role === UserRole.ORG_ADMIN && <VerifyIdentityModal />}
       {celebrate && <EmailVerifiedModal onClose={() => setCelebrate(false)} />}
       <main className="min-h-screen pb-[calc(7rem_+_var(--install-nudge,0px))] md:pb-10 md:pl-60 md:pt-4">
         {children}

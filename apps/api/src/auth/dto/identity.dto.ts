@@ -1,6 +1,6 @@
 import { IsOptional, Matches } from 'class-validator';
 
-/** An organiser's identity number: a BVN or a NIN (or both). Either unlocks a collection account. */
+/** An organiser's identity numbers: both a BVN and a NIN are required to unlock a collection account. */
 export class IdentityDto {
   /** Bank Verification Number: dial *565*0# to get it. */
   @IsOptional()

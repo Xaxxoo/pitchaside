@@ -161,8 +161,8 @@ describe('AuthService', () => {
   });
 
   describe('setIdentity', () => {
-    it('needs a BVN or a NIN', async () => {
-      await expect(service.setIdentity('user-1', {})).rejects.toThrow('Enter your BVN or your NIN');
+    it('needs a BVN and NIN', async () => {
+      await expect(service.setIdentity('user-1', {})).rejects.toThrow('Enter your BVN and NIN');
     });
 
     it('saves a NIN and only ever returns the numbers masked', async () => {

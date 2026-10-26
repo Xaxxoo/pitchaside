@@ -77,8 +77,9 @@ export class CompetitionsController {
   async provisionAccount(@Param('id') id: string, @CurrentUser() user: User) {
     assertClubAdmin(user);
     const fresh = await this.users.findById(user.id);
-    if (!fresh?.bvn && !fresh?.nin) {
-      throw new BadRequestException('Add your BVN or NIN before opening a collection account (Settings → Identity).');
+    if (!fresh?.bvn || !fresh?.nin) {
+      const missing = [!fresh?.bvn && 'BVN', !fresh?.nin && 'NIN'].filter(Boolean).join(' and ');
+      throw new BadRequestException(`Add your ${missing} before opening a collection account (Settings \u2192 Identity).`);
     }
     return this.competitions.provisionAccount(id, user.organizationId, { bvn: fresh.bvn ?? undefined, nin: fresh.nin ?? undefined });
   }

@@ -45,7 +45,7 @@ export function VerifyIdentityModal() {
         Verify your identity
       </h2>
       <p className="text-sm text-gray-500 mt-1.5">
-        Add your BVN or NIN. The bank needs it to open a collection account for your group, the account players pay into.
+        Add your BVN and NIN. The bank needs them to open a collection account for your group, the account players pay into.
       </p>
       <div className="mt-4">
         <IdentityForm onDone={() => setOpen(false)} />
@@ -57,7 +57,7 @@ export function VerifyIdentityModal() {
         Add later
       </button>
       <p className="text-xs text-gray-500 mt-2 text-center">
-        Until you add one, your groups can’t get a collection account. You can add it any time in Settings.
+        Until you add both, your groups can’t get a collection account. You can add them any time in Settings.
       </p>
     </Sheet>
   );
