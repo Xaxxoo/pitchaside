@@ -8,13 +8,22 @@ import { PasswordSignIn } from '@/components/password-sign-in';
 import { SignInSwitch } from '@/components/signin-switch';
 import { http, storeRefreshToken } from '@/lib/http';
 import { btnSecondary } from '@/components/buttons';
+import { KnownAccountPicker } from '@/components/known-account-picker';
+import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
 
 export default function PlayerLoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   // Sent from the organiser sign-in when the email is a player's: keep what they typed.
   const [email, setEmail] = useState<string | null>(null);
-  useEffect(() => setEmail(new URLSearchParams(window.location.search).get('email') ?? ''), []);
+  // Accounts this phone has used: offered by name, and the latest one filled in
+  const [accounts, setAccounts] = useState<KnownAccount[]>([]);
+  useEffect(() => {
+    const known = knownAccounts();
+    setAccounts(known);
+    setEmail(new URLSearchParams(window.location.search).get('email') ?? known[0]?.email ?? '');
+  }, []);
+  const chosen = accounts.find((a) => a.email === email);
 
   function onSignedIn() {
     router.replace('/me');
@@ -55,11 +64,12 @@ export default function PlayerLoginPage() {
           <SignInSwitch current="player" />
         </div>
         {error && <div className="mb-3 bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">{error}</div>}
+        {email !== null && <KnownAccountPicker accounts={accounts} chosen={email} onPick={setEmail} />}
         {email !== null && <PasswordSignIn
           key={email}
           initialEmail={email}
           otherAccount={asOrganiser}
-          title="Player sign in"
+          title={chosen ? `Welcome back, ${chosen.firstName}` : 'Player sign in'}
           onSignedIn={onSignedIn}
         />}
         <JoinWithLink />

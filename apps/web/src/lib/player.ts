@@ -7,6 +7,7 @@ import type { Bibs, KeeperPref } from '@pitchaside/shared';
 import { tableQuery, type TableRange } from './api';
 import type { GoalInput, Lineup, PlanInfo, MatchEventKind, RatingBreakdown, RatingTrial, LeagueTable, PlayerRatings, VoteCategory, VoteResults, GroupAccount, PublicGroup, TeamKey } from './api';
 import { serverMessage } from './http';
+import { rememberAccount } from './known-accounts';
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
@@ -124,7 +125,10 @@ export type SignupInput = { email: string; firstName: string; lastName: string; 
 const fromGame = (game?: string | null) => (game ? `?game=${encodeURIComponent(game)}` : '');
 
 export function signupFromLink(code: string, data: SignupInput, game?: string | null) {
-  return request<JoinResult>('POST', `/public/groups/${code}/signup${fromGame(game)}`, data, false);
+  return request<JoinResult>('POST', `/public/groups/${code}/signup${fromGame(game)}`, data, false).then((res) => {
+    rememberAccount(data);
+    return res;
+  });
 }
 
 export interface ClubGroup {
@@ -357,7 +361,12 @@ export function startGroup(data: { clubName: string; password: string }) {
 }
 
 export function getPlayerHome() {
-  return request<PlayerHome>('GET', '/me');
+  // Each time a player's home loads, this phone remembers the account (name and email only), so
+  // a group link can offer "Continue as …" and someone with two accounts can pick the right one.
+  return request<PlayerHome>('GET', '/me').then((home) => {
+    rememberAccount(home.player);
+    return home;
+  });
 }
 
 export function setRsvp(sessionId: string, status: 'in' | 'out') {

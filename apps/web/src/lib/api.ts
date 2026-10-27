@@ -495,6 +495,8 @@ export interface TransferClaim {
 export const invitedBy = (g: { organiserName?: string | null; organizationName?: string }) => g.organiserName || g.organizationName || '';
 
 export interface PublicGroup {
+  /** Newer servers: lets a signed-in player's phone see they're already in the group. */
+  groupId?: string;
   groupName: string;
   organizationName?: string;
   /** First name of the person who runs the account: "Matthew invites you". */
