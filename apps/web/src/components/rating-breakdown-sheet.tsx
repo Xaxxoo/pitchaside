@@ -3,7 +3,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
-import type { RatingBreakdown } from '@/lib/api';
+import type { ClassicBreakdown, MatchRatingParts, RatingBreakdown, SteadyBreakdown } from '@/lib/api';
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -29,19 +29,21 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
   const first = name.split(' ')[0];
   const title = data ? `How ${first}’s ${data.rating} is made` : `How ${first}’s rating is made`;
 
-  const parts = data
+  const steady = data?.mode === 'steady' ? data : null;
+  const classic = data && data.mode !== 'steady' ? (data as ClassicBreakdown) : null;
+  const parts = classic
     ? [
         {
           key: 'stats',
           label: 'Stats',
-          score: data.stats.score,
-          weight: data.weights.stats,
-          place: data.stats.place,
+          score: classic.stats.score,
+          weight: classic.weights.stats,
+          place: classic.stats.place,
           lines: [
-            `${plural(data.stats.goals, 'goal')}, ${plural(data.stats.assists, 'assist')} in ${plural(data.stats.games, 'game')}`,
-            data.stats.saves ? `${plural(data.stats.saves, 'save')} (each worth a tenth of a goal)` : null,
-            data.stats.yellowCards || data.stats.redCards
-              ? `${[data.stats.yellowCards ? plural(data.stats.yellowCards, 'yellow card') : null, data.stats.redCards ? plural(data.stats.redCards, 'red card') : null]
+            `${plural(classic.stats.goals, 'goal')}, ${plural(classic.stats.assists, 'assist')} in ${plural(classic.stats.games, 'game')}`,
+            classic.stats.saves ? `${plural(classic.stats.saves, 'save')} (each worth a tenth of a goal)` : null,
+            classic.stats.yellowCards || classic.stats.redCards
+              ? `${[classic.stats.yellowCards ? plural(classic.stats.yellowCards, 'yellow card') : null, classic.stats.redCards ? plural(classic.stats.redCards, 'red card') : null]
                   .filter(Boolean)
                   .join(', ')}: a yellow costs a quarter of a goal, a red a whole goal`
               : null,
@@ -51,25 +53,25 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
         {
           key: 'votes',
           label: 'Votes',
-          score: data.votes.score,
-          weight: data.weights.votes,
-          place: data.votes.place,
-          lines: data.votes.ballots
+          score: classic.votes.score,
+          weight: classic.weights.votes,
+          place: classic.votes.place,
+          lines: classic.votes.ballots
             ? [
-                `Player of the Match on ${data.votes.potmVotes} of ${plural(data.votes.ballots, 'ballot')} they could be on${data.votes.potmWins ? ` (won it ${plural(data.votes.potmWins, 'time')})` : ''}`,
-                data.votes.viiPicks ? `In ${plural(data.votes.viiPicks, 'Best VII')} picked by teammates` : 'Not in anyone’s Best VII yet',
-                data.votes.awards.length ? `${plural(data.votes.awards.length, 'award')} with enough voters` : 'No awards with enough voters yet',
+                `Player of the Match on ${classic.votes.potmVotes} of ${plural(classic.votes.ballots, 'ballot')} they could be on${classic.votes.potmWins ? ` (won it ${plural(classic.votes.potmWins, 'time')})` : ''}`,
+                classic.votes.viiPicks ? `In ${plural(classic.votes.viiPicks, 'Best VII')} picked by teammates` : 'Not in anyone’s Best VII yet',
+                classic.votes.awards.length ? `${plural(classic.votes.awards.length, 'award')} with enough voters` : 'No awards with enough voters yet',
               ]
             : ['No votes yet, so this sits in the middle. It never counts against them.'],
         },
         {
           key: 'results',
           label: 'Results',
-          score: data.results.score,
-          weight: data.weights.results,
-          place: data.results.place,
+          score: classic.results.score,
+          weight: classic.weights.results,
+          place: classic.results.place,
           lines: [
-            `Their teams won ${data.results.record.w}, drew ${data.results.record.d}, lost ${data.results.record.l}`,
+            `Their teams won ${classic.results.record.w}, drew ${classic.results.record.d}, lost ${classic.results.record.l}`,
             'Beating stronger sides counts for more. This is also what balances teams.',
           ],
         },
@@ -78,7 +80,12 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
 
   return (
     <Sheet titleId={titleId} onClose={onClose} align="left">
-      <SheetTitle id={titleId} title={title} sub="40% stats, 40% votes, 20% results, each against the rest of the club. 70 is the middle." onClose={onClose} />
+      <SheetTitle
+        id={titleId}
+        title={title}
+        sub={steady ? 'It follows their form, a few points at most each match day.' : '40% stats, 40% votes, 20% results, each against the rest of the club. 70 is the middle.'}
+        onClose={onClose}
+      />
       {failed !== null ? (
         <p className="mt-6 text-center text-sm text-gray-600" role="alert">
           This didn’t load.{failed ? ` The server said: “${failed}”` : ''}
@@ -93,7 +100,9 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
         <p className="mt-6 rounded-3xl bg-chalk px-4 py-6 text-center text-sm text-gray-600">
           {first} hasn’t played a game with scores yet. Until then the card shows the level their organiser gave them.
         </p>
-      ) : (
+      ) : steady ? (
+        <SteadyBody data={steady} first={first} />
+      ) : classic ? (
         <>
           <ol className="mt-4 space-y-2">
             {parts.map((p) => (
@@ -108,7 +117,7 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
                   <div className="h-2 rounded-full bg-pitch-500 animate-fill-grow" style={{ width: `${((p.score - 40) / 59) * 100}%` }} />
                 </div>
                 <p className={`mt-1 text-[12px] font-bold ${p.place !== null && p.place <= 3 ? 'text-pitch-700' : 'text-gray-500'}`}>
-                  {p.place === null ? 'Level with everyone in the club so far' : `${ordinal(p.place)} of ${data.of} in the club`}
+                  {p.place === null ? 'Level with everyone in the club so far' : `${ordinal(p.place)} of ${classic.of} in the club`}
                 </p>
                 <ul className="mt-1.5 space-y-0.5 text-[13px] leading-snug text-gray-600">
                   {p.lines.filter(Boolean).map((l) => (
@@ -119,11 +128,115 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
             ))}
           </ol>
           <p className="mt-3 rounded-2xl bg-chalk px-4 py-3 text-[13px] text-gray-700 tabular-nums">
-            {Math.round(data.weights.stats * 100)}% of {data.stats.score} + {Math.round(data.weights.votes * 100)}% of {data.votes.score} +{' '}
-            {Math.round(data.weights.results * 100)}% of {data.results.score} = <b className="text-ink">{data.rating}</b>
+            {Math.round(classic.weights.stats * 100)}% of {classic.stats.score} + {Math.round(classic.weights.votes * 100)}% of {classic.votes.score} +{' '}
+            {Math.round(classic.weights.results * 100)}% of {classic.results.score} = <b className="text-ink">{classic.rating}</b>
           </p>
         </>
-      )}
+      ) : null}
     </Sheet>
+  );
+}
+
+const PART_LABELS: [keyof MatchRatingParts, string][] = [
+  ['goals', 'Goals'],
+  ['assists', 'Assists'],
+  ['results', 'Results'],
+  ['keeping', 'In goal'],
+  ['cleanSheets', 'Clean sheets'],
+  ['cards', 'Cards'],
+  ['votes', 'Votes'],
+];
+const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)}`;
+const dayLabel = (iso: string) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
+};
+
+/**
+ * A steady card: where they are (form, match days, how far the next match day can move it), then
+ * their latest match days, each with its match rating, what made it and how far the card moved.
+ */
+function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
+  const votes = Math.round(data.votesCount * 100);
+  return (
+    <div className="mt-4 space-y-3">
+      <dl className="grid grid-cols-3 gap-2">
+        {(
+          [
+            ['Form', data.form == null ? '–' : data.form.toFixed(1), 'out of 10'],
+            ['Days rated', String(data.matchDays), data.settling ? 'still settling' : 'settled'],
+            ['Next move', `±${data.maxMove}`, 'at most'],
+          ] as const
+        ).map(([label, v, hint]) => (
+          <div key={label} className="min-w-0 rounded-2xl bg-chalk px-3 py-2.5">
+            <dt className="text-[11px] font-bold text-gray-600 truncate">{label}</dt>
+            <dd className="mt-1 font-display text-[22px] leading-none font-extrabold text-ink tabular-nums">{v}</dd>
+            <dd className="mt-1 text-[11px] text-gray-500 truncate">{hint}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-[13px] leading-snug text-gray-600">
+        {data.settling
+          ? `New players move up to ${data.maxMove} a match day for their first ${data.newFor}, then ${data.settledMove}.`
+          : `Settled: the rating moves ${data.settledMove} at most a match day.`}{' '}
+        Votes count {votes}% for {first} now.
+      </p>
+
+      {data.recent.length === 0 ? (
+        <div className="rounded-3xl bg-chalk px-4 py-4">
+          <p className="text-[14px] font-bold text-ink">No match days with scores yet</p>
+          <p className="mt-0.5 text-[13px] text-gray-600">Until then the card shows the level their organiser gave them.</p>
+        </div>
+      ) : (
+        <section aria-labelledby="steady-days">
+          <h3 id="steady-days" className="text-[14px] font-extrabold text-ink">
+            Latest match days
+          </h3>
+          <p className="text-[12px] text-gray-500">Everyone starts a match day on 6.0. These add or take off.</p>
+          <ol className="mt-2 space-y-2">
+            {data.recent.map((d) => {
+              const made = PART_LABELS.filter(([k]) => d.parts[k] !== 0);
+              return (
+                <li key={d.date} className="rounded-3xl bg-white border border-gray-100 shadow-card px-3.5 py-3">
+                  <div className="flex items-center gap-3">
+                    <span className="shrink-0 w-12 h-12 rounded-xl bg-ink flex flex-col items-center justify-center leading-none" aria-label={`Match rating ${d.rating.toFixed(1)} out of 10`}>
+                      <span className="font-display text-[18px] font-extrabold text-volt-300 tabular-nums">{d.rating.toFixed(1)}</span>
+                      <span className="mt-0.5 text-[8px] font-extrabold tracking-[0.12em] text-white/60">/ 10</span>
+                    </span>
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] font-bold text-ink truncate">{dayLabel(d.date)}</span>
+                      <span className="block text-[12px] text-gray-500 truncate">
+                        {d.games} game{d.games === 1 ? '' : 's'}
+                      </span>
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2.5 py-1 text-[13px] font-extrabold tabular-nums ${d.move > 0 ? 'bg-volt-300 text-ink' : d.move < 0 ? 'bg-kit-400/15 text-kit-600' : 'bg-gray-100 text-gray-600'}`}
+                    >
+                      {d.move > 0 ? `+${d.move}` : d.move < 0 ? `−${Math.abs(d.move)}` : 'No change'}
+                    </span>
+                  </div>
+                  <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="What made it">
+                    {made.length ? (
+                      made.map(([k, label]) => (
+                        <li key={k} className="rounded-full bg-chalk px-2.5 py-1 text-[12px] font-semibold text-gray-700 tabular-nums whitespace-nowrap">
+                          {label} {signed(d.parts[k])}
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-[12px] text-gray-500">A level day: nothing added or taken off</li>
+                    )}
+                  </ul>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      )}
+      {data.classic != null && (
+        <p className="rounded-2xl bg-chalk px-4 py-3 text-[13px] text-gray-600">
+          The classic rating would say <b className="text-ink tabular-nums">{data.classic}</b>. Organisers can switch back any time on the Stats page.
+        </p>
+      )}
+    </div>
   );
 }

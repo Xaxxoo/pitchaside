@@ -508,10 +508,31 @@ describe('ratingBreakdown', () => {
     const row = (id: string, goals: number, games = 5) =>
       ({ ...blankRatings(), player: { id }, games, goals, ballotsSeen: 30, skill: 1500 + goals * 10 }) as any;
     const everyone = [row('a', 9), row('b', 3), row('c', 0), row('new', 0, 0)];
-    jest.spyOn(service as any, 'clubCard').mockResolvedValue({ everyone, trial: trialRatings(everyone) });
+    jest.spyOn(service as any, 'clubCard').mockResolvedValue({ everyone, trial: trialRatings(everyone), steady: null, classic: new Map() });
     const b = (await service.ratingBreakdown('a', 'org'))!;
+    if (b.mode !== 'classic') throw new Error('expected classic');
     expect(b.rating).toBe(Math.round(0.4 * b.stats.score + 0.4 * b.votes.score + 0.2 * b.results.score));
     expect(b).toMatchObject({ of: 3, stats: { goals: 9, games: 5, place: 1 } });
     expect(await service.ratingBreakdown('new', 'org')).toBeNull();
+  });
+
+  it('a steady club shows the latest match days, newest first, with how far the card moved', async () => {
+    const service = new RatingsService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+    const everyone = [{ ...blankRatings(), player: { id: 'a' }, games: 3 }] as any;
+    const rating = (r: number) => ({ rating: r, parts: { goals: 0, assists: 0, results: 0, keeping: 0, cleanSheets: 0, cards: 0, votes: 0 } });
+    const history = [
+      { date: '2026-10-01', rating: rating(6.2), games: 5, before: 50, after: 49.4 },
+      { date: '2026-10-08', rating: rating(8.1), games: 5, before: 49.4, after: 53.4 },
+    ];
+    jest.spyOn(service as any, 'clubCard').mockResolvedValue({
+      everyone,
+      trial: trialRatings(everyone),
+      classic: new Map([['a', 71]]),
+      steady: { steady: new Map([['a', { ovr: 53.4, days: 2, last: 8.1, form: 7.15 }]]), history: new Map([['a', history]]) },
+    });
+    const b = (await service.ratingBreakdown('a', 'org'))!;
+    if (b.mode !== 'steady') throw new Error('expected steady');
+    expect(b).toMatchObject({ rating: 53, classic: 71, matchDays: 2, settling: true, maxMove: 4, votesCount: 1 });
+    expect(b.recent.map((d) => [d.date, d.move])).toEqual([['2026-10-08', 4], ['2026-10-01', -1]]);
   });
 });

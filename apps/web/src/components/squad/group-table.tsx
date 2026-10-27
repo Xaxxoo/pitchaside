@@ -8,6 +8,7 @@ import { Avatar } from '@/components/ratings';
 import { InfoTip } from '@/components/info-tip';
 import { ORGANISER_CLUB, type ClubApi, type StatSort } from './group-stats';
 import { ShareCardButton, ShareIcon, shareIconLight } from '@/components/share-card';
+import { ratingWords } from '@/lib/rating-words';
 
 type PeriodKey = 'all' | 'last3' | 'last5' | 'last10' | 'month' | 'prev' | 'year';
 
@@ -84,7 +85,7 @@ export function GroupTable({
               {table.rankedBy === 'rating' && (
                 <>
                   <span className="block font-bold text-volt-300">How it’s ranked</span>
-                  <span className="block mt-1 mb-2">By rating: 40% goals and assists, 40% the votes after each game, 20% team results. Level on rating, more points go higher.</span>
+                  <span className="block mt-1 mb-2">By rating: {ratingWords(table.ratingMode).short}. Level on rating, more points go higher.</span>
                 </>
               )}
               <span className="block font-bold text-volt-300">How points are won</span>

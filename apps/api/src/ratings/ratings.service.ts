@@ -30,6 +30,8 @@ import { checkKeepers } from './keepers';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
+import { MOVE_NEW, MOVE_SETTLED, NEW_FOR, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Steady } from './match-rating';
+import { Organization, RATING_MODES, type RatingMode } from '../organizations/entities/organization.entity';
 
 /** Sides on match day. Colours live in the UI (Orange, Yellow, Blue, White, Green, Red). */
 export const TEAM_KEYS = ['A', 'B', 'C', 'D', 'E', 'F'] as const;
@@ -1659,13 +1661,113 @@ export class RatingsService {
    * `everyone` is the club's all-time ratings, with the old way's number still in `ovr`.
    */
   private async clubCard(organizationId: string, without?: string) {
-    const skills = await this.skills(organizationId, without);
+    const [skills, mode] = await Promise.all([this.skills(organizationId, without), this.ratingMode(organizationId)]);
     const sessions = (await this.gamesQuery(organizationId).getMany()).filter((s) => s.id !== without);
     const everyone = [...(await this.aggregate(sessions, skills)).values()];
     const trial = trialRatings(everyone);
     const card = new Map<string, number>();
-    for (const r of everyone) if (r.games > 0) card.set(r.player.id, trial.get(r.player.id)!.trial);
-    return { skills, everyone, trial, card };
+    // The old way's number, kept beside the steady one so the switch can be compared
+    const classic = new Map<string, number>();
+    for (const r of everyone) if (r.games > 0) classic.set(r.player.id, trial.get(r.player.id)!.trial);
+    const steady = mode === 'steady' ? await this.steadyCard(organizationId, without) : null;
+    for (const [id, n] of classic) card.set(id, steady ? Math.round(steady.steady.get(id)?.ovr ?? n) : n);
+    return { skills, everyone, trial, card, classic, mode, steady };
+  }
+
+  /** How the club's cards are worked out. Old databases without the column count as classic. */
+  async ratingMode(organizationId: string): Promise<RatingMode> {
+    try {
+      const org = await this.sessionsRepo.manager.findOne(Organization, { where: { id: organizationId }, select: ['id', 'ratingMode'] });
+      return org?.ratingMode === 'steady' ? 'steady' : 'classic';
+    } catch (err) {
+      this.logger.warn(`Rating mode for ${organizationId} not read, using classic: ${err instanceof Error ? err.message : err}`);
+      return 'classic';
+    }
+  }
+
+  async setRatingMode(organizationId: string, mode: unknown) {
+    if (!RATING_MODES.includes(mode as RatingMode)) throw new BadRequestException('Pick classic or steady');
+    await this.sessionsRepo.manager.update(Organization, { id: organizationId }, { ratingMode: mode as RatingMode });
+    return { mode: mode as RatingMode };
+  }
+
+  /**
+   * The steady card: every match day in the club replayed in order through match-rating.ts. Also
+   * each player's match days (date, match rating and its parts, card before and after), newest
+   * last, for "how this number is made". Votes count once the vote has closed, like the table.
+   */
+  private async steadyCard(organizationId: string, without?: string) {
+    const [all, players] = await Promise.all([
+      this.gamesQuery(organizationId).orderBy('session.date', 'ASC').addOrderBy('session.createdAt', 'ASC').getMany(),
+      this.sessionsRepo.manager.find(Player, { where: { organizationId }, select: ['id', 'level'] }),
+    ]);
+    const starts = new Map(players.map((p) => [p.id, cardRating(p.level ? LEVEL_START[p.level] : DEFAULT_START)]));
+    const sessions = without ? all.filter((x) => x.id !== without) : all;
+    const history = new Map<string, { date: string; rating: MatchRating; games: number; before: number; after: number }[]>();
+    if (!sessions.length) return { steady: replaySteady([], starts), history };
+
+    const ids = sessions.map((x) => x.id);
+    const [games, goals, events, votes] = await Promise.all([
+      this.gamesRepo.find({ where: { sessionId: In(ids) }, order: { createdAt: 'ASC' } }),
+      this.goalsRepo.find({ where: { sessionId: In(ids) } }),
+      this.eventsRepo.find({ where: { sessionId: In(ids) } }),
+      this.votesRepo.find({ where: { sessionId: In(ids) } }),
+    ]);
+    const bySession = <T extends { sessionId: string }>(rows: T[]) => {
+      const m = new Map<string, T[]>();
+      for (const r of rows) m.set(r.sessionId, [...(m.get(r.sessionId) ?? []), r]);
+      return m;
+    };
+    const g = bySession(games), gl = bySession(goals), ev = bySession(events), vt = bySession(votes);
+    const days = sessions.map((session) => this.steadyDay(session, g.get(session.id) ?? [], gl.get(session.id) ?? [], ev.get(session.id) ?? [], vt.get(session.id) ?? []));
+
+    const last = new Map(starts);
+    const steady = replaySteady(days, starts, new Map(), (i, lines, ratings, after) => {
+      for (const [id, rating] of ratings) {
+        const before = last.get(id) ?? cardRating(DEFAULT_START);
+        const now = after.get(id)!.ovr;
+        history.set(id, [...(history.get(id) ?? []), { date: String(sessions[i].date).slice(0, 10), rating, games: lines.get(id)!.games, before, after: now }]);
+        last.set(id, now);
+      }
+    });
+    return { steady, history };
+  }
+
+  /** One match day as match-rating.ts reads it. Late arrivals count only from the game they joined. */
+  private steadyDay(session: Session, games: SessionGame[], goals: MatchGoal[], events: MatchEvent[], votes: Vote[]): DayInput {
+    const pays = (session.payments ?? []).filter((p) => p.player && p.attendance !== 'no_show');
+    const side = (team: string, game: SessionGame) => pays.filter((p) => this.teamOf(session, p.team) === team && playedIn(p, game)).map((p) => p.playerId);
+    const count = (kind: string) => {
+      const m: Record<string, number> = {};
+      for (const e of events) if (e.kind === kind) m[e.playerId] = (m[e.playerId] ?? 0) + 1;
+      return m;
+    };
+    const sv = this.window(session).open ? [] : votes;
+    const tally = (cats: VoteCategory[], half?: VoteCategory) => {
+      const m = new Map<string, number>();
+      for (const v of sv) if (cats.includes(v.category)) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + (v.category === half ? 0.5 : 1));
+      return m;
+    };
+    const potm = tally([VoteCategory.POTM]);
+    const potmTop = Math.max(0, ...potm.values());
+    const vii = [...tally([VoteCategory.VII, VoteCategory.VII_SUB], VoteCategory.VII_SUB).entries()].sort((a, b) => b[1] - a[1]).slice(0, VII_STARTERS + 1);
+    const mate = tally([VoteCategory.TEAMMATE]);
+    const sideOf = (id: string) => this.teamOf(session, pays.find((p) => p.playerId === id)?.team ?? null);
+    const mateTop = new Map<string, number>();
+    for (const [id, n] of mate) {
+      const t = sideOf(id);
+      if (t) mateTop.set(t, Math.max(mateTop.get(t) ?? 0, n));
+    }
+    return {
+      games: games.map((x) => ({ sideA: side(x.teamA, x), sideB: side(x.teamB, x), scoreA: x.scoreA, scoreB: x.scoreB, keeperA: x.keeperA, keeperB: x.keeperB })),
+      goals: goals.map((x) => ({ scorerId: x.scorerId, assistId: x.assistId })),
+      saves: count('save'),
+      yellow: count('yellow'),
+      red: count('red'),
+      potm: new Set(potmTop > 0 ? [...potm].filter(([, n]) => n === potmTop).map(([id]) => id) : []),
+      viiOfDay: new Set(vii.map(([id]) => id)),
+      bestOnTeam: new Set([...mate].filter(([id, n]) => { const t = sideOf(id); return !!t && n === mateTop.get(t); }).map(([id]) => id)),
+    };
   }
 
   /**
@@ -1984,7 +2086,7 @@ export class RatingsService {
     // Ranked by the card's rating (Matt, 24 Oct): 40% goals and assists, 40% votes, 20% results,
     // so a player isn't top just for being on the winning side. The card's number is the club's,
     // all time, whatever period the table covers; level on rating, points decide.
-    const { card } = await this.clubCard(organizationId);
+    const { card, mode } = await this.clubCard(organizationId);
     const latest = sessions[sessions.length - 1];
     const cardBefore = sessions.length > 1 ? (await this.clubCard(organizationId, latest.id)).card : null;
     const ranked = async (list: Session[], ratings: Map<string, number>) =>
@@ -2009,6 +2111,8 @@ export class RatingsService {
       shareCode: group.inviteCode ?? null,
       /** What the table is ranked by: the card's rating (points still shown, and break a tie). */
       rankedBy: 'rating' as const,
+      /** How the club's cards are worked out, so every screen explains the same number. */
+      ratingMode: mode,
       points: POINTS,
       rows: rows.map((r, i) => {
         const was = placeBefore.get(r.player.id);
@@ -2106,7 +2210,7 @@ export class RatingsService {
     const group = await this.groupsRepo.findOne({ where: { id: groupId, organizationId }, relations: ['memberships'] });
     if (!group) throw new NotFoundException('Group not found');
     const members = new Set((group.memberships ?? []).map((m) => m.playerId));
-    const { everyone, trial } = await this.clubCard(organizationId);
+    const { everyone, trial, steady, mode, card } = await this.clubCard(organizationId);
     const rows = everyone
       .filter((r) => members.has(r.player.id) && r.games > 0)
       .map((r) => ({
@@ -2118,9 +2222,18 @@ export class RatingsService {
         // What the card showed before 20 Oct, for comparing.
         oldOvr: r.ovr,
         ...trial.get(r.player.id)!,
+        card: card.get(r.player.id) ?? null,
+        // Steady clubs: form and the latest match day, for the Stats spotlight
+        steady: steady
+          ? (() => {
+              const h = steady.history.get(r.player.id) ?? [];
+              const latest = h[h.length - 1];
+              return { form: steady.steady.get(r.player.id)?.form ?? null, matchDays: h.length, last: latest ? latest.rating.rating : null };
+            })()
+          : null,
       }))
-      .sort((a, b) => b.trial - a.trial || (b.oldOvr ?? 0) - (a.oldOvr ?? 0));
-    return { weights: TRIAL_WEIGHTS, rows };
+      .sort((a, b) => (b.card ?? b.trial) - (a.card ?? a.trial) || (b.oldOvr ?? 0) - (a.oldOvr ?? 0));
+    return { mode, weights: TRIAL_WEIGHTS, rows };
   }
 
   /**
@@ -2129,9 +2242,10 @@ export class RatingsService {
    * played, when the card shows the level their organiser gave them.
    */
   async ratingBreakdown(playerId: string, organizationId: string) {
-    const { everyone, trial } = await this.clubCard(organizationId);
+    const { everyone, trial, steady, classic } = await this.clubCard(organizationId);
     const me = everyone.find((r) => r.player.id === playerId && r.games > 0);
     if (!me) return null;
+    if (steady) return this.steadyBreakdown(me.player, steady.steady.get(playerId), steady.history.get(playerId) ?? [], classic.get(playerId) ?? null);
     const t = trial.get(playerId)!;
     const played = everyone.filter((r) => r.games > 0);
     // Where they stand on a part: 1 + how many have a higher score; ties share. Null when everyone's
@@ -2142,6 +2256,7 @@ export class RatingsService {
       .filter(([, e]) => e && e.enough)
       .map(([key, e]) => ({ key, share: Math.round(e!.share * 100) / 100 }));
     return {
+      mode: 'classic' as const,
       player: me.player,
       rating: t.trial,
       weights: TRIAL_WEIGHTS,
@@ -2180,6 +2295,42 @@ export class RatingsService {
    * carries `compare`: for the main numbers, the club's average (in total and per game) and
    * where this player ranks, among everyone who has played in that period.
    */
+  /**
+   * How a steady card number is made: the latest match days (match rating, what made it, how far
+   * the card moved), the limits it moves within, and how much votes count for them now.
+   */
+  private steadyBreakdown(
+    player: SquadMember,
+    s: Steady | undefined,
+    days: { date: string; rating: MatchRating; games: number; before: number; after: number }[],
+    classic: number | null,
+  ) {
+    const played = days.length;
+    return {
+      mode: 'steady' as const,
+      player,
+      rating: Math.round(s?.ovr ?? cardRating(DEFAULT_START)),
+      /** What the classic card would say, while clubs compare. */
+      classic,
+      matchDays: played,
+      settling: played < NEW_FOR,
+      newFor: NEW_FOR,
+      /** The most the card can move on their next match day. */
+      maxMove: played < NEW_FOR ? MOVE_NEW : MOVE_SETTLED,
+      settledMove: MOVE_SETTLED,
+      /** Share of the vote bonus their next match day gets (1 while new, down to VOTES_FLOOR). */
+      votesCount: voteWeight(played + 1),
+      votesFull: VOTES_FULL,
+      votesFloor: VOTES_FLOOR,
+      form: s?.form ?? null,
+      /** Newest first. `move` is what the card showed after minus before, as whole numbers. */
+      recent: days
+        .slice(-5)
+        .reverse()
+        .map((d) => ({ date: d.date, rating: d.rating.rating, parts: d.rating.parts, games: d.games, move: Math.round(d.after) - Math.round(d.before) })),
+    };
+  }
+
   async getPlayerRatings(playerId: string, organizationId: string): Promise<PlayerRatings & { compare: StatCompare; season: PlayerRatings & { compare: StatCompare } }> {
     const sessions = await this.gamesQuery(organizationId).getMany();
     const { skills, card } = await this.clubCard(organizationId);

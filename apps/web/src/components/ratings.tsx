@@ -11,6 +11,7 @@ import { kitFor } from '@/components/illustrations';
 import { useToast } from '@/components/toast';
 import { ShareCardButton, ShareIcon, shareIconInk } from '@/components/share-card';
 import { isVotingOpen } from '@/lib/game-status';
+import { ratingWords } from '@/lib/rating-words';
 import {
   getSessions,
   getSessionVoting,
@@ -306,8 +307,8 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
       )}
       {byRating && (
         <p className="px-1 text-[12px] leading-snug text-gray-600">
-          <b className="text-ink">Ranked by rating:</b> 40% goals and assists, 40% the votes after each game, 20% team results. So being on
-          the winning side isn’t enough to top it. Level on rating, points decide.
+          <b className="text-ink">Ranked by rating:</b> {ratingWords(table.ratingMode).short}. So being on the winning side isn’t enough to top
+          it. Level on rating, points decide.
         </p>
       )}
       <p className="px-1 text-[11px] leading-snug text-gray-500">

@@ -188,6 +188,11 @@ export class GameDto {
   keeperB?: string | null;
 }
 
+class RatingModeDto {
+  @IsIn(['classic', 'steady'])
+  mode: 'classic' | 'steady';
+}
+
 /** Organiser views: vote link + results per game, league table, player ratings. */
 @UseGuards(JwtAuthGuard)
 @Controller()
@@ -285,6 +290,17 @@ export class RatingsController {
   @Get('groups/:id/rating-trial')
   ratingTrial(@Param('id') id: string, @CurrentUser() user: User) {
     return this.ratings.getRatingTrial(id, user.organizationId);
+  }
+
+  /** How the club's player cards are worked out: classic or steady. */
+  @Get('ratings/mode')
+  async ratingMode(@CurrentUser() user: User) {
+    return { mode: await this.ratings.ratingMode(user.organizationId) };
+  }
+
+  @Put('ratings/mode')
+  setRatingMode(@Body() body: RatingModeDto, @CurrentUser() user: User) {
+    return this.ratings.setRatingMode(user.organizationId, body.mode);
   }
 
   /** How a player's card number is made, part by part. */

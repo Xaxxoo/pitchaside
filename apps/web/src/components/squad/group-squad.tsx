@@ -32,6 +32,7 @@ import type { IPlayer } from '@pitchaside/shared';
 import { InfoTip } from '@/components/info-tip';
 import { FilterBar, FilterMenu } from '@/components/filter-menu';
 import { Avatar } from '@/components/ratings';
+import { ratingWords } from '@/lib/rating-words';
 
 /**
  * A group's squad, about the players: how many, who's coming to the next game, how it's made up
@@ -411,8 +412,7 @@ export function GroupSquad({
               <p className="mt-1 text-[12px] leading-snug text-gray-600">
                 {avgRating ? 'average rating' : 'Ratings settle after 3 games'}{' '}
                 <InfoTip label="What's the rating?" align="right">
-                  Each player’s rating, from 40 to 99: 40% goals, assists and saves (cards take a little off), 40% votes (Player of the Match, Best VII, awards), 20% team results, compared with the rest of the club. It settles once
-                  they’ve played 3 games with scores.
+                  {ratingWords(table?.ratingMode).long}
                 </InfoTip>
               </p>
             </div>

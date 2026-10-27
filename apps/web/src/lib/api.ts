@@ -1192,6 +1192,8 @@ export interface LeagueTable {
   shareCode?: string | null;
   /** 'rating': ranked by the card's rating, points shown beside it. Missing: by points (older servers). */
   rankedBy?: 'rating';
+  /** How the club's cards are worked out, so every screen explains the same number. Missing: classic. */
+  ratingMode?: RatingMode;
   points: { win: number; draw: number; teamOfDay: number; potm: number };
   rows: (PlayerRatings & {
     player: SquadMember;
@@ -1206,8 +1208,25 @@ export function getSessionVoting(sessionId: string): Promise<SessionVoting> {
   return http.get(`/sessions/${sessionId}/voting`);
 }
 
+/**
+ * How the club's player cards are worked out (a club setting, both apps). 'classic': where each
+ * player ranks in the club (40% stats, 40% votes, 20% results). 'steady': a match rating out of 10
+ * each match day, and a card that moves a little at a time toward their form.
+ */
+export type RatingMode = 'classic' | 'steady';
+
+export function getRatingMode(): Promise<{ mode: RatingMode }> {
+  return http.get('/ratings/mode');
+}
+
+export function setRatingMode(mode: RatingMode): Promise<{ mode: RatingMode }> {
+  return http.put('/ratings/mode', { mode });
+}
+
 /** Each player's 40/40/20 rating and its three parts, beside the old way's number, for the organiser. */
 export interface RatingTrial {
+  /** Missing: classic (older servers). */
+  mode?: RatingMode;
   weights: { stats: number; votes: number; results: number };
   rows: {
     player: SquadMember;
@@ -1219,11 +1238,52 @@ export interface RatingTrial {
     oldOvr: number | null;
     trial: number;
     parts: { stats: number; votes: number; results: number };
+    /** The number on the card, whichever way the club works it out. */
+    card?: number | null;
+    /** Steady clubs: form (average match rating), match days rated, the latest match rating. */
+    steady?: { form: number | null; matchDays: number; last: number | null } | null;
   }[];
 }
 
-/** How a player's card number is made, part by part. Null before they've played. */
-export interface RatingBreakdown {
+/** How a player's card number is made. Null before they've played. */
+export type RatingBreakdown = ClassicBreakdown | SteadyBreakdown;
+
+/** What made one match rating, in points out of 10 on top of the 6.0 everyone starts the day on. */
+export interface MatchRatingParts {
+  goals: number;
+  assists: number;
+  results: number;
+  keeping: number;
+  cleanSheets: number;
+  cards: number;
+  votes: number;
+}
+
+export interface SteadyBreakdown {
+  mode: 'steady';
+  player: SquadMember;
+  rating: number;
+  /** What the classic card would say, while the club compares. */
+  classic: number | null;
+  matchDays: number;
+  settling: boolean;
+  newFor: number;
+  /** The most the card can move on their next match day, and once settled. */
+  maxMove: number;
+  settledMove: number;
+  /** Share of the vote bonus their next match day gets: 1 while new, down to votesFloor. */
+  votesCount: number;
+  votesFull: number;
+  votesFloor: number;
+  form: number | null;
+  /** Newest first. */
+  recent: { date: string; rating: number; parts: MatchRatingParts; games: number; move: number }[];
+}
+
+/** The classic card: three parts, each against the club. */
+export interface ClassicBreakdown {
+  /** Missing on older servers. */
+  mode?: 'classic';
   player: SquadMember;
   rating: number;
   weights: { stats: number; votes: number; results: number };
