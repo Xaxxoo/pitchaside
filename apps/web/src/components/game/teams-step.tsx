@@ -29,7 +29,8 @@ export function Swatch({ team, bibs, className = 'w-3 h-3 rounded-sm' }: { team:
  * Step 2 of match day: split the squad into sides. One tap makes fair teams from everyone's
  * rating; after that, tap a player and pick their side (two taps) or make them captain. Sides sit
  * side by side, two to a row, so a whole squad fits on about one phone screen; anyone not on a
- * side comes first because that's what's left to do. Once a score is in the teams are locked.
+ * side comes first because that's what's left to do. Once a score is in the teams are locked,
+ * except that someone who came late (not on a side yet) can still be put on one.
  */
 export function TeamsStep({
   sessionId,
@@ -105,12 +106,14 @@ export function TeamsStep({
     );
   }
 
+  // Locked: only someone not on a side yet (they came late) can still be placed.
+  const fixed = (m: Member) => locked && !!m.team;
   const Row = ({ m, i }: { m: Member; i: number }) => (
     <li className="animate-rise" style={stagger(Math.min(i, 12), 18, 0)}>
       <button
         onClick={() => setMoving(m)}
-        disabled={locked || !!busy}
-        aria-label={`${shownName(m)}${m.captain ? ', captain' : m.vice ? ', vice-captain' : ''}${m.paid === 'unpaid' ? ', not paid yet' : ''}${locked ? '' : ': move'}`}
+        disabled={fixed(m) || !!busy}
+        aria-label={`${shownName(m)}${m.captain ? ', captain' : m.vice ? ', vice-captain' : ''}${m.paid === 'unpaid' ? ', not paid yet' : ''}${fixed(m) ? '' : m.team ? ': move' : ': put on a side'}`}
         title={`${m.firstName} ${m.lastName}`}
         className="press w-full flex items-center gap-2 min-h-11 px-2 py-1 text-left rounded-xl hover:bg-white/70 disabled:hover:bg-transparent disabled:cursor-default"
       >
@@ -147,7 +150,7 @@ export function TeamsStep({
             </svg>
             <span>
               <b className="text-white">{lineup.teamCount} teams, locked.</b> Scores are in and each one counts for the players on these teams. Delete
-              the scores to change the teams.
+              the scores to change the teams. Someone who came late can still go on a side: tap them.
             </span>
           </p>
         ) : (
@@ -202,15 +205,18 @@ export function TeamsStep({
             <BibShirt key={t} team={t} bibs={lineup.bibs} className="w-7 h-7" />
           ))}
         </span>
-        <span className="flex-1 min-w-0 text-[14px] font-bold text-ink">Bibs and names for this game</span>
+        <span className="flex-1 min-w-0 truncate text-[14px] font-bold text-ink">Bibs and names</span>
         <span className="shrink-0 text-[13px] font-bold text-pitch-700">Change</span>
       </button>
 
       {unpicked.length > 0 && (
         <div className="mt-4">
           <h3 className="px-1 text-[13px] font-extrabold text-ink">
-            Not on a team yet <span className="text-gray-500 tabular-nums">· {unpicked.length}</span>
+            {locked ? 'Came late, not on a side yet' : 'Not on a team yet'} <span className="text-gray-500 tabular-nums">· {unpicked.length}</span>
           </h3>
+          {locked && (
+            <p className="px-1 mt-0.5 text-[12px] leading-snug text-gray-600">Tap to put them on a side. Only the games saved after that count for them.</p>
+          )}
           <ul className="mt-1.5 grid grid-cols-2 gap-x-1 p-1.5 bg-white rounded-3xl border border-dashed border-gray-300">
             {unpicked.map((m, i) => (
               <Row key={m.id} m={m} i={i} />
@@ -274,10 +280,16 @@ export function TeamsStep({
           <SheetTitle
             id={titleId}
             title={shownName(moving)}
-            sub={moving.team ? `On ${teamName(moving.team, lineup.captains, lineup.bibs)}${moving.captain ? ', captain' : moving.vice ? ', vice-captain' : ''}` : 'Not on a team yet'}
+            sub={
+              moving.team
+                ? `On ${teamName(moving.team, lineup.captains, lineup.bibs)}${moving.captain ? ', captain' : moving.vice ? ', vice-captain' : ''}`
+                : locked
+                  ? 'Came late. Once on a side they stay there; only the games saved after this count for them.'
+                  : 'Not on a team yet'
+            }
             onClose={() => setMoving(null)}
           />
-          <p className="mt-4 text-[13px] font-bold text-gray-600">Move to</p>
+          <p className="mt-4 text-[13px] font-bold text-gray-600">{moving.team ? 'Move to' : 'Put on'}</p>
           <div className="mt-2 grid grid-cols-2 gap-2">
             {teams.map((t, i) => {
               const here = moving.team === t;

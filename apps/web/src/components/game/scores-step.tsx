@@ -220,7 +220,9 @@ export function ScoresStep({
   function playedSeconds() {
     const started = clock?.timer.startedAt ? Date.parse(clock.timer.startedAt) : NaN;
     if (!clock || !Number.isFinite(started)) return undefined;
-    const now = Date.now() + clock.offset;
+    // Paused: it stood still at the pause, so that's as far as it got.
+    const pausedAt = clock.timer.pausedAt ? Date.parse(clock.timer.pausedAt) : NaN;
+    const now = Number.isFinite(pausedAt) ? pausedAt : Date.now() + clock.offset;
     const ends = started + clock.timer.minutes * 60_000;
     if (now - ends > 15 * 60_000) return undefined;
     return Math.max(0, Math.round((Math.min(now, ends) - started) / 1000));

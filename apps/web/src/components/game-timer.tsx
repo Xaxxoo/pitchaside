@@ -8,8 +8,11 @@ import { BallSpinner } from '@/components/skeleton';
 export interface TimerApi {
   load: (sessionId: string) => Promise<Timer>;
   /** Left out for players who only watch the clock. */
-  save?: (sessionId: string, change: { start?: boolean; minutes?: number }) => Promise<Timer>;
+  save?: (sessionId: string, change: TimerChange) => Promise<Timer>;
 }
+
+/** Start (also from the top over a running clock), stop, pause or resume, or set the length. */
+export type TimerChange = { start?: boolean; minutes?: number; pause?: boolean };
 
 /** Lengths most 5-a-side games use, one tap each; − and + cover the rest. */
 const QUICK = [5, 7, 10, 12, 15];
@@ -77,8 +80,9 @@ const clock = (ms: number) => {
 /**
  * The match-day clock: the organiser picks today's length
  * and taps Start; every phone in the game then counts down from the same moment. The phone that
- * started it buzzes and beeps at time and stays awake while it runs. Scores are still added by
- * hand. `watch` is the players' view: nothing until a clock is running.
+ * started it buzzes and beeps at time and stays awake while it runs. It can be paused (an injury,
+ * a ball over the fence) and picks up with the same time left, or restarted from the top. Scores
+ * are still added by hand. `watch` is the players' view: nothing until a clock is running.
  */
 export function GameTimer({
   sessionId,
@@ -136,9 +140,14 @@ export function GameTimer({
   }, [timer, offset, onTimer]);
 
   const endsAt = timer?.startedAt ? Date.parse(timer.startedAt) + timer.minutes * 60_000 : null;
-  const left = endsAt == null ? null : endsAt - (now + offset);
-  const running = left != null && left > 0;
-  const up = left != null && left <= 0;
+  const pausedAt = timer?.startedAt && timer.pausedAt ? Date.parse(timer.pausedAt) : null;
+  // Paused, the clock stands still at the time left when it was paused.
+  const paused = endsAt != null && pausedAt != null;
+  const left = endsAt == null ? null : endsAt - (paused ? pausedAt : now + offset);
+  const running = !paused && left != null && left > 0;
+  const up = !paused && left != null && left <= 0;
+  /** A game is on: counting down, or paused part way. */
+  const on = running || paused;
   const mine = !!timer?.startedAt && readMine(sessionId) === timer.startedAt;
 
   // Tick while it runs.
@@ -185,26 +194,37 @@ export function GameTimer({
     };
   }, [running, mine]);
 
-  async function change(c: { start?: boolean; minutes?: number }) {
+  async function change(c: TimerChange) {
     if (!api.save || !timer) return;
-    if (c.start) {
+    if (c.start || c.pause === false) {
       unlockAudio();
       buzz(12);
-    }
+    } else if (c.pause) buzz(8);
     // Show it straight away; the server's answer replaces it.
     const before = timer;
-    const startedAt = c.start ? new Date(Date.now() + offset).toISOString() : c.start === false ? null : timer.startedAt;
-    setTimer({ ...timer, minutes: c.minutes ?? timer.minutes, startedAt });
+    const at = Date.now() + offset;
+    let { startedAt, pausedAt: pause } = timer;
+    if (c.start) [startedAt, pause] = [new Date(at).toISOString(), null];
+    else if (c.start === false) [startedAt, pause] = [null, null];
+    else if (c.pause && startedAt && !pause) pause = new Date(at).toISOString();
+    else if (c.pause === false && startedAt && pause) {
+      // Same time left as when it was paused: the start moves on by however long it stood still.
+      startedAt = new Date(Date.parse(startedAt) + Math.max(0, at - Date.parse(pause))).toISOString();
+      pause = null;
+    }
+    // Resuming moves the start, so the phone that started it keeps knowing it's the one to buzz.
+    const keepsMine = c.start !== undefined || (c.pause === false && mine);
+    setTimer({ ...timer, minutes: c.minutes ?? timer.minutes, startedAt, pausedAt: pause });
     setNow(Date.now());
-    if (c.start !== undefined) writeMine(sessionId, startedAt);
+    if (keepsMine) writeMine(sessionId, startedAt);
     setBusy(true);
     try {
       const t = await api.save(sessionId, c);
       take(t);
-      if (c.start !== undefined) writeMine(sessionId, t.startedAt);
+      if (keepsMine) writeMine(sessionId, t.startedAt);
     } catch (err) {
       setTimer(before);
-      if (c.start !== undefined) writeMine(sessionId, before.startedAt);
+      if (keepsMine) writeMine(sessionId, before.startedAt);
       onError?.(err instanceof Error ? err.message : 'The timer didn’t change. Try again.');
     } finally {
       setBusy(false);
@@ -216,12 +236,16 @@ export function GameTimer({
 
   // Players watching: only a running clock, or one that just ran out.
   if (watch) {
-    if (!timer || left == null || left < -WATCH_UP_MS) return null;
+    if (!timer || left == null || (!paused && left < -WATCH_UP_MS)) return null;
     return (
       <div className={`flex items-center gap-3 rounded-2xl px-4 py-3 ${up ? 'bg-kit-500 text-ink' : 'bg-white/10 text-white'}`}>
-        {up ? <span aria-hidden>⏱</span> : <LiveDot />}
-        <span className="flex-1 text-[13px] font-bold">{up ? 'Time’s up on this game' : `Game on · ${timer.minutes} min`}</span>
-        <span role="timer" aria-label={up ? 'Time’s up' : `${clock(left)} left`} className="font-display text-2xl font-extrabold tabular-nums">
+        {up ? <span aria-hidden>⏱</span> : paused ? <PauseGlyph className="w-3.5 h-3.5 text-volt-300" /> : <LiveDot />}
+        <span className="flex-1 min-w-0 text-[13px] font-bold">{up ? 'Time’s up on this game' : paused ? 'Game paused' : `Game on · ${timer.minutes} min`}</span>
+        <span
+          role="timer"
+          aria-label={up ? 'Time’s up' : `${clock(left)} left${paused ? ', paused' : ''}`}
+          className={`font-display text-2xl font-extrabold tabular-nums ${paused ? 'motion-safe:animate-pulse' : ''}`}
+        >
           {up ? '0:00' : clock(left)}
         </span>
       </div>
@@ -242,7 +266,7 @@ export function GameTimer({
     return <div className="h-[76px] rounded-3xl bg-white border border-gray-200 animate-pulse" aria-label="Loading the timer" />;
   }
 
-  const pct = running ? Math.max(0, Math.min(100, (left / (timer.minutes * 60_000)) * 100)) : up ? 0 : 100;
+  const pct = on && left != null ? Math.max(0, Math.min(100, (left / (timer.minutes * 60_000)) * 100)) : up ? 0 : 100;
   const small = 'press min-h-11 px-4 rounded-xl text-[14px] font-bold inline-flex items-center justify-center gap-1.5 disabled:opacity-50';
 
   return (
@@ -253,17 +277,29 @@ export function GameTimer({
       <div className="flex items-center gap-3">
         <div className="flex-1 min-w-0">
           <p className={`text-[12px] font-bold ${up ? 'text-ink/80' : 'text-gray-500'}`}>
-            {up ? 'Full time on this game' : running ? `Game on · ${timer.minutes} min` : 'Game timer'}
+            {up ? 'Full time on this game' : paused ? 'Paused · the clock is stopped' : running ? `Game on · ${timer.minutes} min` : 'Game timer'}
           </p>
-          <p role="timer" aria-label={running ? `${clock(left!)} left` : up ? 'Time’s up' : `${timer.minutes} minutes`} className={`font-display leading-none font-extrabold tabular-nums whitespace-nowrap ${up ? 'text-[32px] py-1' : 'text-[40px]'}`}>
-            {running ? clock(left!) : up ? 'Time’s up' : `${timer.minutes}:00`}
+          <p
+            role="timer"
+            aria-label={on ? `${clock(left!)} left${paused ? ', paused' : ''}` : up ? 'Time’s up' : `${timer.minutes} minutes`}
+            className={`font-display leading-none font-extrabold tabular-nums whitespace-nowrap ${up ? 'text-[32px] py-1' : 'text-[40px]'} ${paused ? 'text-gray-500 motion-safe:animate-pulse' : ''}`}
+          >
+            {on ? clock(left!) : up ? 'Time’s up' : `${timer.minutes}:00`}
           </p>
         </div>
         {canRun &&
-          (running ? (
-            <button onClick={() => change({ start: false })} disabled={busy} className={`${small} bg-white border border-gray-300 text-ink hover:border-ink`}>
-              Stop
-            </button>
+          (on ? (
+            paused ? (
+              <button onClick={() => change({ pause: false })} disabled={busy} className={`${small} bg-ink text-volt-300 hover:bg-pitch-900`}>
+                <span aria-hidden>▶</span>
+                Resume
+              </button>
+            ) : (
+              <button onClick={() => change({ pause: true })} disabled={busy} className={`${small} bg-white border border-gray-300 text-ink hover:border-ink`}>
+                <PauseGlyph className="w-3.5 h-3.5" />
+                Pause
+              </button>
+            )
           ) : (
             <button onClick={() => change({ start: true })} disabled={busy} className={`${small} bg-ink text-volt-300 hover:bg-pitch-900`}>
               {busy ? <BallSpinner className="w-4 h-4" /> : <span aria-hidden>▶</span>}
@@ -277,7 +313,26 @@ export function GameTimer({
         <div className={`h-full rounded-full ${running ? 'bg-volt-400' : 'bg-pitch-600'} motion-safe:transition-[width] motion-safe:duration-300`} style={{ width: `${pct}%` }} />
       </div>
 
-      {canRun && !running && (
+      {/* Mid-game: start this game again from the top, or stop the clock without a result */}
+      {canRun && on && (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <button
+            onClick={() => change({ start: true })}
+            disabled={busy}
+            className="press min-h-11 -ml-1 px-1 inline-flex items-center gap-1.5 text-[14px] font-bold text-pitch-700 disabled:opacity-50"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M16 4.5h4.5V9M20.5 4.5 17 8A7.5 7.5 0 1 0 19.5 12" />
+            </svg>
+            Restart from {timer.minutes}:00
+          </button>
+          <button onClick={() => change({ start: false })} disabled={busy} className="press min-h-11 -mr-1 px-1 text-[14px] font-bold text-gray-600 hover:text-ink disabled:opacity-50">
+            Stop the clock
+          </button>
+        </div>
+      )}
+
+      {canRun && !on && (
         <div className="mt-3">
           <p className={`text-[12px] font-bold ${up ? 'text-ink/80' : 'text-gray-500'}`} id={`len-${sessionId}`}>
             Today’s games last
@@ -329,8 +384,18 @@ export function GameTimer({
         </button>
       )}
       <p className="sr-only" aria-live="polite">
-        {up ? 'Time’s up on this game.' : ''}
+        {up ? 'Time’s up on this game.' : paused ? 'Clock paused.' : ''}
       </p>
     </section>
+  );
+}
+
+/** Two bars: the pause sign. */
+function PauseGlyph({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 12 12" fill="currentColor" aria-hidden>
+      <rect x="2" y="1.5" width="3" height="9" rx="1" />
+      <rect x="7" y="1.5" width="3" height="9" rx="1" />
+    </svg>
   );
 }

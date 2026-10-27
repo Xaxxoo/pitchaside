@@ -18,9 +18,36 @@ export class PlayersService {
     @InjectRepository(Payment) private paymentsRepo: Repository<Payment>,
   ) {}
 
-  create(dto: CreatePlayerDto, organizationId: string) {
+  async create(dto: CreatePlayerDto, organizationId: string) {
+    await this.phoneFree(dto.phone, organizationId);
     const player = this.playersRepo.create({ ...dto, nickname: cleanNickname(dto.nickname), organizationId });
-    return this.playersRepo.save(player);
+    return this.saveOrSayWhoHasThePhone(player);
+  }
+
+  /**
+   * One number, one player in a club. Said plainly with who has it (rather than a server error),
+   * so the organiser adds that player instead of making a second one.
+   */
+  private async phoneFree(phone: string | null | undefined, organizationId: string, self?: string) {
+    if (!phone) return;
+    const other = await this.playersRepo.findOne({ where: { organizationId, phone } });
+    if (other && other.id !== self) {
+      throw new ConflictException(`${other.firstName} ${other.lastName} already has this number. Add them from your players instead, or leave the number out.`);
+    }
+  }
+
+  /** Two saves at once with the same number: the database stops the second, said the same way. */
+  private async saveOrSayWhoHasThePhone(player: Player) {
+    try {
+      return await this.playersRepo.save(player);
+    } catch (err) {
+      const e = err as { constraint?: string; driverError?: { constraint?: string } };
+      if ((e.constraint ?? e.driverError?.constraint) === 'UQ_players_org_phone') {
+        await this.phoneFree(player.phone, player.organizationId, player.id);
+        throw new ConflictException('Someone in your club already has this number.');
+      }
+      throw err;
+    }
   }
 
   findAll(organizationId: string) {
@@ -70,7 +97,8 @@ export class PlayersService {
     const player = await this.findOne(id, organizationId);
     Object.assign(player, dto);
     if (dto.nickname !== undefined) player.nickname = cleanNickname(dto.nickname);
-    return this.playersRepo.save(player);
+    if (dto.phone) await this.phoneFree(player.phone, organizationId, player.id);
+    return this.saveOrSayWhoHasThePhone(player);
   }
 
   /** Not while they hold credit in a group: it would vanish with them. */

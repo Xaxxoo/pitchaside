@@ -7,13 +7,13 @@ export function SheetTitle({ id, title, sub, onClose }: { id: string; title: str
   // Inside a sheet, close with its slide-away rather than vanishing.
   const close = useSheetClose() ?? onClose;
   return (
+    // The line under the title runs the full width of the sheet, under the close button too, so
+    // it isn't squeezed into short lines beside it.
+    <div>
     <div className="flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <h2 id={id} className="font-display text-xl font-extrabold text-ink leading-tight">
-          {title}
-        </h2>
-        {sub && <p className="text-[13px] text-gray-600 mt-1 leading-snug">{sub}</p>}
-      </div>
+      <h2 id={id} className="min-w-0 font-display text-xl font-extrabold text-ink leading-tight">
+        {title}
+      </h2>
       <button
         onClick={close}
         aria-label="Close"
@@ -26,6 +26,8 @@ export function SheetTitle({ id, title, sub, onClose }: { id: string; title: str
           </svg>
         </span>
       </button>
+    </div>
+    {sub && <p className="-mt-2 pr-1 text-[13px] text-gray-600 leading-snug">{sub}</p>}
     </div>
   );
 }

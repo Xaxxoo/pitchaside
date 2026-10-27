@@ -333,18 +333,12 @@ export function GameCard({
           <div className="min-w-0">
             <span className="block text-[11px] font-bold uppercase tracking-[0.12em] text-white/65">{days === 0 ? 'Match day' : played ? 'Last game' : 'Next game'}</span>
             <span className="mt-1 block font-display text-[22px] leading-tight font-extrabold truncate">{game.groupName}</span>
+            {/* "Today · 3:56pm" says it in one short line, so the status on the right never cuts it off */}
             <span className="mt-1 flex items-center gap-2 min-w-0">
-              <span className="text-sm font-semibold text-white/85 truncate">
-                {niceDate(game.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+              {pill.live && <LiveDot className="bg-volt-400" />}
+              <span className={`text-sm font-semibold truncate ${pill.live ? 'text-volt-300' : 'text-white/85'}`}>
+                {days === 0 && !played ? 'Today' : days === 1 && !played ? 'Tomorrow' : niceDate(game.date, { weekday: 'short', day: 'numeric', month: 'short' })}
                 {time ? ` · ${time}` : ''}
-              </span>
-              <span
-                className={`shrink-0 inline-flex items-center gap-1.5 h-6 px-2 rounded-md text-[11px] font-bold whitespace-nowrap ${
-                  pill.live ? 'bg-volt-400/15 text-volt-300' : 'bg-white/[0.08] text-white/75'
-                }`}
-              >
-                {pill.live && <LiveDot className="bg-volt-400" />}
-                {pill.text}
               </span>
             </span>
           </div>

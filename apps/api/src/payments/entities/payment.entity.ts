@@ -76,6 +76,13 @@ export class Payment {
   attendance: Attendance | null;
 
   /**
+   * Came late: when they went onto a side, after the day's first score. Only the games saved from
+   * then count for them (results and rating). Null when they were on a side from the start.
+   */
+  @Column({ name: 'joined_side_at', type: 'timestamptz', nullable: true })
+  joinedSideAt: Date | null;
+
+  /**
    * Marked paid by hand on top of a part payment: how much of it came from the money the player
    * had already sent by transfer (their kept money). Goes back to them if the payment is undone.
    */

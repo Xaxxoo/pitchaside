@@ -43,7 +43,7 @@ export default function StartGroupPage() {
       <FormHero
         eyebrow="Organising"
         title="Start your group"
-        subtitle="You'll run it from the Organising side — and keep playing from here."
+        subtitle="Run it from Organising. Keep playing from here."
         art={<KitLine className="w-full h-auto" />}
       />
       <form onSubmit={submit} className={formCardClass}>

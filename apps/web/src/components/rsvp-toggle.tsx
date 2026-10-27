@@ -39,7 +39,7 @@ export function RsvpToggle(props: { checked?: boolean; onChange?: (v: boolean) =
     <SwitchRow
       {...props}
       title="Players confirm each game"
-      sub="Players tap “I’m in” from their phone. When a game is full, the rest go on a waitlist. Only players who are in get a due."
+      sub="Players tap “I’m in”. A full game gets a waitlist; only players in owe."
     />
   );
 }

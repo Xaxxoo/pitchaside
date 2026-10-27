@@ -26,6 +26,8 @@ import {
   exportSessionPaymentsCsv,
   sendReminders,
   setRsvpForPlayer,
+  createPlayer,
+  addMember,
   getLineup,
   getRsvpBoard,
   type BankTransfer,
@@ -335,6 +337,9 @@ export default function GamePage() {
   const cancelled = phase === 'cancelled';
   const played = !before && !cancelled;
   const tally = gameTally(payments, coveredByDues, before);
+  // Players can be added until the game is ended (someone who turns up at 7:05 for a 7pm game
+  // still plays), from the group or brand new.
+  const canAdd = session.status === 'upcoming' && session.kind !== 'dues';
   // Members not on this game yet, for "Add players".
   const onGame = new Set(payments.map((p) => p.playerId));
   const notOnGame = members
@@ -482,7 +487,25 @@ export default function GamePage() {
       {adding && (
         <AddToGameSheet
           members={notOnGame}
+          late={!before}
+          onQr={isGame ? () => {
+            setAdding(false);
+            setShowQr(true);
+          } : undefined}
           onClose={() => setAdding(false)}
+          onAddNew={async (p) => {
+            try {
+              const player = await createPlayer(p);
+              await addMember(session.groupId, { playerId: player.id });
+              await setRsvpForPlayer(id, player.id, 'in');
+              await fetchSession();
+              loadUnnamed();
+              toast.success(`${player.firstName} is in the group and on this game`);
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : 'That didn’t save. Try again.');
+              throw err;
+            }
+          }}
           onAdd={async (m) => {
             try {
               await setRsvpForPlayer(id, m.playerId, 'in');
@@ -563,8 +586,8 @@ export default function GamePage() {
                 ? 'Share the game on WhatsApp so players can say they’re in, or add the ones who told you.'
                 : 'Everyone in the group is added when the game is made. Add players to the group first.'
             }
-            actionLabel={before && notOnGame.length ? 'Add players' : undefined}
-            onAction={before && notOnGame.length ? () => setAdding(true) : undefined}
+            actionLabel={canAdd ? 'Add players' : undefined}
+            onAction={canAdd ? () => setAdding(true) : undefined}
           />
         ) : (
           <>
@@ -583,8 +606,7 @@ export default function GamePage() {
               canSendDetails={!!billing?.account}
               canMove={(p) => p.status === PaymentStatus.PAID && p.source === 'transfer' && otherDues(p).length > 0}
               busyId={busyId}
-              onAdd={before && notOnGame.length > 0 ? () => setAdding(true) : undefined}
-              onQr={isGame && session.status === 'upcoming' ? () => setShowQr(true) : undefined}
+              onAdd={canAdd ? () => setAdding(true) : undefined}
               onAction={onPlayerAction}
               onBulkPaid={async (ids) => {
                 try {

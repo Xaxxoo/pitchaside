@@ -157,10 +157,10 @@ export function GroupTable({
 function Leaders({ table, onSeeAll }: { table: LeagueTable; onSeeAll?: (sort: StatSort) => void }) {
   const boards = (
     [
-      ['goals', 'Goals', 'No goals recorded yet. Add scorers on match day.', (r) => r.goals],
-      ['assists', 'Assists', 'No assists recorded yet.', (r) => r.assists],
-      ['potm', 'Player of the Match', 'Comes from the vote after each game.', (r) => r.potmWins],
-      ['vii', 'Best VII of the Day', 'Comes from the vote after each game.', (r) => r.viiOfDay],
+      ['goals', 'Goals', 'No goals yet. Add scorers on match day.', (r) => r.goals],
+      ['assists', 'Assists', 'No assists yet.', (r) => r.assists],
+      ['potm', 'Player of the Match', 'From the vote after each game.', (r) => r.potmWins],
+      ['vii', 'Best VII of the Day', 'From the vote after each game.', (r) => r.viiOfDay],
     ] as [StatSort, string, string, (r: LeagueTable['rows'][number]) => number][]
   ).map(([key, title, none, of]) => ({
     key,

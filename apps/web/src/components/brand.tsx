@@ -66,16 +66,20 @@ export function PageHeader({
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
 }) {
+  // The subtitle runs the full width under the title row, so buttons beside the title never
+  // squeeze it into a narrow column of short lines.
   return (
-    <div className="mb-5 flex items-end justify-between gap-3">
-      <div className="min-w-0">
-        {eyebrow && (
-          <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-pitch-600 mb-1">{eyebrow}</p>
-        )}
-        <h1 className="text-[28px] leading-none font-extrabold text-ink">{title}</h1>
-        {subtitle && <p className="text-sm text-gray-500 mt-1.5">{subtitle}</p>}
+    <div className="mb-5">
+      <div className="flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          {eyebrow && (
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-pitch-600 mb-1">{eyebrow}</p>
+          )}
+          <h1 className="text-[28px] leading-none font-extrabold text-ink">{title}</h1>
+        </div>
+        {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
       </div>
-      {actions && <div className="flex items-center gap-2 shrink-0">{actions}</div>}
+      {subtitle && <p className="text-sm text-gray-500 mt-1.5">{subtitle}</p>}
     </div>
   );
 }

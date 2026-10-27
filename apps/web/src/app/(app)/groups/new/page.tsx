@@ -94,8 +94,8 @@ export default function NewGroupPage() {
       <FormShell>
       <FormHero
         eyebrow="New squad"
-        title="New Group"
-        subtitle="Name it, set the fee per player, pick a schedule. Done in 30 seconds."
+        title="New group"
+        subtitle="Name, fee and day. Done in 30 seconds."
         art={<KitLine className="w-full h-auto" />}
       />
 
@@ -104,8 +104,8 @@ export default function NewGroupPage() {
           <legend className="block text-xs font-bold text-gray-700 mb-1.5">Where are your players?</legend>
           <div className="grid grid-cols-2 gap-2">
             {([
-              { value: 'local' as const, label: 'Nigeria', hint: 'Pay via bank transfer (NGN)' },
-              { value: 'international' as const, label: 'International', hint: 'Pay via USDT/USDC (USD)' },
+              { value: 'local' as const, label: 'Nigeria', hint: 'Bank transfer in ₦' },
+              { value: 'international' as const, label: 'International', hint: 'USDT or USDC in $' },
             ]).map((o) => (
               <label key={o.value} className="cursor-pointer">
                 <input
@@ -185,9 +185,9 @@ export default function NewGroupPage() {
             <input id="kickoffTime" name="kickoffTime" type="time" defaultValue="20:00" className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600" />
           </div>
         </div>
-        <p className="-mt-2 text-[11px] text-gray-500">Players get a reminder the evening before and 2 hours before kick-off.</p>
+        <p className="-mt-2 text-[11px] text-gray-500">Players get reminders the evening before and 2 hours before.</p>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 gap-3 items-end">
           <div>
             <label htmlFor="targetPlayers" className="block text-xs font-bold text-gray-700 mb-1.5">
               Players per game *
@@ -204,7 +204,7 @@ export default function NewGroupPage() {
           </div>
           <div>
             <label htmlFor="feePerPlayer" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Amount per player ({currencySymbol(scope)}) *
+              Fee per player ({currencySymbol(scope)}) *
             </label>
             <input
               id="feePerPlayer"
@@ -269,7 +269,7 @@ export default function NewGroupPage() {
           disabled={submitting}
           className="w-full py-3 bg-ink text-volt-300 font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? 'Creating...' : 'Create Group'}
+          {submitting ? 'Creating…' : 'Create group'}
         </button>
       </form>
       </FormShell>

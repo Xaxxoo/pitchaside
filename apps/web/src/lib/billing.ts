@@ -30,7 +30,7 @@ export function chainName(chain: string): string {
 }
 
 export const frequencyOptions: { value: PaymentType; label: string; short: string; hint: string }[] = [
-  { value: PaymentType.PER_SESSION, label: 'Per game', short: 'per game', hint: 'Pay each time you play' },
+  { value: PaymentType.PER_SESSION, label: 'Per game', short: 'per game', hint: 'Each time you play' },
   { value: PaymentType.WEEKLY, label: 'Weekly', short: 'per week', hint: 'Dues every Monday' },
   { value: PaymentType.MONTHLY, label: 'Monthly', short: 'per month', hint: 'Dues on the 1st' },
   { value: PaymentType.QUARTERLY, label: 'Quarterly', short: 'per quarter', hint: 'Every 3 months' },

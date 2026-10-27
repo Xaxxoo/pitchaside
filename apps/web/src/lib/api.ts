@@ -933,7 +933,7 @@ export function getTimer(sessionId: string): Promise<GameTimer> {
 }
 
 /** Start (from now) or stop the clock, and/or set today's game length. */
-export function setTimer(sessionId: string, change: { start?: boolean; minutes?: number }): Promise<GameTimer> {
+export function setTimer(sessionId: string, change: { start?: boolean; minutes?: number; pause?: boolean }): Promise<GameTimer> {
   return http.put(`/sessions/${sessionId}/timer`, change);
 }
 

@@ -90,8 +90,8 @@ export default function NewCompetitionPage() {
       <FormShell>
         <FormHero
           eyebrow="New tournament"
-          title="Create Cup"
-          subtitle="Set up a knockout or league competition. Teams register and pay, you manage fixtures and results."
+          title="New cup"
+          subtitle="Knockout or league. Teams sign up and pay; you run it."
           art={<Trophy className="w-full h-auto" />}
         />
 
@@ -114,8 +114,8 @@ export default function NewCompetitionPage() {
             <legend className="block text-xs font-bold text-gray-700 mb-1.5">Format *</legend>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { value: CompetitionFormat.KNOCKOUT, label: 'Knockout', hint: 'Single elimination bracket' },
-                { value: CompetitionFormat.LEAGUE, label: 'League', hint: 'Round-robin, everyone plays everyone' },
+                { value: CompetitionFormat.KNOCKOUT, label: 'Knockout', hint: 'Lose and you’re out' },
+                { value: CompetitionFormat.LEAGUE, label: 'League', hint: 'Everyone plays everyone' },
               ].map((o) => (
                 <label key={o.value} className="cursor-pointer">
                   <input type="radio" name="format" value={o.value} className="peer sr-only" />
@@ -170,8 +170,8 @@ export default function NewCompetitionPage() {
             <legend className="block text-xs font-bold text-gray-700 mb-1.5">Visibility</legend>
             <div className="grid grid-cols-2 gap-2">
               {[
-                { value: CompetitionVisibility.PUBLIC, label: 'Public', hint: 'Anyone can find and join' },
-                { value: CompetitionVisibility.INVITE_ONLY, label: 'Invite Only', hint: 'Teams need an invite code' },
+                { value: CompetitionVisibility.PUBLIC, label: 'Public', hint: 'Anyone can join' },
+                { value: CompetitionVisibility.INVITE_ONLY, label: 'Invite only', hint: 'Teams need a code' },
               ].map((o) => (
                 <label key={o.value} className="cursor-pointer">
                   <input type="radio" name="visibility" value={o.value} defaultChecked={o.value === 'public'} className="peer sr-only" />

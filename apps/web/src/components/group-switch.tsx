@@ -75,7 +75,6 @@ export function GroupSwitch({
                       <span className="block text-[13px] text-gray-500 truncate">
                         {members} player{members === 1 ? '' : 's'}
                         {Number(g.feePerPlayer) > 0 ? ` · ${formatCurrency(Number(g.feePerPlayer))} a game` : ''}
-                        {g.location ? ` · ${g.location}` : ''}
                       </span>
                     </span>
                     <span
