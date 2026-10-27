@@ -53,10 +53,17 @@ const statusWords: Record<OutgoingTransfer['status'], string> = {
  */
 function payoutNote(p: OutgoingTransfer) {
   const raw = p.errorMessage ?? '';
+  const bank = p.beneficiaryBankName;
+  // Saved with the longer wording used before 28 Oct: shown in the short one.
+  if (raw.startsWith('The bank timed out sending this')) return `${bank ?? 'The bank'} didn't answer. Nothing was sent. Try again shortly.`;
+  if (raw.startsWith("The bank couldn't find that account")) return `Account not found${bank ? ` at ${bank}` : ''}. Check the number. Nothing was sent.`;
+  if (raw.startsWith('Not enough in the group account for this transfer')) return 'Not enough in the group account. Nothing was sent.';
+  const old = raw.match(/^The bank didn't send this[^.]*\. No money left the account\.(?: \((.*)\))?$/);
+  if (old) return `Didn’t go through${bank ? ` to ${bank}` : ''}${old[1] ? ` (${old[1].replace(/\.$/, '').slice(0, 60)})` : ''}. Nothing was sent.`;
   if (!raw.startsWith('Payrep MFB')) return raw;
-  const to = p.beneficiaryBankName ? ` to ${p.beneficiaryBankName}` : '';
-  if (/timed? ?out|timeout/i.test(raw)) return `The bank timed out sending this${to}. No money left the account. Try again in a few minutes, or send it to another bank.`;
-  return `The bank didn't send this${to}. No money left the account. (${raw.replace(/^Payrep MFB [^:]*\(\d+\): /, '').slice(0, 120)})`;
+  if (/timed? ?out|timeout/i.test(raw)) return `${bank ?? 'The bank'} didn't answer. Nothing was sent. Try again shortly.`;
+  const reason = raw.replace(/^Payrep MFB [^:]*\(\d+\): /, '').replace(/\.$/, '').slice(0, 60);
+  return `Didn’t go through${bank ? ` to ${bank}` : ''}${reason ? ` (${reason})` : ''}. Nothing was sent.`;
 }
 
 type PayoutFilter = 'all' | 'sent' | 'waiting' | 'failed';

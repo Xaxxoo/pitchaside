@@ -72,7 +72,7 @@ describe('withdrawals when the bank says "timed out"', () => {
     const { pay, fees } = setup({ status: 'not_found' });
     const p = await pay();
     expect(p.status).toBe(PayoutStatus.FAILED);
-    expect(p.errorMessage).toBe('The bank timed out sending this to OPay. No money left the account. Try again in a few minutes, or send it to another bank.');
+    expect(p.errorMessage).toBe("OPay didn't answer. Nothing was sent. Try again shortly.");
     expect(fees()).toBe(0);
   });
 
@@ -87,7 +87,7 @@ describe('withdrawals when the bank says "timed out"', () => {
     const { pay } = setup({ status: 'failed', errorMessage: 'Transfer request timed out. Please try again.' });
     const p = await pay();
     expect(p.status).toBe(PayoutStatus.FAILED);
-    expect(p.errorMessage).toMatch(/^The bank timed out sending this to OPay\. No money left the account\./);
+    expect(p.errorMessage).toMatch(/^OPay didn't answer\. Nothing was sent\./);
   });
 
   it('the bank is still working on it, or can’t be asked: held (processing), never freed to send twice', async () => {
@@ -119,8 +119,8 @@ describe('withdrawals when the bank says "timed out"', () => {
   });
 
   it('plain words for other refusals', () => {
-    expect(payoutFailureText('Payrep MFB transfer failed (400): Insufficient balance')).toBe('Not enough in the group account for this transfer. No money left the account.');
-    expect(payoutFailureText('Payrep MFB transfer failed (400): Invalid account number', 'OPay')).toMatch(/couldn't find that account to OPay/);
-    expect(payoutFailureText('Payrep MFB transfer failed (400): Daily limit reached', 'GTBank')).toBe("The bank didn't send this to GTBank. No money left the account. (Daily limit reached)");
+    expect(payoutFailureText('Payrep MFB transfer failed (400): Insufficient balance')).toBe('Not enough in the group account. Nothing was sent.');
+    expect(payoutFailureText('Payrep MFB transfer failed (400): Invalid account number', 'OPay')).toBe('Account not found at OPay. Check the number. Nothing was sent.');
+    expect(payoutFailureText('Payrep MFB transfer failed (400): Daily limit reached', 'GTBank')).toBe('Didn’t go through to GTBank (Daily limit reached). Nothing was sent.');
   });
 });
