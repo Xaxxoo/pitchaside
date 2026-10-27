@@ -24,10 +24,13 @@ import { decidedEarly, winnerStays } from '@/lib/winner-stays';
 const KEYS = Object.keys(TEAMS) as TeamKey[];
 
 export interface ScoresApi {
-  addGame: (sessionId: string, game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number }) => Promise<Lineup>;
+  addGame: (
+    sessionId: string,
+    game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+  ) => Promise<Lineup>;
   deleteGame: (sessionId: string, gameId: string) => Promise<Lineup>;
   /** Correct a saved game's score: the organiser's only. */
-  updateGame?: (sessionId: string, gameId: string, score: { scoreA: number; scoreB: number }) => Promise<Lineup>;
+  updateGame?: (sessionId: string, gameId: string, change: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null }) => Promise<Lineup>;
   addGoal: (sessionId: string, gameId: string, goal: GoalInput) => Promise<Lineup>;
   deleteGoal: (sessionId: string, goalId: string) => Promise<Lineup>;
   addEvent: (sessionId: string, event: { playerId: string; kind: MatchEventKind }) => Promise<Lineup>;
@@ -93,7 +96,16 @@ export function ScoresStep({
 }) {
   const sideTitle = useId();
   const teams = KEYS.slice(0, lineup.teamCount);
-  const [draft, setDraft] = useState({ teamA: 'A' as TeamKey, teamB: 'B' as TeamKey, scoreA: 0, scoreB: 0, goals: [] as GoalInput[] });
+  // `keepers`: who's in goal for each team, as picked on this phone (null: not recorded). A team not
+  // in it yet takes whoever kept for it in its last game.
+  const [draft, setDraft] = useState({
+    teamA: 'A' as TeamKey,
+    teamB: 'B' as TeamKey,
+    scoreA: 0,
+    scoreB: 0,
+    goals: [] as GoalInput[],
+    keepers: {} as Partial<Record<TeamKey, string | null>>,
+  });
   // The game being played is kept on this phone until it's saved: a refresh, a lost signal or
   // leaving the page doesn't wipe a score that was never sent.
   const draftKey = `pa_score_draft_${sessionId}`;
@@ -101,7 +113,7 @@ export function ScoresStep({
   useEffect(() => {
     try {
       const kept = JSON.parse(localStorage.getItem(draftKey) ?? 'null');
-      if (kept && typeof kept.scoreA === 'number' && typeof kept.scoreB === 'number' && Array.isArray(kept.goals)) setDraft(kept);
+      if (kept && typeof kept.scoreA === 'number' && typeof kept.scoreB === 'number' && Array.isArray(kept.goals)) setDraft({ keepers: {}, ...kept });
     } catch {
       // Nothing kept: start from 0–0.
     }
@@ -157,6 +169,9 @@ export function ScoresStep({
   const [editing, setEditing] = useState<string | null>(null);
   const gamesTitle = useId();
   const [choosing, setChoosing] = useState<'teamA' | 'teamB' | null>(null);
+  // Picking who's in goal: for a side of the game being played, or of a game already saved.
+  const [keeperFor, setKeeperFor] = useState<{ team: TeamKey; side: 'teamA' | 'teamB'; gameId?: string } | null>(null);
+  const keeperTitle = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [removing, setRemoving] = useState<MatchGame | null>(null);
   const toast = useToast();
@@ -213,6 +228,23 @@ export function ScoresStep({
   const scorersLine = (goals: GoalInput[]) => goals.map((g) => `${who(g.scorerId)}${g.assistId ? ` (${who(g.assistId)})` : ''}`).join(', ');
   const valid = teams.includes(draft.teamA) && teams.includes(draft.teamB) && draft.teamA !== draft.teamB;
 
+  /** Who kept goal for a team in its last saved game: the starting guess for its next one. */
+  const lastKeeper = (t: TeamKey) => {
+    for (let i = lineup.games.length - 1; i >= 0; i--) {
+      const g = lineup.games[i];
+      if (g.teamA === t) return g.keeperA ?? null;
+      if (g.teamB === t) return g.keeperB ?? null;
+    }
+    return null;
+  };
+  const keeperOf = (t: TeamKey) => {
+    const id = draft.keepers[t] !== undefined ? draft.keepers[t]! : lastKeeper(t);
+    // Taken off the game since: not recorded, rather than a name nobody can find
+    return id && lineup.squad.some((m) => m.id === id) ? id : null;
+  };
+  /** A keeper from another team (or none): borrowed. */
+  const borrowedBy = (id: string | null | undefined, t: TeamKey) => !!id && lineup.squad.find((m) => m.id === id)?.team !== t;
+
   /**
    * How long the game lasted, from the clock: started for this game (not one long gone) and up to
    * now or its whistle. Left out when the clock wasn't used, and its time limit counts instead.
@@ -231,9 +263,11 @@ export function ScoresStep({
   async function save() {
     setBusy('save');
     try {
-      onLineup(await api.addGame(sessionId, { ...draft, seconds: playedSeconds() }));
+      const { teamA, teamB, scoreA, scoreB, goals } = draft;
+      onLineup(await api.addGame(sessionId, { teamA, teamB, scoreA, scoreB, goals, seconds: playedSeconds(), keeperA: keeperOf(draft.teamA), keeperB: keeperOf(draft.teamB) }));
       buzz([12, 40, 18]);
-      setDraft((d) => ({ ...d, scoreA: 0, scoreB: 0, goals: [] }));
+      // Who's in goal carries on to the next game (the same team usually keeps the same keeper)
+      setDraft((d) => ({ ...d, scoreA: 0, scoreB: 0, goals: [], keepers: { ...d.keepers, [d.teamA]: keeperOf(d.teamA), [d.teamB]: keeperOf(d.teamB) } }));
     } catch (err) {
       onError(err instanceof Error ? err.message : 'The score didn’t save. Try again.');
     } finally {
@@ -336,6 +370,14 @@ export function ScoresStep({
         >
           − Take one off
         </button>
+        <KeeperChip
+          keeper={keeperOf(t)}
+          borrowed={borrowedBy(keeperOf(t), t)}
+          name={who}
+          face={face}
+          onClick={() => setKeeperFor({ team: t, side })}
+          label={`In goal for ${name(t)}`}
+        />
         {sideGoals.length > 0 && (
           <ul className="max-w-full flex flex-col items-center gap-1 text-[12px] leading-snug font-semibold text-white/80">
             {sideGoals.map((g, n) => (
@@ -763,9 +805,123 @@ export function ScoresStep({
                   ) : (
                     score === 0 && <p className="mt-1 text-[13px] text-gray-500">No goals</p>
                   )}
+                  {(() => {
+                    const side = t === g.teamA ? 'teamA' : 'teamB';
+                    const k = (side === 'teamA' ? g.keeperA : g.keeperB) ?? null;
+                    const line = k ? (
+                      <>
+                        <b className="font-semibold text-gray-700">{who(k)}</b> in goal{borrowedBy(k, t) ? ' (borrowed)' : ''}
+                      </>
+                    ) : (
+                      'Keeper not added'
+                    );
+                    // One quiet line under the goals: the organiser can fix it, a captain just sees it
+                    return (
+                      <div className="mt-1 flex items-center gap-2 min-h-11 text-[13px] text-gray-500">
+                        <GloveIcon className="w-4 h-4 shrink-0" />
+                        <span className="flex-1 min-w-0 truncate">{line}</span>
+                        {api.updateGame && (
+                          <button
+                            onClick={() => setKeeperFor({ team: t, side, gameId: g.id })}
+                            disabled={!!busy}
+                            className="press shrink-0 min-h-11 px-2 -mr-2 text-[13px] font-bold text-pitch-700"
+                          >
+                            {busy === `keeper-${g.id}` ? 'Saving…' : k ? 'Change' : 'Add'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
+          </Sheet>
+        );
+      })()}
+
+      {keeperFor && (() => {
+        const t = keeperFor.team;
+        const saved = keeperFor.gameId ? lineup.games.find((x) => x.id === keeperFor.gameId) : null;
+        const current = saved ? (keeperFor.side === 'teamA' ? saved.keeperA : saved.keeperB) ?? null : keeperOf(t);
+        // The other side's keeper in the same game can't keep for this one too
+        const otherTeam = saved ? (keeperFor.side === 'teamA' ? saved.teamB : saved.teamA) : keeperFor.side === 'teamA' ? draft.teamB : draft.teamA;
+        const otherKeeper = saved ? (keeperFor.side === 'teamA' ? saved.keeperB : saved.keeperA) ?? null : keeperOf(otherTeam);
+        const playing = lineup.squad;
+        const own = playing.filter((m) => m.team === t);
+        const others = playing.filter((m) => m.team !== t);
+        const close = () => setKeeperFor(null);
+        const pick = async (id: string | null) => {
+          if (saved) {
+            if (!api.updateGame) return;
+            setBusy(`keeper-${saved.id}`);
+            try {
+              onLineup(await api.updateGame(sessionId, saved.id, keeperFor.side === 'teamA' ? { keeperA: id } : { keeperB: id }));
+              close();
+            } catch (err) {
+              onError(err instanceof Error ? err.message : 'That didn’t save. Try again.');
+            } finally {
+              setBusy(null);
+            }
+            return;
+          }
+          buzz(8);
+          setDraft((d) => ({ ...d, keepers: { ...d.keepers, [t]: id } }));
+          close();
+        };
+        const Row = ({ m }: { m: (typeof playing)[number] }) => {
+          const theirs = m.team && m.team !== t ? m.team : null;
+          const elsewhere = m.id === otherKeeper;
+          return (
+            <li>
+              <button
+                onClick={() => pick(m.id)}
+                disabled={elsewhere || !!busy}
+                aria-pressed={current === m.id}
+                className={`press w-full flex items-center gap-3 min-h-14 px-3 py-2 rounded-2xl border text-left disabled:opacity-40 ${
+                  current === m.id ? 'border-ink bg-chalk' : 'border-gray-100 bg-white hover:border-ink'
+                }`}
+              >
+                {face(m.id, 'w-9 h-9 text-[11px]')}
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] font-bold text-ink truncate">{shortName(m)}</span>
+                  {(theirs || elsewhere) && (
+                    <span className="flex items-center gap-1.5 text-[12px] text-gray-500 truncate">
+                      {theirs && <Swatch team={theirs} bibs={lineup.bibs} />}
+                      {elsewhere ? `In goal for ${name(otherTeam)}` : `From ${name(theirs!)}`}
+                    </span>
+                  )}
+                </span>
+                {current === m.id && <span className="shrink-0 text-[12px] font-extrabold text-pitch-700">In goal</span>}
+              </button>
+            </li>
+          );
+        };
+        return (
+          <Sheet titleId={keeperTitle} onClose={close} align="left">
+            <SheetTitle id={keeperTitle} title={`Who’s in goal for ${name(t)}?`} sub="Anyone playing today. A keeper from another team counts as borrowed." onClose={close} />
+            {own.length > 0 && (
+              <>
+                <p className="mt-4 flex items-center gap-1.5 text-[13px] font-extrabold text-ink">
+                  <Swatch team={t} bibs={lineup.bibs} />
+                  {name(t)}
+                </p>
+                <ul className="mt-1.5 space-y-1.5">{own.map((m) => <Row key={m.id} m={m} />)}</ul>
+              </>
+            )}
+            {others.length > 0 && (
+              <>
+                <p className="mt-4 text-[13px] font-extrabold text-ink">Borrowed from another team</p>
+                <ul className="mt-1.5 space-y-1.5">{others.map((m) => <Row key={m.id} m={m} />)}</ul>
+              </>
+            )}
+            <button
+              onClick={() => pick(null)}
+              disabled={!!busy}
+              aria-pressed={current === null}
+              className={`press mt-4 w-full min-h-12 px-3 rounded-2xl border text-left text-[14px] font-bold ${current === null ? 'border-ink bg-chalk text-ink' : 'border-dashed border-gray-300 text-gray-600 hover:border-ink'}`}
+            >
+              Not recorded
+            </button>
           </Sheet>
         );
       })()}
@@ -820,5 +976,49 @@ export function ScoresStep({
         onCancel={() => setRemoving(null)}
       />
     </section>
+  );
+}
+
+/** A keeper's glove. */
+function GloveIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M8 21h8v-3l2-3V8a1.5 1.5 0 0 0-3 0v3V5a1.5 1.5 0 0 0-3 0v5V4a1.5 1.5 0 0 0-3 0v6V6a1.5 1.5 0 0 0-3 0v8l2 4Z" />
+    </svg>
+  );
+}
+
+/**
+ * Who's in goal for a side of the game being played: their face and name (or a prompt), one tap
+ * to change. A keeper from another team says so, in words.
+ */
+function KeeperChip({
+  keeper,
+  borrowed,
+  name,
+  face,
+  onClick,
+  label,
+}: {
+  keeper: string | null;
+  borrowed: boolean;
+  name: (id: string) => string;
+  face: (id: string, className: string) => React.ReactNode;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={`${label}: ${keeper ? `${name(keeper)}${borrowed ? ', borrowed' : ''}` : 'not recorded'}. Change`}
+      className="press max-w-full min-h-11 inline-flex items-center gap-1.5 pl-1.5 pr-3 rounded-full border border-white/15 text-[12px] font-bold text-white hover:bg-white/10"
+    >
+      {keeper ? face(keeper, 'w-6 h-6 text-[9px]') : <GloveIcon className="w-5 h-5 text-white/60" />}
+      {/* "Borrowed" on its own small line, so it never squeezes the keeper's name */}
+      <span className="min-w-0 text-left leading-tight">
+        <span className="block truncate">{keeper ? name(keeper) : 'Who’s in goal?'}</span>
+        {keeper && borrowed && <span className="block text-[10px] font-extrabold uppercase tracking-wide text-volt-300">Borrowed</span>}
+      </span>
+    </button>
   );
 }

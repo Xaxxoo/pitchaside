@@ -855,6 +855,9 @@ export interface MatchGame {
   recordedBy?: string | null;
   /** How long it lasted, from the timer; null when not known. */
   seconds?: number | null;
+  /** Who was in goal for each side (anyone playing that day; a borrowed keeper too). Null: not recorded. */
+  keeperA?: string | null;
+  keeperB?: string | null;
 }
 
 export interface TeamStanding {
@@ -950,7 +953,7 @@ export function balanceLineup(sessionId: string, teamCount?: number): Promise<Li
 
 export function addMatchGame(
   sessionId: string,
-  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number },
+  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null },
 ): Promise<Lineup> {
   return http.post(`/sessions/${sessionId}/games`, game);
 }
@@ -983,7 +986,11 @@ export function deleteMatchEvent(sessionId: string, eventId: string): Promise<Li
 }
 
 /** Correct a saved game's score (the organiser only). Named scorers stay. */
-export function updateMatchGame(sessionId: string, gameId: string, score: { scoreA: number; scoreB: number }): Promise<Lineup> {
+export function updateMatchGame(
+  sessionId: string,
+  gameId: string,
+  score: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null },
+): Promise<Lineup> {
   return http.patch(`/sessions/${sessionId}/games/${gameId}`, score);
 }
 

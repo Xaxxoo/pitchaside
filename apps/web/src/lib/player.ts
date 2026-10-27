@@ -440,7 +440,10 @@ export function getMatchDay(sessionId: string) {
   return request<Lineup>('GET', `/me/games/${sessionId}/match-day`);
 }
 
-export function addCaptainGame(sessionId: string, game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number }) {
+export function addCaptainGame(
+  sessionId: string,
+  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+) {
   return request<Lineup>('POST', `/me/games/${sessionId}/match-day/games`, game);
 }
 
