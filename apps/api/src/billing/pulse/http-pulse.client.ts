@@ -190,7 +190,16 @@ export class HttpPulseClient implements PulseClient {
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
-    if (!res.ok) throw new Error(`Payrep MFB transfer failed (${res.status}): ${await pulseReason(res)}`);
+    if (!res.ok) {
+      // Everything Payrep's support asks for: our reference, their request id, the full reply.
+      const raw = await res.clone().text().catch(() => '');
+      const requestId = res.headers.get('x-request-id') ?? res.headers.get('x-correlation-id') ?? res.headers.get('request-id') ?? '';
+      console.error(
+        `[Payrep] transfer ${input.reference} refused: HTTP ${res.status}${requestId ? ` request-id=${requestId}` : ''} debit=${input.debitAccountNumber} ` +
+          `to=${input.beneficiaryBankCode}/${input.beneficiaryAccountNumber} amount=${input.amount} reply=${raw.slice(0, 1000)}`,
+      );
+      throw new Error(`Payrep MFB transfer failed (${res.status}): ${await pulseReason(res)}`);
+    }
 
     const json = (await res.json()) as Record<string, any>;
     const d = json.data ?? json;
@@ -209,6 +218,8 @@ export class HttpPulseClient implements PulseClient {
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
+    // No record at Payrep: the transfer never reached them.
+    if (res.status === 404) return { status: 'not_found' };
     if (!res.ok) throw new Error(`Payrep MFB transfer lookup failed (${res.status}): ${await pulseReason(res)}`);
 
     const json = (await res.json()) as Record<string, any>;
