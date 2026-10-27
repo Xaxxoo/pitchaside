@@ -12,6 +12,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     private usersService: UsersService,
   ) {
+    const secret = config.get<string>('JWT_SECRET');
+    if (!secret && config.get<string>('NODE_ENV') === 'production') {
+      throw new Error('JWT_SECRET must be set in production.');
+    }
     super({
       jwtFromRequest: (req: Request) => {
         // Try HttpOnly cookie first, fall back to Bearer header for API clients
@@ -19,7 +23,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         if (cookieToken) return cookieToken;
         return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
       },
-      secretOrKey: config.get<string>('JWT_SECRET', 'pitchaside-dev-secret'),
+      secretOrKey: secret || 'pitchaside-dev-secret',
     });
   }
 

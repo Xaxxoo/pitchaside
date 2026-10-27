@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
@@ -26,6 +27,7 @@ export class Payment {
   @JoinColumn({ name: 'session_id' })
   session: Session;
 
+  @Index()
   @Column({ name: 'session_id' })
   sessionId: string;
 
@@ -33,12 +35,14 @@ export class Payment {
   @JoinColumn({ name: 'player_id' })
   player: Player;
 
+  @Index()
   @Column({ name: 'player_id' })
   playerId: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 
+  @Index()
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status: PaymentStatus;
 

@@ -65,6 +65,8 @@ export class SessionsService {
       dto.recurrenceType || RecurrenceType.NONE,
       dto.recurrenceCount || 1,
     );
+    const today = localDate(0);
+    if (dates.some((d) => d < today)) throw new BadRequestException('Pick today or a day ahead.');
 
     let firstSession: Session | null = null;
 
@@ -297,8 +299,8 @@ export class SessionsService {
     const wasCompleted = session.status === SessionStatus.COMPLETED;
     const wasCancelled = session.status === SessionStatus.CANCELLED;
     session.status = status as SessionStatus;
-    // Full time opens the vote (once: reopening and ending again keeps the first time).
-    if (session.status === SessionStatus.COMPLETED && !session.voteOpensAt) session.voteOpensAt = new Date();
+    // Full time opens (or re-opens) the vote: a game cancelled and re-ended gets a fresh window.
+    if (session.status === SessionStatus.COMPLETED) session.voteOpensAt = new Date();
     const saved = await this.sessionsRepo.save(session);
 
     // Called off: what members paid for it by transfer goes back to them as extra to sort. Back
@@ -335,6 +337,8 @@ export class SessionsService {
    */
   async endGame(id: string, noShows: string[], organizationId: string, markedBy?: string) {
     const session = await this.findOne(id, organizationId);
+    if (session.status === SessionStatus.COMPLETED) throw new BadRequestException('This game has already been ended.');
+    if (session.status === SessionStatus.CANCELLED) throw new BadRequestException('This game is called off.');
     const missing = new Set(noShows);
     for (const p of session.payments ?? []) {
       if (missing.has(p.id)) {

@@ -200,14 +200,26 @@ export class NotificationsService implements OnModuleInit {
     let delivered = 0;
     await Promise.all(
       subs.map(async (s) => {
+        const sub = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
+        const opts = { TTL: 60 * 60 * 24 };
         try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, {
-            TTL: 60 * 60 * 24,
-          });
+          await webpush.sendNotification(sub, payload, opts);
           delivered++;
         } catch (err: any) {
-          if (err.statusCode === 404 || err.statusCode === 410) await this.subsRepo.delete({ id: s.id });
-          else this.logger.warn(`Push failed: ${err.statusCode ?? ''} ${err.message}`);
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            await this.subsRepo.delete({ id: s.id });
+          } else if (err.statusCode >= 500) {
+            // Transient server error: retry once after a short delay.
+            try {
+              await new Promise((r) => setTimeout(r, 1500));
+              await webpush.sendNotification(sub, payload, opts);
+              delivered++;
+            } catch (retryErr: any) {
+              this.logger.warn(`Push retry failed: ${retryErr.statusCode ?? ''} ${retryErr.message}`);
+            }
+          } else {
+            this.logger.warn(`Push failed: ${err.statusCode ?? ''} ${err.message}`);
+          }
         }
       }),
     );
