@@ -524,3 +524,5 @@ export interface ICryptoOutgoingTransfer {
  * has voted). The API keeps its own copy: VOTE_HOURS in ratings.service.
  */
 export const VOTE_HOURS = 36;
+
+export * from './phone';

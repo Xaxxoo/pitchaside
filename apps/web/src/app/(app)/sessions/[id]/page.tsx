@@ -54,7 +54,7 @@ import { GroupMessageSheet, SEND_KINDS, type SendKind } from '@/components/game/
 import { coveredByDues as coversByDues, gamePhase, gameTally, leftToPay } from '@/lib/game-player';
 import { AddToGameSheet } from '@/components/game/add-to-game-sheet';
 import { MovePaymentSheet } from '@/components/game/move-payment-sheet';
-import { gameInviteMessage, openWhatsApp, paymentDetailsMessage } from '@/lib/whatsapp';
+import { gameInviteMessage, openWhatsApp, paymentDetailsMessage, pickWhy } from '@/lib/whatsapp';
 import { prettyTime } from '@/components/player-ui';
 
 /** Today as YYYY-MM-DD in the browser's time zone. */
@@ -250,7 +250,8 @@ export default function GamePage() {
     if (action === 'details') {
       if (!billing?.account || !session) return;
       const member = members.find((m) => m.player.id === p.playerId);
-      openWhatsApp(
+      const phone = p.player?.phone ?? member?.player.phone;
+      const went = openWhatsApp(
         paymentDetailsMessage({
           firstName: first,
           groupName: session.group?.name ?? 'Your group',
@@ -259,8 +260,10 @@ export default function GamePage() {
           amount: leftToPay(p),
           forWhat: gameLabel(session),
         }),
-        p.player?.phone ?? member?.player.phone,
+        phone,
       );
+      const why = pickWhy(first, phone, went);
+      if (why) toast.success(why);
       return;
     }
     if (action === 'move') {

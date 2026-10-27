@@ -1,3 +1,4 @@
+import { dialNumber, readPhone } from '@pitchaside/shared';
 import { formatCurrency, type GroupAccount } from './api';
 
 /**
@@ -7,36 +8,35 @@ import { formatCurrency, type GroupAccount } from './api';
  */
 
 /**
- * A number as WhatsApp wants it: digits with the country code. Nigerian numbers come in every
- * shape ("0803 123 4567", "803 123 4567", "+234 803 123 4567", "+234 0803 123 4567"): all of
- * them read "2348031234567". A number from elsewhere keeps its own code when it starts with +.
- * Anything too short to be a phone number is null (no link rather than a broken one).
+ * A number as WhatsApp wants it ("0803 123 4567" → "2348031234567"), or null when it isn't one
+ * WhatsApp can open. The same rule as the server's (readPhone in @pitchaside/shared).
  */
 export function whatsappNumber(phone?: string | null) {
-  const raw = (phone ?? '').trim();
-  const digits = raw.replace(/\D/g, '');
-  if (!digits) return null;
-  if (digits.startsWith('2340') && digits.length === 14) return `234${digits.slice(4)}`;
-  if (digits.startsWith('234') && digits.length === 13) return digits;
-  if (digits.startsWith('0') && digits.length === 11) return `234${digits.slice(1)}`;
-  if (/^[789]\d{9}$/.test(digits)) return `234${digits}`;
-  if (raw.startsWith('+') && digits.length >= 8) return digits;
-  if (digits.startsWith('00') && digits.length >= 10) return digits.slice(2);
-  return null;
+  return dialNumber(phone);
 }
 
-/** "+234 803 123 4567": a number written the same way everywhere, or the number as typed if it isn't one we know. */
+/** "+234 803 123 4567": a number written the same way everywhere, or the number as typed if it isn't one we can read. */
 export function prettyPhone(phone?: string | null) {
-  const n = whatsappNumber(phone);
-  if (!n) return phone?.trim() || '';
-  if (n.startsWith('234') && n.length === 13) return `+234 ${n.slice(3, 6)} ${n.slice(6, 9)} ${n.slice(9)}`;
-  return `+${n}`;
+  const r = readPhone(phone);
+  return r.ok ? r.pretty : phone?.trim() || '';
 }
 
-/** Opens WhatsApp with the message ready: to that person when we have their number, else to pick a chat. */
-export function openWhatsApp(text: string, phone?: string | null) {
+/**
+ * Opens WhatsApp with the message ready: to that person when their number can be read, else to
+ * pick a chat. Says which, so a screen can tell the organiser why it's asking them to pick.
+ */
+export function openWhatsApp(text: string, phone?: string | null): 'person' | 'pick' {
   const to = whatsappNumber(phone);
   window.open(`https://wa.me/${to ?? ''}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+  return to ? 'person' : 'pick';
+}
+
+/** Why a message to one player went to the chat picker instead: for a toast. Null when it went to them. */
+export function pickWhy(firstName: string, phone: string | null | undefined, went: 'person' | 'pick') {
+  if (went === 'person') return null;
+  return phone?.trim()
+    ? `${firstName}’s number won’t open WhatsApp, so pick their chat. You can fix the number on their page.`
+    : `No number for ${firstName}, so pick their chat in WhatsApp.`;
 }
 
 /** Everything one player needs to pay: who to pay, how much, for what, and the code that matches it to them. */
