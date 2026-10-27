@@ -7,6 +7,7 @@ import { SheetTitle } from '@/components/home/sheet-title';
 import { Avatar } from '@/components/ratings';
 import { BallSpinner } from '@/components/skeleton';
 import { buzz, stagger } from '@/components/motion';
+import { useToast } from '@/components/toast';
 import { balanceLineup, saveLineup, setGameBibs, type Lineup, type TeamKey } from '@/lib/api';
 import { BibShirt } from '@/components/bib-shirt';
 import { BibsSheet } from '@/components/bibs-sheet';
@@ -50,6 +51,9 @@ export function TeamsStep({
   const [busy, setBusy] = useState<string | null>(null);
   const [moving, setMoving] = useState<Member | null>(null);
   const [bibsOpen, setBibsOpen] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const clearId = useId();
+  const toast = useToast();
   const teams = KEYS.slice(0, lineup.teamCount);
   const locked = lineup.locked;
   const unpicked = lineup.squad.filter((m) => !m.team);
@@ -95,6 +99,17 @@ export function TeamsStep({
   const avg = (team: TeamKey) => {
     const rated = lineup.squad.filter((m) => m.team === team && m.ovr != null);
     return rated.length ? Math.round(rated.reduce((s, m) => s + (m.ovr ?? 0), 0) / rated.length) : null;
+  };
+
+  // Each side's average, once everyone on it is rated: shows how close the split is
+  const averages = teams.map(avg).filter((a): a is number => a != null);
+  // Who a clear takes off: everyone on a side except its captain and vice
+  const clearable = (t?: TeamKey) => lineup.squad.filter((m) => m.team && (!t || m.team === t) && !m.captain && !m.vice);
+  const clear = (t?: TeamKey) => {
+    setClearing(false);
+    const off = clearable(t);
+    buzz(12);
+    run('clear', () => saveLineup(sessionId, { teams: Object.fromEntries(off.map((m) => [m.id, null])) }));
   };
 
   if (lineup.squad.length === 0) {
@@ -179,16 +194,22 @@ export function TeamsStep({
             <button
               onClick={() => {
                 buzz(12);
-                run('balance', () => balanceLineup(sessionId));
+                run('balance', async () => {
+                  const l = await balanceLineup(sessionId);
+                  if (l.fair?.onlyOne) toast.success('That’s the only fair split for these players');
+                  return l;
+                });
               }}
               disabled={!!busy}
               className="press mt-3 w-full min-h-12 rounded-2xl bg-volt-400 text-ink text-[15px] font-bold hover:bg-volt-300 disabled:opacity-60 inline-flex items-center justify-center gap-2"
             >
               {busy === 'balance' ? <BallSpinner className="w-4 h-4" /> : <span aria-hidden>✦</span>}
-              {picked ? `Remake ${lineup.teamCount} fair teams` : `Make ${lineup.teamCount} fair teams`}
+              {picked ? 'Make new fair teams' : `Make ${lineup.teamCount} fair teams`}
             </button>
             <p className="mt-2 text-[12px] leading-snug text-white/60">
-              Fair by rating; captains stay on their side. Tap a player to move them or make them captain or vice-captain.
+              {averages.length > 1
+                ? `Team averages ${averages.join(' · ')}. Each tap makes a new fair split; captains stay.`
+                : 'Fair by rating; captains stay on their side. Tap a player to move them.'}
             </p>
           </>
         )}
@@ -225,7 +246,7 @@ export function TeamsStep({
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-4 grid grid-cols-2 gap-2 items-start">
         {teams.map((t) => {
           const members = lineup.squad
             .filter((m) => m.team === t)
@@ -257,12 +278,26 @@ export function TeamsStep({
                   ))}
                 </ul>
               ) : (
-                <p className="px-2 py-3 text-[12px] text-gray-500">No one yet</p>
+                <p className="mx-1 mb-1 rounded-2xl border border-dashed border-ink/20 px-2.5 py-2.5 text-[12px] leading-snug text-gray-600">
+                  <b className="block text-ink">No one yet</b>
+                  {unpicked.length ? 'Tap a player above to put them here.' : 'Move someone from another team.'}
+                </p>
               )}
             </div>
           );
         })}
       </div>
+
+      {!locked && clearable().length > 0 && (
+        <div className="mt-2 flex items-center justify-between gap-3 px-1">
+          <span className="text-[13px] text-gray-600 tabular-nums">
+            {picked} of {lineup.squad.length} on a team
+          </span>
+          <button onClick={() => setClearing(true)} disabled={!!busy} className="press min-h-11 px-2 -mr-2 text-[13px] font-bold text-pitch-700">
+            {busy === 'clear' ? 'Clearing…' : 'Clear teams'}
+          </button>
+        </div>
+      )}
 
       {!locked && onDone && unpicked.length === 0 && lineup.scoresOpen && (
         <button onClick={onDone} className="press mt-4 w-full min-h-12 rounded-2xl bg-white border border-gray-300 text-[15px] font-bold text-ink hover:border-ink">
@@ -354,6 +389,45 @@ export function TeamsStep({
                 </button>
               </li>
             )}
+          </ul>
+        </Sheet>
+      )}
+
+      {clearing && (
+        <Sheet titleId={clearId} onClose={() => setClearing(false)} align="left">
+          <SheetTitle id={clearId} title="Clear teams" sub="They go back to Not on a team. Captains and vices stay." onClose={() => setClearing(false)} />
+          <ul className="mt-4 space-y-2">
+            <li>
+              <button onClick={() => clear()} className="press w-full flex items-center gap-3 min-h-14 px-3.5 rounded-2xl border border-gray-200 text-left hover:border-ink">
+                <span className="flex -space-x-1.5 shrink-0" aria-hidden>
+                  {teams.map((t) => (
+                    <Swatch key={t} team={t} bibs={lineup.bibs} className="w-4 h-4 rounded ring-2 ring-white" />
+                  ))}
+                </span>
+                <span className="flex-1 min-w-0">
+                  <span className="block text-[15px] font-bold text-ink">All teams</span>
+                  <span className="block text-[12px] text-gray-500 tabular-nums">{clearable().length} players come off</span>
+                </span>
+              </button>
+            </li>
+            {teams.map((t) => {
+              const n = clearable(t).length;
+              return (
+                <li key={t}>
+                  <button
+                    onClick={() => clear(t)}
+                    disabled={n === 0}
+                    className="press w-full flex items-center gap-3 min-h-14 px-3.5 rounded-2xl border border-gray-200 text-left hover:border-ink disabled:opacity-50 disabled:hover:border-gray-200"
+                  >
+                    <Swatch team={t} bibs={lineup.bibs} className="w-4 h-4 rounded shrink-0" />
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-[15px] font-bold text-ink truncate">{teamName(t, lineup.captains, lineup.bibs)} only</span>
+                      <span className="block text-[12px] text-gray-500 tabular-nums">{n ? `${n} player${n === 1 ? '' : 's'} come${n === 1 ? 's' : ''} off` : 'No one to take off'}</span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </Sheet>
       )}
