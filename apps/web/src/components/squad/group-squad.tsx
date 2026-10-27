@@ -207,8 +207,9 @@ export function GroupSquad({
     : '';
   const inNext = new Set((nextGame?.payments ?? []).filter((p) => p.attendance !== 'no_show').map((p) => p.playerId));
   const stats = new Map((table?.rows ?? []).map((r) => [r.player.id, r]));
-  // Joined in the last 30 days: worth a word (the exact date is in their card).
-  const isNew = (joinedAt: string) => Date.now() - new Date(joinedAt).getTime() < 30 * 86_400_000;
+  // Just added (the last 14 days, a couple of game weeks): worth a word. The exact date is in their card.
+  const NEW_DAYS = 14;
+  const isNew = (joinedAt: string) => Date.now() - new Date(joinedAt).getTime() < NEW_DAYS * 86_400_000;
   const members = (group.memberships ?? []).map((m) => ({
     ...m,
     due: dueOf(m.player.id),
@@ -236,7 +237,7 @@ export function GroupSquad({
       { value: 'none', label: `No number · ${noneCount}`, show: noneCount > 0 && noneCount < memberCount },
     ] as { value: typeof memberFilter; label: string; show: boolean }[]
   ).filter((f) => f.show);
-  const filterSays = { all: '', in: `${inCount} coming to ${nextLabel}`, out: `${outCount} not in yet for ${nextLabel}`, new: `${newCount} new in the last 30 days`,
+  const filterSays = { all: '', in: `${inCount} coming to ${nextLabel}`, out: `${outCount} not in yet for ${nextLabel}`, new: `${newCount} added in the last ${NEW_DAYS} days`,
     fix: `${fixCount} with a number WhatsApp can’t open`,
     none: `${noneCount} with no number`,
   }[memberFilter];
@@ -386,7 +387,8 @@ export function GroupSquad({
           <div className="mt-2 grid grid-cols-3 gap-2">
             <div className="rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-2.5">
               <p className="font-display text-[22px] leading-none font-extrabold text-ink tabular-nums">{memberCount}</p>
-              <p className="mt-1 text-[12px] leading-snug text-gray-600">player{memberCount === 1 ? '' : 's'}{newCount ? `, ${newCount} new` : ''}</p>
+              <p className="mt-1 text-[12px] leading-snug text-gray-600">player{memberCount === 1 ? '' : 's'}</p>
+              {newCount > 0 && <p className="text-[12px] leading-snug font-bold text-pitch-700">{newCount} new</p>}
             </div>
             {nextGame ? (
               <Link href={`/sessions/${nextGame.id}`} className="press rounded-2xl bg-white border border-gray-100 shadow-card px-3 py-2.5 hover:border-gray-300">
@@ -536,7 +538,8 @@ export function GroupSquad({
                 const detail = [
                   st?.ovr != null ? `Rating ${st.ovr}${st.provisional ? ' (settling)' : ''}` : null,
                   st ? `${st.games} game${st.games === 1 ? '' : 's'}` : null,
-                  level,
+                  // The level they started at, until they have a rating (it stays on their card)
+                  st?.ovr == null ? level : null,
                   m.role !== 'player' && sentence(m.role),
                 ].filter(Boolean) as string[];
                 return (
@@ -555,7 +558,7 @@ export function GroupSquad({
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-1.5 min-w-0">
                           <span className="text-[15px] font-bold text-ink leading-snug truncate">{name}</span>
-                          {m.fresh && <span className="shrink-0 text-[10px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-volt-300 text-ink">New</span>}
+                          {m.fresh && <span className="shrink-0 animate-pop-in text-[10px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-volt-300 text-ink" title={`Added in the last ${NEW_DAYS} days`}>New</span>}
                         </span>
                         <span className="block text-xs text-gray-500 mt-0.5 truncate">
                           {m.player.nickname ? `“${m.player.nickname}”${detail.length ? ' · ' : ''}` : ''}
