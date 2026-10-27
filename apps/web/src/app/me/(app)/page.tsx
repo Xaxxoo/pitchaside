@@ -7,7 +7,8 @@ import { Avatar, VoteClock } from '@/components/ratings';
 import { PushToggle } from '@/components/pwa';
 import { DidYouKnow } from '@/components/onboarding/did-you-know';
 import { GameCard, GameRow, LoadError, Section, niceDate } from '@/components/player-ui';
-import { CountUpNaira } from '@/components/motion';
+import { CountUpNaira, LiveDot } from '@/components/motion';
+import { Trophy } from '@/components/illustrations';
 import { formatCurrency } from '@/lib/api';
 import { getPlayerHome, subscribePlayerPush, type PlayerHome } from '@/lib/player';
 import { ModeSwitch, usePlayerProfile } from '@/components/player-shell';
@@ -167,32 +168,40 @@ export default function PlayerHomePage() {
       {pendingVotes.length > 0 && (
         <div className="mt-3 space-y-2">
           {pendingVotes.map((v) => (
+            // Full time: the card is the moment itself (who ran the show?), with one button to vote
             <Link
               key={v.token}
               href={`/v/${v.token}`}
-              className="press flex items-center gap-3 min-h-16 rounded-3xl border-2 border-ink bg-sun-400 px-4 py-3 shadow-sticker"
+              aria-label={`Vote for Player of the Match: ${v.groupName}, ${niceDate(v.date, { weekday: 'long', day: 'numeric', month: 'long' })}`}
+              className="press group relative block overflow-hidden rounded-[28px] border-2 border-ink bg-[linear-gradient(160deg,#134927_0%,#10301d_42%,#0f1a14_100%)] p-5 text-white shadow-sticker animate-rise"
             >
-              <span className="w-10 h-10 rounded-2xl bg-ink text-sun-400 flex items-center justify-center font-extrabold shrink-0" aria-hidden>
-                ★
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block font-display text-[17px] leading-tight font-extrabold text-ink">Vote for Player of the Match</span>
-                <span className="block text-xs text-ink/70 truncate">
-                  {v.groupName} · {niceDate(v.date, { weekday: 'short', day: 'numeric', month: 'short' })}
+              <span className="absolute inset-0 turf-stripes-soft" aria-hidden />
+              <Trophy className="absolute -right-4 -top-1 w-32 motion-safe:animate-pop-in" />
+              <span className="relative block pr-24">
+                <span className="flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-[0.14em] text-volt-300">
+                  <LiveDot className="bg-volt-400" />
+                  Full time · {niceDate(v.date, { weekday: 'short', day: 'numeric', month: 'short' })}
                 </span>
-                {/* How long is left: a quiet line, then a countdown in the last 3 hours */}
-                <VoteClock closesAt={v.closesAt} tone="sun" className="mt-1 block w-fit" />
-                {/* Turnout, with the faces of who's voted: nobody is named for not voting */}
+                <span className="mt-1.5 block font-display text-[26px] leading-[1.05] font-extrabold">Who ran the show?</span>
+                <span className="mt-1 block text-[13px] text-white/75 truncate">{v.groupName}</span>
+              </span>
+              {/* Turnout, with the faces of who's voted: nobody is named for not voting */}
+              <span className="relative mt-3 flex items-center gap-2 min-w-0">
+                {v.voters && v.voters.length > 0 && <FaceStack people={v.voters} total={v.ballots} max={3} onDark showMore={false} />}
                 {v.squadSize ? (
-                  <span className="mt-1.5 flex items-center gap-2">
-                    {v.voters && v.voters.length > 0 && <FaceStack people={v.voters} total={v.ballots} max={2} />}
-                    <span className="text-xs font-bold text-ink tabular-nums whitespace-nowrap" aria-label={`${v.ballots} of ${v.squadSize} have voted`}>
-                      {v.ballots}/{v.squadSize} voted
-                    </span>
+                  <span className="text-[13px] font-bold tabular-nums whitespace-nowrap" aria-label={`${v.ballots} of ${v.squadSize} have voted`}>
+                    {v.ballots} of {v.squadSize} voted
                   </span>
                 ) : null}
               </span>
-              <span className="shrink-0 inline-flex items-center min-h-9 px-3.5 rounded-full bg-ink text-sun-400 text-[13px] font-extrabold whitespace-nowrap">Vote ›</span>
+              {/* When it closes: a quiet line, then a countdown in the last 3 hours */}
+              <VoteClock closesAt={v.closesAt} tone="dark" className="relative mt-1.5 block w-fit" />
+              <span className="relative mt-4 flex items-center justify-center gap-2 h-12 rounded-2xl bg-volt-400 text-ink text-[15px] font-extrabold group-hover:bg-volt-300 transition-colors">
+                Vote now · 1 minute
+                <svg className="w-4 h-4 animate-nudge" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" aria-hidden>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                </svg>
+              </span>
             </Link>
           ))}
         </div>
