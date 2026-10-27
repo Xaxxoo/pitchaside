@@ -302,6 +302,32 @@ export class PaymentsService {
     return saved;
   }
 
+  /**
+   * Bulk-waive every pending payment for the given sessions. Used by super-admins
+   * when an organiser confirms nobody owes anything for upcoming games.
+   */
+  async waiveBySession(sessionIds: string[]): Promise<{ waived: number; sessionIds: string[] }> {
+    if (!sessionIds.length) return { waived: 0, sessionIds: [] };
+    const pending = await this.paymentsRepo.find({
+      where: { sessionId: In(sessionIds), status: PaymentStatus.PENDING },
+      relations: ['session'],
+    });
+    if (!pending.length) return { waived: 0, sessionIds };
+
+    for (const payment of pending) {
+      await releaseToExtra(this.paymentsRepo.manager, payment.session.groupId, [payment]);
+      payment.status = PaymentStatus.WAIVED;
+      payment.attendance = 'came';
+    }
+    await this.paymentsRepo.save(pending);
+
+    const affected = [...new Set(pending.map((p) => p.sessionId))];
+    for (const sid of affected) {
+      await this.recalculateSessionTotal(sid);
+    }
+    return { waived: pending.length, sessionIds: affected };
+  }
+
   async recalculateSessionTotal(sessionId: string) {
     const payments = await this.paymentsRepo.find({
       where: { sessionId, status: PaymentStatus.PAID },

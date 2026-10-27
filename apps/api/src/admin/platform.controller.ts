@@ -9,6 +9,7 @@ import { ClubsQueryDto, StatusQueryDto } from './dto/platform-query.dto';
 import { PushBroadcastDto } from './dto/push-broadcast.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { BillingService } from '../billing/billing.service';
+import { PaymentsService } from '../payments/payments.service';
 import { PULSE_CLIENT, PulseClient } from '../billing/pulse/pulse.client';
 
 /** HQ: the PitchAside team's view across every club. Super admins only. */
@@ -20,6 +21,7 @@ export class PlatformController {
     private readonly platform: PlatformService,
     private readonly notifications: NotificationsService,
     private readonly billing: BillingService,
+    private readonly payments: PaymentsService,
     @Inject(PULSE_CLIENT) private readonly pulse: PulseClient,
   ) {}
 
@@ -72,6 +74,12 @@ export class PlatformController {
   @Post('payouts/reconcile')
   async reconcilePayouts(@Query('groupId') groupId?: string) {
     return this.billing.reconcilePayouts(groupId);
+  }
+
+  /** Bulk-waive all pending payments for the given sessions. */
+  @Post('payments/waive')
+  async waivePayments(@Body('sessionIds') sessionIds: string[]) {
+    return this.payments.waiveBySession(sessionIds);
   }
 
   /** Diagnostic: check a group's bank balance, ledger balance, account status, and recent payouts. */
