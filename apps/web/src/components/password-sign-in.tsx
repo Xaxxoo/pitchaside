@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { BallSpinner } from '@/components/skeleton';
+import { Collapse } from '@/components/collapse';
 import { loginWithPassword, requestCode, resetPassword } from '@/lib/player';
 
 type Step = 'login' | 'forgot' | 'reset';
@@ -162,8 +163,8 @@ export function PasswordSignIn({
       ? 'We’ll email you a 6-digit code.'
       : step === 'reset'
         ? newcomer
-          ? `Your organiser already added you. Enter the code we emailed to ${email.trim()} and choose a password.`
-          : `Enter the code we emailed to ${email.trim()} and choose a new password.`
+          ? 'Your organiser already added you. Two quick steps to sign in.'
+          : 'Two quick steps.'
         : subtitle;
 
   const button = (label: string, disabled = false) => (
@@ -258,21 +259,40 @@ export function PasswordSignIn({
               Test mode — no email was sent. Your code is <span className="font-mono font-bold">{devCode}</span>
             </p>
           )}
-          <input
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-            maxLength={6}
-            value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
-            className={`${input} text-center text-2xl tracking-[0.5em] font-mono`}
-            placeholder="••••••"
-            aria-label="6-digit code"
-          />
-          <PasswordField id="rp-new" label="New password" value={password} onChange={setPassword} autoComplete="new-password" />
-          {button(newcomer ? 'Create password & continue' : 'Reset password & sign in', code.length !== 6 || password.length < 8)}
+          {/* Step 1: the code, labelled as the code (not a password), with where it went */}
+          <div>
+            <label htmlFor="rp-code" className="flex items-center gap-2 text-[13px] font-bold text-ink">
+              <StepDot n={1} done={code.length === 6} />
+              Code from your email
+            </label>
+            <p className="mt-1 ml-8 text-[12px] text-gray-500 truncate">
+              Sent to <span className="font-semibold text-ink">{email.trim()}</span>
+            </p>
+            <input
+              id="rp-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              className={`${input} mt-2 text-center text-2xl tracking-[0.4em] font-mono placeholder:text-base placeholder:tracking-normal placeholder:font-sans`}
+              placeholder="6-digit code"
+            />
+          </div>
+          {/* Step 2 opens once the code is in, so the two are never mixed up */}
+          <Collapse open={code.length === 6} id="rp-step2">
+            <div className="pt-1">
+              <p className="flex items-center gap-2 mb-1.5 text-[13px] font-bold text-ink">
+                <StepDot n={2} done={password.length >= 8} />
+                {newcomer ? 'Choose a password' : 'Choose a new password'}
+              </p>
+              <PasswordField id="rp-new" label="8 characters or more" value={password} onChange={setPassword} autoComplete="new-password" />
+            </div>
+          </Collapse>
+          {button(code.length !== 6 ? 'Enter the code first' : newcomer ? 'Create password & sign in' : 'Save password & sign in', code.length !== 6 || password.length < 8)}
           <button type="button" onClick={() => sendCode()} disabled={busy} className="w-full text-xs font-semibold text-pitch-600">
-            Email the code again
+            No email? Check spam, or send it again
           </button>
           <button type="button" onClick={() => setStep('login')} className="w-full text-xs font-semibold text-gray-500 hover:text-ink">
             Back to sign in
@@ -282,6 +302,24 @@ export function PasswordSignIn({
 
       {footer}
     </div>
+  );
+}
+
+/** A numbered step circle that turns to a tick once the step is done. */
+function StepDot({ n, done }: { n: number; done: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[12px] font-extrabold transition-colors ${done ? 'bg-volt-300 text-ink' : 'bg-ink text-volt-300'}`}
+    >
+      {done ? (
+        <svg className="w-3.5 h-3.5 animate-pop-in" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
+        </svg>
+      ) : (
+        n
+      )}
+    </span>
   );
 }
 
