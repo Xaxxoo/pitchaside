@@ -11,7 +11,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, In, MoreThanOrEqual, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, In, MoreThanOrEqual, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Group, PaymentType } from '../groups/entities/group.entity';
 import { GroupMembership, MemberRole } from '../groups/entities/group-membership.entity';
@@ -1882,6 +1882,36 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     return NIGERIAN_BANKS;
   }
 
+  /** Query Payrep for the real status of every `processing` payout and reconcile. */
+  async reconcilePayouts(groupId?: string): Promise<ReconcileResult[]> {
+    const where: FindOptionsWhere<OutgoingTransfer> = { status: PayoutStatus.PROCESSING };
+    if (groupId) where.groupId = groupId;
+    const stuck = await this.payoutsRepo.find({ where, order: { createdAt: 'ASC' } });
+
+    const results: ReconcileResult[] = [];
+    for (const payout of stuck) {
+      if (!payout.providerReference) {
+        results.push({ id: payout.id, reference: null, before: 'processing', after: null, error: 'no provider reference' });
+        continue;
+      }
+      try {
+        const bank = await this.pulse.getTransfer(payout.providerReference);
+        const bankStatus = /complet|success/.test(bank.status) ? 'completed' as const
+                         : /fail|reverse/.test(bank.status) ? 'failed' as const
+                         : null;
+        if (bankStatus) {
+          await this.handlePayoutWebhook(payout.providerReference, bankStatus, bank.errorMessage);
+          results.push({ id: payout.id, reference: payout.providerReference, before: 'processing', after: bankStatus });
+        } else {
+          results.push({ id: payout.id, reference: payout.providerReference, before: 'processing', after: null, bankStatus: bank.status });
+        }
+      } catch (err: any) {
+        results.push({ id: payout.id, reference: payout.providerReference, before: 'processing', after: null, error: err.message });
+      }
+    }
+    return results;
+  }
+
   // ── helpers ──
 
   private async findGroup(id: string, organizationId: string) {
@@ -1900,6 +1930,16 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     if (!transfer) throw new NotFoundException('Transfer not found');
     return transfer;
   }
+}
+
+export interface ReconcileResult {
+  id: string;
+  reference: string | null;
+  before: string;
+  after: 'completed' | 'failed' | null;
+  /** The raw bank status when it didn't map to completed/failed. */
+  bankStatus?: string;
+  error?: string;
 }
 
 /** The billing period containing `now`. Weeks start on Monday. */

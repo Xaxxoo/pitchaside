@@ -68,6 +68,12 @@ export class PlatformController {
     return this.platform.getActivity(query);
   }
 
+  /** Actively reconcile `processing` payouts against Payrep's real status. */
+  @Post('payouts/reconcile')
+  async reconcilePayouts(@Query('groupId') groupId?: string) {
+    return this.billing.reconcilePayouts(groupId);
+  }
+
   /** Diagnostic: check a group's bank balance, ledger balance, account status, and recent payouts. */
   @Get('groups/:id/diagnostics')
   async groupDiagnostics(@Param('id') groupId: string) {
