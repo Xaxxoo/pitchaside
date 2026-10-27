@@ -75,7 +75,7 @@ function OrganisersTable({ search }: { search: string }) {
               {u.role === 'super_admin' ? (
                 <span className="text-gray-500">{u.clubName}</span>
               ) : (
-                <Link href={`/hq/clubs/${u.clubId}`} className="text-ink hover:text-pitch-600">
+                <Link href={`/admin/clubs/${u.clubId}`} className="text-ink hover:text-pitch-600">
                   {u.clubName}
                 </Link>
               )}

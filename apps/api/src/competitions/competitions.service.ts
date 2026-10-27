@@ -16,6 +16,7 @@ import { CompetitionMatch, MatchStatus } from './entities/competition-match.enti
 import { CreateCompetitionDto } from './dto/create-competition.dto';
 import { UpdateCompetitionDto } from './dto/update-competition.dto';
 import { RegisterTeamDto } from './dto/register-team.dto';
+import { UpdateTeamDto } from './dto/update-team.dto';
 import { RecordResultDto } from './dto/record-result.dto';
 import { ScheduleMatchDto } from './dto/schedule-match.dto';
 import { NIGERIAN_STATES, isValidState, isValidCity } from './data/nigerian-locations';
@@ -115,7 +116,7 @@ export class CompetitionsService {
 
   // ── Account provisioning ──
 
-  async provisionAccount(id: string, organizationId: string, bvn?: string): Promise<Competition> {
+  async provisionAccount(id: string, organizationId: string, ids: { bvn?: string; nin?: string } = {}): Promise<Competition> {
     const comp = await this.findOne(id, organizationId);
     if (comp.accountNumber) {
       throw new BadRequestException('Competition already has a collection account');
@@ -127,7 +128,8 @@ export class CompetitionsService {
       accountName: accountNameFor(comp.name),
       email: contact?.email,
       phone: contact?.phone ?? undefined,
-      bvn,
+      bvn: ids.bvn,
+      nin: ids.nin,
     });
 
     comp.accountNumber = account.accountNumber;
@@ -188,11 +190,16 @@ export class CompetitionsService {
     await this.teamsRepo.remove(team);
   }
 
-  async updateTeam(competitionId: string, teamId: string, organizationId: string, data: Partial<CompetitionTeam>): Promise<CompetitionTeam> {
+  async updateTeam(competitionId: string, teamId: string, organizationId: string, dto: UpdateTeamDto): Promise<CompetitionTeam> {
     await this.findOne(competitionId, organizationId);
     const team = await this.teamsRepo.findOne({ where: { id: teamId, competitionId } });
     if (!team) throw new NotFoundException('Team not found');
-    Object.assign(team, data);
+    // Only the editable fields, by name: never the id (save would write that row instead) or the
+    // competition, payment or club it belongs to.
+    const { name, captainName, captainPhone, captainEmail } = dto;
+    for (const [key, value] of Object.entries({ name, captainName, captainPhone, captainEmail })) {
+      if (value !== undefined) (team as any)[key] = value;
+    }
     return this.teamsRepo.save(team);
   }
 

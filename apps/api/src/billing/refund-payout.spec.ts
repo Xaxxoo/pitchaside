@@ -9,19 +9,26 @@ function setup(credit: number, extra = 0) {
   const membership: any = { groupId: 'g1', playerId: 'p1', credit: credit.toFixed(2), extra: extra.toFixed(2) };
   const tx = {
     findOne: async (_e: unknown, o: any) => (o.where.playerId === 'p1' ? membership : null),
-    save: async (x: any) => x,
+    // The payout row is written once, inside the locked transaction.
+    save: async (x: any) => (x.providerReference ? (stored = x) : x),
   };
   const manager = { transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
   let stored: any = null;
   const payoutsRepo = {
     manager,
     createQueryBuilder: () => {
-      const qb: any = { select: () => qb, where: () => qb, andWhere: () => qb, getRawOne: async () => ({ dailyTotal: 0 }) };
+      const qb: any = { select: () => qb, where: () => qb, andWhere: () => qb, innerJoin: () => qb, getOne: async () => stored, getRawOne: async () => ({ dailyTotal: 0 }) };
       return qb;
     },
     create: (p: any) => ({ id: 'po1', status: PayoutStatus.PENDING, ...p }),
     save: jest.fn(async (p: any) => (stored = p)),
     findOne: async () => stored,
+    findOneOrFail: async () => stored,
+    update: async (where: any, changes: any) => {
+      if (!stored || stored.id !== where.id || stored.status !== where.status) return { affected: 0 };
+      Object.assign(stored, changes);
+      return { affected: 1 };
+    },
   };
   const pulse = new MockPulseClient('secret');
   jest.spyOn(pulse, 'nameEnquiry').mockResolvedValue({ accountName: 'TUNDE BAKARE' });
@@ -44,7 +51,7 @@ function setup(credit: number, extra = 0) {
       refundPlayerId,
       pin: '1234',
     });
-  return { service, membership, refund, transferOut, payout: () => stored };
+  return { service, membership, refund, transferOut, payout: () => stored, leavePending: (p: any) => (stored = p) };
 }
 
 describe('refund payouts', () => {
@@ -111,5 +118,31 @@ describe('refund payouts', () => {
     function transferOutProcessing() {
       jest.spyOn((service as any).pulse, 'transferOut').mockResolvedValueOnce({ status: 'processing' } as any);
     }
+  });
+
+  it('gives a refund back once when the same failure message arrives twice at the same moment', async () => {
+    const { service, membership, refund, payout } = setup(1500);
+    jest.spyOn((service as any).pulse, 'transferOut').mockResolvedValueOnce({ status: 'processing' } as any);
+    await refund(1000);
+
+    const ref = payout().providerReference;
+    await Promise.all([service.handlePayoutWebhook(ref, 'failed'), service.handlePayoutWebhook(ref, 'failed')]);
+    expect(membership.extra).toBe('1000.00');
+  });
+
+  it("won't cancel a payout that may still be on its way to the bank", async () => {
+    const { service, membership, leavePending } = setup(500);
+    leavePending({ id: 'po1', groupId: 'g1', status: PayoutStatus.PENDING, refundPlayerId: 'p1', amount: '1000.00', createdAt: new Date() });
+    await expect(service.cancelPayout('po1', 'org1')).rejects.toThrow(BadRequestException);
+    expect(membership.extra).toBe('0.00');
+  });
+
+  it('cancels a payout left pending by a server stop, and gives the refund back once', async () => {
+    const { service, membership, leavePending } = setup(500);
+    const old = new Date(Date.now() - 60 * 60 * 1000);
+    leavePending({ id: 'po1', groupId: 'g1', status: PayoutStatus.PENDING, refundPlayerId: 'p1', amount: '1000.00', createdAt: old });
+    const results = await Promise.allSettled([service.cancelPayout('po1', 'org1'), service.cancelPayout('po1', 'org1')]);
+    expect(results.filter((r) => r.status === 'fulfilled')).toHaveLength(1);
+    expect(membership.extra).toBe('1000.00');
   });
 });

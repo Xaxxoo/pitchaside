@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
@@ -111,6 +111,9 @@ export class NotificationsService implements OnModuleInit {
   // ── Push ──
 
   async subscribe(sub: PushInput, owner: { playerId?: string; userId?: string; personKey?: string }) {
+    // The server POSTs to this URL on every notification, so it must be a browser's push service,
+    // never an address the server can reach inside its own network.
+    if (!isPushServiceUrl(sub.endpoint)) throw new BadRequestException("That isn't a browser push address");
     const existing = await this.subsRepo.findOne({ where: { endpoint: sub.endpoint } });
     const row = existing ?? this.subsRepo.create({ endpoint: sub.endpoint });
     row.p256dh = sub.keys.p256dh;
@@ -130,8 +133,9 @@ export class NotificationsService implements OnModuleInit {
     return { subscribed: true };
   }
 
-  async unsubscribe(endpoint: string) {
-    await this.subsRepo.delete({ endpoint });
+  /** Turns off push on one device, only if it belongs to whoever is asking. */
+  async unsubscribe(endpoint: string, owner: { userId: string } | { personKey: string }) {
+    await this.subsRepo.delete({ endpoint, ...owner });
     return { subscribed: false };
   }
 
@@ -196,14 +200,26 @@ export class NotificationsService implements OnModuleInit {
     let delivered = 0;
     await Promise.all(
       subs.map(async (s) => {
+        const sub = { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } };
+        const opts = { TTL: 60 * 60 * 24 };
         try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, {
-            TTL: 60 * 60 * 24,
-          });
+          await webpush.sendNotification(sub, payload, opts);
           delivered++;
         } catch (err: any) {
-          if (err.statusCode === 404 || err.statusCode === 410) await this.subsRepo.delete({ id: s.id });
-          else this.logger.warn(`Push failed: ${err.statusCode ?? ''} ${err.message}`);
+          if (err.statusCode === 404 || err.statusCode === 410) {
+            await this.subsRepo.delete({ id: s.id });
+          } else if (err.statusCode >= 500) {
+            // Transient server error: retry once after a short delay.
+            try {
+              await new Promise((r) => setTimeout(r, 1500));
+              await webpush.sendNotification(sub, payload, opts);
+              delivered++;
+            } catch (retryErr: any) {
+              this.logger.warn(`Push retry failed: ${retryErr.statusCode ?? ''} ${retryErr.message}`);
+            }
+          } else {
+            this.logger.warn(`Push failed: ${err.statusCode ?? ''} ${err.message}`);
+          }
         }
       }),
     );
@@ -357,4 +373,17 @@ export class NotificationsService implements OnModuleInit {
   later(fn: () => Promise<unknown>) {
     fn().catch((err) => this.logger.warn(`Notification failed: ${err?.message ?? err}`));
   }
+}
+
+/** Hosts browsers use for Web Push (Chrome/Edge via FCM, Firefox, Safari, Windows). */
+const PUSH_HOSTS = [/^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /^(.+\.)?push\.apple\.com$/, /^(.+\.)?notify\.windows\.com$/];
+
+export function isPushServiceUrl(endpoint: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(endpoint);
+  } catch {
+    return false;
+  }
+  return url.protocol === 'https:' && !url.port && !url.username && !url.password && PUSH_HOSTS.some((h) => h.test(url.hostname));
 }

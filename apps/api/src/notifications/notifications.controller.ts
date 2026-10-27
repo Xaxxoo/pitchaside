@@ -51,8 +51,8 @@ export class NotificationsController {
 
   @UseGuards(JwtAuthGuard)
   @Delete('push/subscribe')
-  unsubscribe(@Body() dto: UnsubscribeDto) {
-    return this.notifications.unsubscribe(dto.endpoint);
+  unsubscribe(@Body() dto: UnsubscribeDto, @CurrentUser() user: User) {
+    return this.notifications.unsubscribe(dto.endpoint, { userId: user.id });
   }
 
   /** Emails on or off for this organiser (on unless they switch it off). */

@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useRef, useState } from 'react';
 import { useToast } from '@/components/toast';
 import { addMember, createPlayer } from '@/lib/api';
@@ -12,6 +13,7 @@ export function QuickAddPlayers({ groupId, onAdded }: { groupId: string; onAdded
   const toast = useToast();
   const first = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
+  const phoneSeen = useTouched();
   const [saving, setSaving] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
   const ready = form.firstName.trim().length >= 2 && form.lastName.trim().length >= 2;
@@ -56,9 +58,10 @@ export function QuickAddPlayers({ groupId, onAdded }: { groupId: string; onAdded
         placeholder="WhatsApp number (optional)"
         aria-label="WhatsApp number (optional)"
         autoComplete="off"
+        onBlur={phoneSeen.onBlur}
         className={input}
       />
-      <p className="text-[12px] text-gray-500">With a number you can send them their payment details on WhatsApp.</p>
+      <PhoneHint value={form.phone} touched={phoneSeen.touched}>With a number you can send them their payment details on WhatsApp.</PhoneHint>
       <button type="submit" disabled={!ready || saving} className="w-full min-h-11 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 disabled:opacity-40 transition-colors">
         {saving ? 'Adding…' : added.length ? 'Add another' : 'Add to the group'}
       </button>

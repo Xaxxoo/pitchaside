@@ -75,6 +75,8 @@ export class RsvpService {
 
   async setByOrganiser(sessionId: string, playerId: string, status: 'in' | 'out', organizationId: string) {
     const session = await this.loadGame(sessionId, organizationId);
+    const member = await this.membershipsRepo.findOne({ where: { groupId: session.groupId, playerId } });
+    if (!member) throw new NotFoundException("That player isn't in this group");
     await this.apply(session, playerId, status, { force: true });
     return this.board(session);
   }

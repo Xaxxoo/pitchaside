@@ -8,7 +8,7 @@ import { RatingBreakdownSheet } from '@/components/rating-breakdown-sheet';
 import { EmptyState } from '@/components/empty-state';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
-import { whatsappNumber } from '@/lib/whatsapp';
+import { prettyPhone, whatsappNumber } from '@/lib/whatsapp';
 import { PlayerSheet } from '@/components/group/member-sheet';
 import { UserRole } from '@pitchaside/shared';
 import { useAuth } from '@/lib/auth';
@@ -310,7 +310,20 @@ export default function PlayerDetailPage() {
                 )}
               </div>
               {!player.email && <p className="mt-2 text-[11px] leading-snug text-white/60">No email yet: they can’t sign in until you add one.</p>}
-              {player.phone && <p className="mt-2 text-[12px] text-white/60 tabular-nums truncate">{player.phone}</p>}
+              {player.phone &&
+                (waNumber ? (
+                  <p className="mt-2 text-[12px] text-white/60 tabular-nums truncate">{prettyPhone(player.phone)}</p>
+                ) : (
+                  // Typed so WhatsApp can't open it: say so, and the way to fix it.
+                  <p className="mt-2 flex items-center gap-2 text-[12px] leading-snug text-kit-400">
+                    <span className="min-w-0">
+                      <span className="tabular-nums">{player.phone}</span> won’t open WhatsApp.
+                    </span>
+                    <button onClick={() => setEditing(true)} className="press shrink-0 min-h-9 px-2.5 rounded-full bg-white/10 font-bold text-white hover:bg-white/20">
+                      Fix it
+                    </button>
+                  </p>
+                ))}
             </div>
           </div>
 
@@ -416,7 +429,7 @@ function PlayerMoney({
           </span>
         </span>
         <span className="shrink-0 text-right">
-          <span className="block font-display text-[15px] font-extrabold text-ink tabular-nums">{formatCurrency(p.amount)}</span>
+          <span className="block font-display text-[15px] font-extrabold text-ink tabular-nums">{formatCurrency(Number(p.amount))}</span>
           <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${chip.cls}`}>{chip.text}</span>
         </span>
       </li>

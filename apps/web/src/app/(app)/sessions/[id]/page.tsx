@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar } from '@/components/ratings';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
@@ -54,7 +54,7 @@ import { GroupMessageSheet, SEND_KINDS, type SendKind } from '@/components/game/
 import { coveredByDues as coversByDues, gamePhase, gameTally, leftToPay } from '@/lib/game-player';
 import { AddToGameSheet } from '@/components/game/add-to-game-sheet';
 import { MovePaymentSheet } from '@/components/game/move-payment-sheet';
-import { gameInviteMessage, openWhatsApp, paymentDetailsMessage } from '@/lib/whatsapp';
+import { gameInviteMessage, openWhatsApp, paymentDetailsMessage, pickWhy } from '@/lib/whatsapp';
 import { prettyTime } from '@/components/player-ui';
 
 /** Today as YYYY-MM-DD in the browser's time zone. */
@@ -100,10 +100,14 @@ export default function GamePage() {
   // A payment by transfer being moved to another of the player's games.
   const [movingPay, setMovingPay] = useState<IPayment | null>(null);
 
+  // Version counter: when multiple fetches are in flight (rapid mutations),
+  // only the latest one updates state so earlier results don't overwrite newer ones.
+  const fetchId = useRef(0);
   const fetchSession = useCallback(() => {
+    const v = ++fetchId.current;
     return getSession(id)
-      .then(setSession)
-      .catch(() => router.push('/sessions'));
+      .then((s) => { if (fetchId.current === v) setSession(s); })
+      .catch(() => { if (fetchId.current === v) router.push('/sessions'); });
   }, [id, router]);
 
   useEffect(() => {
@@ -149,10 +153,12 @@ export default function GamePage() {
   const liveDay = !!session && isGameKind && session.status === 'upcoming' && String(session.date).slice(0, 10) <= localToday();
   useEffect(() => {
     if (!liveDay) return;
-    const look = () => document.visibilityState === 'visible' && getLineup(id).then(setLineup).catch(() => undefined);
+    let stale = false;
+    const look = () => document.visibilityState === 'visible' && getLineup(id).then((l) => { if (!stale) setLineup(l); }).catch(() => undefined);
     const timer = window.setInterval(look, 20_000);
     document.addEventListener('visibilitychange', look);
     return () => {
+      stale = true;
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', look);
     };
@@ -244,7 +250,8 @@ export default function GamePage() {
     if (action === 'details') {
       if (!billing?.account || !session) return;
       const member = members.find((m) => m.player.id === p.playerId);
-      openWhatsApp(
+      const phone = p.player?.phone ?? member?.player.phone;
+      const went = openWhatsApp(
         paymentDetailsMessage({
           firstName: first,
           groupName: session.group?.name ?? 'Your group',
@@ -253,15 +260,19 @@ export default function GamePage() {
           amount: leftToPay(p),
           forWhat: gameLabel(session),
         }),
-        p.player?.phone ?? member?.player.phone,
+        phone,
       );
+      const why = pickWhy(first, phone, went);
+      if (why) toast.success(why);
       return;
     }
     if (action === 'move') {
       setMovingPay(p);
       return;
     }
-    if (action === 'paid') {
+    if (action === 'cash') {
+      act(p, () => markPaid(p.id, 'cash'), `${first} paid in cash`);
+    } else if (action === 'paid') {
       // With money waiting for a name, ask whether it was one of those; otherwise just mark paid.
       if (unnamed.length) setHowPaid(p.id);
       else act(p, () => markPaid(p.id), `${first} marked paid`);
@@ -440,7 +451,7 @@ export default function GamePage() {
             onUseTransfer={(t, outcome) => payWithTransfer(p.id, t, outcome)}
             onOtherWay={() => {
               setHowPaid(null);
-              act(p, () => markPaid(p.id), `${nameOfPayment(p).split(' ')[0]} marked paid`);
+              act(p, () => markPaid(p.id, 'cash'), `${nameOfPayment(p).split(' ')[0]} paid in cash`);
             }}
             onClose={() => setHowPaid(null)}
           />

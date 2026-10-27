@@ -48,6 +48,13 @@ function setup(bankIn: number) {
     },
     create: (p: any) => ({ id: `po${recorded.length + 1}`, status: PayoutStatus.PENDING, ...p }),
     save: async (p: any) => p,
+    update: async (where: any, changes: any) => {
+      const p: any = recorded.find((r: any) => r.id === where.id);
+      if (!p || p.status !== where.status) return { affected: 0 };
+      Object.assign(p, changes);
+      return { affected: 1 };
+    },
+    findOneOrFail: async ({ where }: any) => recorded.find((r: any) => r.id === where.id),
   };
   const pulse = new MockPulseClient('secret');
   jest.spyOn(pulse, 'nameEnquiry').mockResolvedValue({ accountName: 'TUNDE BAKARE' });

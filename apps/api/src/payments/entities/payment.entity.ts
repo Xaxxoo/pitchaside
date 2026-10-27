@@ -3,6 +3,7 @@ import {
   PrimaryGeneratedColumn,
   Column,
   CreateDateColumn,
+  Index,
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
@@ -26,6 +27,7 @@ export class Payment {
   @JoinColumn({ name: 'session_id' })
   session: Session;
 
+  @Index()
   @Column({ name: 'session_id' })
   sessionId: string;
 
@@ -33,24 +35,26 @@ export class Payment {
   @JoinColumn({ name: 'player_id' })
   player: Player;
 
+  @Index()
   @Column({ name: 'player_id' })
   playerId: string;
 
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   amount: number;
 
+  @Index()
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status: PaymentStatus;
 
-  @Column({ nullable: true })
-  paidAt: Date;
+  @Column({ type: 'timestamp', nullable: true })
+  paidAt: Date | null;
 
-  @Column({ nullable: true })
-  markedBy: string;
+  @Column({ type: 'varchar', nullable: true })
+  markedBy: string | null;
 
   /** 'manual' when an admin marked it, 'transfer' when reconciled from a bank transfer. */
-  @Column({ nullable: true })
-  source: string;
+  @Column({ type: 'varchar', nullable: true })
+  source: string | null;
 
   /** Match-day side: 'A'–'F' (colours in the UI); null = not picked yet. */
   @Column({ type: 'varchar', nullable: true })
@@ -92,4 +96,7 @@ export class Payment {
    * sessions are loaded. Only on their oldest unpaid due in the group, which is where it goes.
    */
   paidSoFar?: number;
+
+  /** Not stored: the actual amount the player sent by transfer, set when sessions are loaded. */
+  transferAmount?: number;
 }

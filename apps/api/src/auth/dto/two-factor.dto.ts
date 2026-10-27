@@ -7,9 +7,10 @@ export class TwoFactorVerifyDto {
 }
 
 export class TwoFactorValidateDto {
+  /** From the password step (`/auth/login` with 2FA on). */
   @IsString()
   @IsNotEmpty()
-  userId: string;
+  challenge: string;
 
   @IsString()
   @IsNotEmpty()

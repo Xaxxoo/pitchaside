@@ -29,6 +29,7 @@ export class PaymentsController {
       dto.paymentIds,
       user.organizationId,
       `${user.firstName} ${user.lastName}`,
+      dto.source,
     );
     await this.auditService.log({
       action: AuditAction.PAYMENT_BULK_MARKED_PAID,
@@ -45,9 +46,10 @@ export class PaymentsController {
   async markAsPaid(
     @Param('id') id: string,
     @Body('markedBy') markedBy: string | undefined,
+    @Body('source') source: 'cash' | 'manual' | undefined,
     @CurrentUser() user: User,
   ) {
-    const result = await this.paymentsService.markAsPaid(id, user.organizationId, markedBy);
+    const result = await this.paymentsService.markAsPaid(id, user.organizationId, markedBy, source);
     await this.auditService.log({
       action: AuditAction.PAYMENT_MARKED_PAID,
       entityType: 'payment',

@@ -1,18 +1,22 @@
 'use client';
 
 import { NotificationSettings } from '@/components/notify';
+import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, getTransferPinStatus, setTransferPin, changeTransferPin } from '@/lib/api';
 import { PageHeader } from '@/components/brand';
 import { VerifyEmailRow } from '@/components/verify-email-modal';
+import { IdentityForm } from '@/components/identity-form';
+import { UserRole } from '@pitchaside/shared';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
   const toast = useToast();
 
   // Profile state
+  const phoneSeen = useTouched();
   const [profileData, setProfileData] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
@@ -189,10 +193,11 @@ export default function SettingsPage() {
             type="tel"
             value={profileData.phone}
             onChange={(e) => setProfileData({ ...profileData, phone: e.target.value })}
+            onBlur={phoneSeen.onBlur}
             placeholder="0803 123 4567"
             className={inputClass}
           />
-          <p className="text-[11px] text-gray-500 mt-1">Optional — so your players and co-organisers can reach you.</p>
+          <PhoneHint value={profileData.phone ?? ''} touched={phoneSeen.touched}>Optional: so your players and co-organisers can reach you.</PhoneHint>
         </div>
         <VerifyEmailRow email={user.email} verified={!!user.emailVerified} onCheck={refreshUser} />
         <button
@@ -203,6 +208,30 @@ export default function SettingsPage() {
           {savingProfile ? 'Saving…' : 'Update profile'}
         </button>
       </form>
+
+      {/* Identity: the club admin's BVN or NIN unlocks group collection accounts */}
+      {(user?.role === UserRole.ORG_ADMIN || user?.role === UserRole.SUPER_ADMIN) && (
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
+        <h2 className="text-lg font-bold text-ink mb-1">Identity</h2>
+        {user?.bvn && user?.nin ? (
+          <p className="text-sm text-gray-600 mb-3 flex items-start gap-2">
+            <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-volt-300 text-ink flex items-center justify-center" aria-hidden>
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
+            </span>
+            <span>
+              <b className="text-ink">Both added</b>: BVN {user.bvn} · NIN {user.nin}. Your groups can open collection accounts.
+            </span>
+          </p>
+        ) : user?.bvn || user?.nin ? (
+          <p className="text-sm text-gray-600 mb-4">
+            {user.bvn ? `BVN ${user.bvn} added.` : `NIN ${user.nin} added.`} Add your {user.bvn ? 'NIN' : 'BVN'} too: the bank needs both.
+          </p>
+        ) : (
+          <p className="text-sm text-gray-600 mb-4">Add your BVN and NIN. Until you add both, your groups can’t get a collection account.</p>
+        )}
+        <IdentityForm submitLabel={user?.bvn || user?.nin ? 'Save' : 'Add'} onDone={() => toast.success('Saved: your BVN and NIN are on file')} />
+      </div>
+      )}
 
       {/* Change Password */}
       <form onSubmit={handlePasswordChange} className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">

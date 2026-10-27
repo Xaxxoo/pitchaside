@@ -1,5 +1,6 @@
 'use client';
 
+import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useState } from 'react';
 import { BallSpinner } from '@/components/skeleton';
 import { PasswordField } from '@/components/password-sign-in';
@@ -30,6 +31,7 @@ export function PlayerSignupForm({
   onEmailChange?: (email: string) => void;
 }) {
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', password: '' });
+  const phoneSeen = useTouched();
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
@@ -90,10 +92,13 @@ export function PlayerSignupForm({
           autoComplete="tel"
           value={form.phone}
           onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          onBlur={phoneSeen.onBlur}
           className={input}
           placeholder="0803 123 4567"
         />
-        <p className="text-[11px] text-gray-500 mt-1">So your organiser can reach you. If they already added you by number, this links you to your record.</p>
+        <PhoneHint value={form.phone} touched={phoneSeen.touched}>
+          So your organiser can reach you on WhatsApp. If they added you by number, this links you to your record.
+        </PhoneHint>
       </div>
       <PasswordField
         id="su-password"
@@ -101,6 +106,7 @@ export function PlayerSignupForm({
         value={form.password}
         onChange={(v) => setForm({ ...form, password: v })}
         autoComplete="new-password"
+        minLength={8}
         hint="At least 8 characters. You'll sign in with your email and this password."
       />
       <button

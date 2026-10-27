@@ -320,21 +320,25 @@ export class CryptoService {
       throw new BadRequestException('Transfer is already matched or assigned');
     }
 
-    const payment = await this.paymentRepo.findOne({
-      where: { id: paymentId },
-      relations: ['player'],
-    });
+    // The payment id comes from the request: it has to be a due in one of this club's games.
+    const payment = await this.paymentRepo
+      .createQueryBuilder('payment')
+      .innerJoin('payment.session', 'session')
+      .innerJoin('session.group', 'group')
+      .where('payment.id = :paymentId', { paymentId })
+      .andWhere('group.organizationId = :organizationId', { organizationId })
+      .getOne();
     if (!payment) throw new NotFoundException('Payment not found');
 
-    transfer.paymentId = paymentId;
-    transfer.playerId = payment.playerId;
-    transfer.status = CryptoTransferStatus.ASSIGNED;
-    await this.transferRepo.save(transfer);
+    // Claim the transfer only while it's still unmatched, so two assigns can't both use it.
+    const claimed = await this.transferRepo.update(
+      { id: transfer.id, status: CryptoTransferStatus.UNMATCHED },
+      { paymentId, playerId: payment.playerId, status: CryptoTransferStatus.ASSIGNED },
+    );
+    if (!claimed.affected) throw new BadRequestException('Transfer is already matched or assigned');
 
-    // Mark the payment as paid
     await this.payments.markAsPaid(paymentId, organizationId, 'crypto');
-
-    return transfer;
+    return this.findTransfer(transfer.id, organizationId);
   }
 
   async giveTransfer(transferId: string, playerId: string, organizationId: string) {
@@ -343,11 +347,16 @@ export class CryptoService {
       throw new BadRequestException('Transfer is already matched or assigned');
     }
 
-    transfer.playerId = playerId;
-    transfer.status = CryptoTransferStatus.ASSIGNED;
-    await this.transferRepo.save(transfer);
+    // The player id comes from the request: it has to be a member of the group the money came to.
+    const member = transfer.groupId && (await this.membershipRepo.findOne({ where: { groupId: transfer.groupId, playerId } }));
+    if (!member) throw new NotFoundException("That player isn't in this group");
 
-    return transfer;
+    const claimed = await this.transferRepo.update(
+      { id: transfer.id, status: CryptoTransferStatus.UNMATCHED },
+      { playerId, status: CryptoTransferStatus.ASSIGNED },
+    );
+    if (!claimed.affected) throw new BadRequestException('Transfer is already matched or assigned');
+    return this.findTransfer(transfer.id, organizationId);
   }
 
   async ignoreTransfer(transferId: string, organizationId: string) {

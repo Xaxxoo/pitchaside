@@ -15,10 +15,13 @@ import { CryptoModule } from '../crypto/crypto.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
-        secret: config.get<string>('JWT_SECRET', 'pitchaside-dev-secret'),
-        signOptions: { expiresIn: '15m' },
-      }),
+      useFactory: (config: ConfigService) => {
+        const secret = config.get<string>('JWT_SECRET');
+        if (!secret && config.get<string>('NODE_ENV') === 'production') {
+          throw new Error('JWT_SECRET must be set in production.');
+        }
+        return { secret: secret || 'pitchaside-dev-secret', signOptions: { expiresIn: '15m' } };
+      },
     }),
     UsersModule,
     OrganizationsModule,

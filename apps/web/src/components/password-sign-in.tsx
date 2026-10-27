@@ -17,9 +17,11 @@ function PasswordField({
   autoComplete,
   autoFocus,
   required = true,
+  minLength,
   hint,
 }: {
   required?: boolean;
+  minLength?: number;
   hint?: string;
   id: string;
   label: string;
@@ -39,7 +41,7 @@ function PasswordField({
           id={id}
           type={show ? 'text' : 'password'}
           required={required}
-          minLength={required ? 6 : undefined}
+          minLength={minLength ?? (required ? 6 : undefined)}
           autoComplete={autoComplete}
           autoFocus={autoFocus}
           value={value}

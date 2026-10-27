@@ -89,38 +89,48 @@ export class RemindersService implements OnModuleInit, OnModuleDestroy {
     return new Map(rows.map((m) => [m.playerId, m.paymentRef]));
   }
 
-  // ── The day before, 6am and 5pm: the organiser sends the link to the group chat ──
+  // ── 5pm the day before, and 6:30am on match day: the organiser sends the link to the group chat ──
   // An app can't post in a WhatsApp group, so the organiser gets the message ready to send: the
   // notice opens the game with it written, one tap to WhatsApp, pick the group, send.
   private async shareInGroup(now: Date) {
     const today = localDate(0, undefined, now);
-    const sixAm = zonedInstant(today, '06:00');
-    const fivePm = zonedInstant(today, '17:00');
-    if (now < sixAm) return;
-    for (const game of await this.games(localDate(1, undefined, now))) {
-      if (game.status !== SessionStatus.UPCOMING) continue;
-      const g = game.group;
-      const ko = kickoffFor(game);
-      const board = await this.rsvp.board(game);
-      const left = board.capacity - board.in.length;
-      // Full: nothing to ask the group for.
-      if (g.requireRsvp && board.capacity > 0 && left <= 0) continue;
-      const day = new Date(`${game.date.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
-      const count = board.capacity > 0 ? `${board.in.length} of ${board.capacity} in, ${left} place${left === 1 ? '' : 's'} left.` : `${board.in.length} in so far.`;
-      const last = now >= fivePm;
-      // One of each a day: a game set up after 5pm only gets the last call.
-      if (!(await this.claim(`${last ? 'share-pm' : 'share-am'}:${game.id}`))) continue;
-      await this.notifications.notifyOrganisers(
-        g.organizationId,
-        {
-          kind: 'share_invite',
-          title: last ? `Last call for ${day}: send the link to the group` : `Send ${day}’s link to the group`,
-          body: `${g.name}${ko ? ` · ${prettyTime(ko)}` : ''}. ${count} Tap to send it on WhatsApp.`,
-          url: `/sessions/${game.id}?send=${last ? 'lastcall' : 'invite'}`,
-        },
-        { email: true },
-      );
+    // Friday 5pm (the day before): the first call.
+    if (now >= zonedInstant(today, '17:00')) {
+      for (const game of await this.games(localDate(1, undefined, now))) await this.shareCall(game, 'first', now);
     }
+    // Saturday 6:30am (match day): the last call, while there's still time before kick-off.
+    if (now >= zonedInstant(today, '06:30')) {
+      for (const game of await this.games(today)) {
+        const time = kickoffFor(game);
+        if (now >= (time ? zonedInstant(game.date, time) : zonedInstant(today, '12:00'))) continue;
+        await this.shareCall(game, 'last', now);
+      }
+    }
+  }
+
+  private async shareCall(game: Session, call: 'first' | 'last', now: Date) {
+    if (game.status !== SessionStatus.UPCOMING) return;
+    const g = game.group;
+    const ko = kickoffFor(game);
+    const board = await this.rsvp.board(game);
+    const left = board.capacity - board.in.length;
+    // Full: nothing to ask the group for.
+    if (g.requireRsvp && board.capacity > 0 && left <= 0) return;
+    // A game set up after the first call's time only gets the last one.
+    if (!(await this.claim(`share-${call}:${game.id}`))) return;
+    const day = new Date(`${game.date.slice(0, 10)}T12:00:00Z`).toLocaleDateString('en-GB', { weekday: 'long', timeZone: 'UTC' });
+    const when = game.date.slice(0, 10) === localDate(0, undefined, now) ? 'today’s' : `${day}’s`;
+    const count = board.capacity > 0 ? `${board.in.length} of ${board.capacity} in, ${left} place${left === 1 ? '' : 's'} left.` : `${board.in.length} in so far.`;
+    await this.notifications.notifyOrganisers(
+      g.organizationId,
+      {
+        kind: 'share_invite',
+        title: call === 'last' ? `Last call: send ${when} link to the group` : `Send ${when} link to the group`,
+        body: `${g.name}${ko ? ` · ${prettyTime(ko)}` : ''}. ${count} Tap to send it on WhatsApp.`,
+        url: `/sessions/${game.id}?send=${call === 'last' ? 'lastcall' : 'invite'}`,
+      },
+      { email: true },
+    );
   }
 
   // ── 6pm the day before ──
@@ -162,10 +172,10 @@ export class RemindersService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // ── 6am on match day: the squad ──
+  // ── 6:30am on match day: the squad ──
   private async matchMorning(now: Date) {
     const today = localDate(0, undefined, now);
-    if (now < zonedInstant(today, '06:00')) return;
+    if (now < zonedInstant(today, '06:30')) return;
     for (const game of await this.games(today)) {
       if (game.status !== SessionStatus.UPCOMING) continue;
       const time = kickoffFor(game);
@@ -198,8 +208,8 @@ export class RemindersService implements OnModuleInit, OnModuleDestroy {
       if (!time || game.status !== SessionStatus.UPCOMING) continue;
       const ko = zonedInstant(game.date, time);
       if (now < new Date(ko.getTime() - 2 * 3600_000) || now >= ko) continue;
-      // An early kick-off already had the 6am message under 3 hours ago: one is enough.
-      if (ko.getTime() - zonedInstant(game.date, '06:00').getTime() <= 3 * 3600_000) continue;
+      // An early kick-off already had the 6:30am message under 3 hours ago: one is enough.
+      if (ko.getTime() - zonedInstant(game.date, '06:30').getTime() <= 3 * 3600_000) continue;
       if (!(await this.claim(`ko:${game.id}`))) continue;
 
       const squad = await this.squad(game);

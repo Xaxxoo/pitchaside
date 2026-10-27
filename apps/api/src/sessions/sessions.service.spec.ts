@@ -41,7 +41,7 @@ describe('SessionsService', () => {
   const mockSession = {
     id: 'session-1',
     groupId: 'group-1',
-    date: '2026-01-15',
+    date: '2027-06-15',
     targetAmount: 5000,
     collectedAmount: 0,
     status: SessionStatus.UPCOMING,
@@ -184,7 +184,7 @@ describe('SessionsService', () => {
       sessionsRepo.createQueryBuilder.mockReturnValue(qb);
 
       await service.create(
-        { groupId: 'group-1', date: '2026-01-15' },
+        { groupId: 'group-1', date: '2027-06-15' },
         'org-1',
       );
 
@@ -207,7 +207,7 @@ describe('SessionsService', () => {
       await service.create(
         {
           groupId: 'group-1',
-          date: '2026-01-15',
+          date: '2027-06-15',
           recurrenceType: RecurrenceType.WEEKLY,
           recurrenceCount: 4,
         },
@@ -228,14 +228,14 @@ describe('SessionsService', () => {
       await service.create(
         {
           groupId: 'group-1',
-          date: '2026-01-15',
+          date: '2027-06-15',
           recurrenceType: RecurrenceType.WEEKLY,
           recurrenceCount: 4,
         },
         'org-1',
       );
 
-      expect(findOne).toHaveBeenCalledWith('session-2026-01-15', 'org-1');
+      expect(findOne).toHaveBeenCalledWith('session-2027-06-15', 'org-1');
     });
   });
 

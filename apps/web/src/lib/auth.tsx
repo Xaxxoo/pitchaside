@@ -6,7 +6,8 @@ import type { IUser, IAuthResponse } from '@pitchaside/shared';
 
 interface TwoFactorRequired {
   requires2FA: true;
-  userId: string;
+  /** From the password step; the code step sends it back. */
+  challenge: string;
 }
 
 type LoginResult = { requires2FA: false } | TwoFactorRequired;
@@ -15,7 +16,7 @@ interface AuthContextValue {
   user: IUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  validate2FA: (userId: string, code: string) => Promise<void>;
+  validate2FA: (challenge: string, code: string) => Promise<void>;
   register: (data: {
     organizationName: string;
     firstName: string;
@@ -49,13 +50,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Proactive token refresh while logged in
+  // Proactive token refresh while logged in. Uses a localStorage timestamp
+  // so only one tab refreshes at a time — refresh tokens are single-use, and
+  // concurrent refreshes across tabs would invalidate each other.
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       if (refreshTimer.current) clearInterval(refreshTimer.current);
       return;
     }
+    const SKIP_IF_WITHIN = 10 * 60 * 1000; // another tab refreshed in the last 10 min
+    const LOCK_KEY = '_pa_refresh_ts';
     refreshTimer.current = setInterval(async () => {
+      try {
+        const last = Number(localStorage.getItem(LOCK_KEY) || '0');
+        if (Date.now() - last < SKIP_IF_WITHIN) return; // another tab already refreshed
+        localStorage.setItem(LOCK_KEY, String(Date.now()));
+      } catch { /* localStorage unavailable — refresh anyway */ }
       try {
         const rt = getStoredRefreshToken();
         const res = await http.post<any>('/auth/refresh', rt ? { refreshToken: rt } : undefined);
@@ -65,12 +76,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (refreshTimer.current) clearInterval(refreshTimer.current);
     };
-  }, [user]);
+  }, [userId]);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     const res = await http.post<IAuthResponse | TwoFactorRequired>('/auth/login', { email, password });
     if ('requires2FA' in res && res.requires2FA) {
-      return { requires2FA: true, userId: res.userId };
+      return { requires2FA: true, challenge: res.challenge };
     }
     const authRes = res as IAuthResponse;
     storeRefreshToken((authRes as any).refreshToken);
@@ -78,8 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { requires2FA: false };
   }, []);
 
-  const validate2FA = useCallback(async (userId: string, code: string) => {
-    const res = await http.post<IAuthResponse>('/auth/2fa/validate', { userId, code });
+  const validate2FA = useCallback(async (challenge: string, code: string) => {
+    const res = await http.post<IAuthResponse>('/auth/2fa/validate', { challenge, code });
     setUser(res.user);
   }, []);
 

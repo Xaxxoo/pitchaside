@@ -2,6 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import { BillingService } from './billing.service';
 import { MockPulseClient } from './pulse/mock-pulse.client';
 import { Group } from '../groups/entities/group.entity';
+import { PayoutStatus } from './entities/outgoing-transfer.entity';
 
 /** BillingService with in-memory stand-ins for just what payees and payouts touch. */
 function setup(groupOverrides: Partial<Group> = {}) {
@@ -18,12 +19,19 @@ function setup(groupOverrides: Partial<Group> = {}) {
       const qb: any = { select: () => qb, where: () => qb, andWhere: () => qb, getRawOne: async () => ({ dailyTotal: 0 }) };
       return qb;
     },
-    create: (p: any) => ({ ...p }),
+    create: (p: any) => ({ id: 'po1', status: PayoutStatus.PENDING, ...p }),
     save: jest.fn(async (p: any) => {
       saved.push({ ...p });
-      return p;
+      return (last = p);
     }),
+    update: async (where: any, changes: any) => {
+      if (!last || last.id !== where.id || last.status !== where.status) return { affected: 0 };
+      Object.assign(last, changes);
+      return { affected: 1 };
+    },
+    findOneOrFail: async () => last,
   };
+  let last: any = null;
   const pulse = new MockPulseClient('secret');
   jest.spyOn(pulse, 'nameEnquiry').mockResolvedValue({ accountName: 'ADEBAYO OGUNDIPE' });
   const transferOut = jest.spyOn(pulse, 'transferOut');

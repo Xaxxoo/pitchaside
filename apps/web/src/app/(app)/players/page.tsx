@@ -25,6 +25,7 @@ export default function PlayersPage() {
   const [copied, setCopied] = useState(false);
   const [showRegenConfirm, setShowRegenConfirm] = useState(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const copyTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   function fetchPlayers(p = page, s = debouncedSearch) {
     return getPlayersPaginated(p, 10, s || undefined)
@@ -50,7 +51,7 @@ export default function PlayersPage() {
   }
 
   useEffect(() => {
-    return () => clearTimeout(debounceTimer.current);
+    return () => { clearTimeout(debounceTimer.current); clearTimeout(copyTimer.current); };
   }, []);
 
   function handlePageChange(p: number) {
@@ -101,7 +102,8 @@ export default function PlayersPage() {
     navigator.clipboard.writeText(inviteLink).then(() => {
       setCopied(true);
       toast.success('Invite link copied');
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
     });
   }
 

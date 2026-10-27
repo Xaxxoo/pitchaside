@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, UseGuards, Req, Res, Query, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Put, Body, UseGuards, Req, Res, Query, BadRequestException } from '@nestjs/common';
 import { ThrottlerGuard, Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
@@ -9,6 +9,8 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
+import { IdentityDto } from './dto/identity.dto';
+import { assertClubAdmin } from './club-admin';
 import { TwoFactorVerifyDto, TwoFactorValidateDto } from './dto/two-factor.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { AllowTreasurer } from './decorators/allow-treasurer.decorator';
@@ -58,10 +60,20 @@ export class AuthController {
     return this.authService.updateProfile(user.id, dto);
   }
 
+  /** The club admin's BVN and/or NIN: either one unlocks a group collection account. */
+  @UseGuards(JwtAuthGuard)
+  @Put('identity')
+  setIdentity(@Body() dto: IdentityDto, @CurrentUser() user: any) {
+    assertClubAdmin(user);
+    return this.authService.setIdentity(user.id, dto);
+  }
+
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
-  changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: any) {
-    return this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
+  async changePassword(@Body() dto: ChangePasswordDto, @CurrentUser() user: any, @Res({ passthrough: true }) res: Response) {
+    const { accessToken, refreshToken, message } = await this.authService.changePassword(user.id, dto.currentPassword, dto.newPassword);
+    setAuthCookies(res, this.configService, accessToken, refreshToken);
+    return { message };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -85,7 +97,7 @@ export class AuthController {
   @SkipCsrf()
   @Post('2fa/validate')
   async validate2FA(@Body() dto: TwoFactorValidateDto, @Res({ passthrough: true }) res: Response) {
-    const result = await this.authService.validate2FALogin(dto.userId, dto.code);
+    const result = await this.authService.validate2FALogin(dto.challenge, dto.code);
     setAuthCookies(res, this.configService, result.accessToken, result.refreshToken);
     return { accessToken: result.accessToken, user: result.user };
   }

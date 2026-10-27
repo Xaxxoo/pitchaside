@@ -6,6 +6,7 @@ import { CONTRIBUTIONS_VISIBILITY, Group } from './entities/group.entity';
 import { GroupMembership } from './entities/group-membership.entity';
 import { CreateGroupDto, UpdateGroupDto } from './dto/create-group.dto';
 import { AddMemberDto } from './dto/add-member.dto';
+import { Player } from '../players/entities/player.entity';
 import { PaginationDto, PaginatedResult } from '../common/dto/pagination.dto';
 import { BillingService } from '../billing/billing.service';
 import { CryptoService } from '../crypto/crypto.service';
@@ -136,6 +137,9 @@ export class GroupsService {
 
   async addMember(groupId: string, dto: AddMemberDto, organizationId: string) {
     await this.findOne(groupId, organizationId);
+    // The player id comes from the request: it has to be one of this club's players.
+    const inClub = await this.membershipsRepo.manager.getRepository(Player).exists({ where: { id: dto.playerId, organizationId } });
+    if (!inClub) throw new NotFoundException('Player not found');
     const membership = await this.membershipsRepo.save(
       this.membershipsRepo.create({
         groupId,

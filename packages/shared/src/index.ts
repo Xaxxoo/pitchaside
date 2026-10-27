@@ -107,16 +107,19 @@ export interface IPayment {
   id: string;
   sessionId: string;
   playerId: string;
-  amount: number;
+  /** PostgreSQL decimal: may serialize as a string; wrap with `Number()` before arithmetic. */
+  amount: number | string;
   status: PaymentStatus;
-  paidAt?: string;
-  markedBy?: string;
+  paidAt?: string | null;
+  markedBy?: string | null;
   /** 'dues' on a game's ₦0 entry in a group whose period dues cover games. */
-  source?: 'manual' | 'transfer' | 'dues' | null;
+  source?: 'manual' | 'transfer' | 'dues' | 'cash' | null;
   /** On games: paid for this game — their own due, or the period's dues that cover it. */
   gamePaid?: 'paid' | 'unpaid' | 'waived';
   /** Already sent towards this due by transfer (a part payment); only on a player's oldest unpaid due. */
   paidSoFar?: number;
+  /** The actual amount the player sent by transfer, when it differs from the due. */
+  transferAmount?: number;
   /** Whether they turned up: not set until the game is ended (counts as came), 'came', or 'no_show'. */
   attendance?: 'came' | 'no_show' | null;
   player?: IPlayer;
@@ -126,8 +129,12 @@ export interface IPayment {
 
 export enum AuditAction {
   PAYMENT_MARKED_PAID = 'payment_marked_paid',
+  PAYMENT_MARKED_UNPAID = 'payment_marked_unpaid',
   PAYMENT_WAIVED = 'payment_waived',
+  PAYMENT_NO_SHOW = 'payment_no_show',
+  PAYMENT_CAME = 'payment_came',
   PAYMENT_BULK_MARKED_PAID = 'payment_bulk_marked_paid',
+  PAYMENT_MOVED = 'payment_moved',
   SESSION_CREATED = 'session_created',
   SESSION_STATUS_CHANGED = 'session_status_changed',
   GROUP_CREATED = 'group_created',
@@ -167,7 +174,10 @@ export interface IUser {
   lastName: string;
   email: string;
   phone?: string | null;
+  /** Masked (`•••••••4521`): only whether there is one, and its last digits. */
   bvn?: string | null;
+  /** Masked like bvn. A BVN or a NIN unlocks a group collection account. */
+  nin?: string | null;
   role: UserRole;
   organizationId: string;
   organization?: IOrganization;
@@ -516,3 +526,5 @@ export interface ICryptoOutgoingTransfer {
  * has voted). The API keeps its own copy: VOTE_HOURS in ratings.service.
  */
 export const VOTE_HOURS = 36;
+
+export * from './phone';

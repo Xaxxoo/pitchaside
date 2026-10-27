@@ -32,7 +32,7 @@ function dayWord(date: string) {
 /**
  * The message for the group chat, written and ready. Apps can't post in a WhatsApp group, so
  * this is the next best thing: see exactly what goes, one tap opens WhatsApp with it typed, pick
- * the group, send. Opened from the 6am and 5pm notices the day before, at full time, and from
+ * the group, send. Opened from the Friday 5pm and match-day 6:30am notices, at full time, and from
  * the notice before the vote closes.
  *
  * Says so plainly when there's nothing to send: the game was called off, the vote isn't open, or

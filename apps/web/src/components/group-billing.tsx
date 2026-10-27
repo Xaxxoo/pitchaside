@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { IdentityForm } from '@/components/identity-form';
 import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useToast } from '@/components/toast';
@@ -47,7 +48,6 @@ import {
   recordManualTransfer,
   regenerateGroupInvite,
   simulateTransfer,
-  updateProfile,
   type BankTransfer,
   type TransferClaim,
   type GroupBilling,
@@ -172,40 +172,24 @@ export function GroupAccountCard({
   showLink?: boolean;
 }) {
   const toast = useToast();
-  const { user, refreshUser } = useAuth();
+  const { user } = useAuth();
   const [busy, setBusy] = useState(false);
   const [confirmRegen, setConfirmRegen] = useState(false);
-  const [bvnInput, setBvnInput] = useState('');
-  const [showBvnPrompt, setShowBvnPrompt] = useState(false);
+  const [showIdPrompt, setShowIdPrompt] = useState(false);
+  // Both a BVN and a NIN are needed to open the account (the bank needs to know whose it is), and only the club admin's.
+  const hasId = !!(user?.bvn && user?.nin);
+  const canOpen = user?.role === UserRole.ORG_ADMIN || user?.role === UserRole.SUPER_ADMIN;
   const [showRecord, setShowRecord] = useState(false);
   const router = useRouter();
   const account = billing.account;
 
   async function retryAccount() {
-    // If the user has no BVN on file, show the inline BVN input first
-    if (!user?.bvn) {
-      setShowBvnPrompt(true);
+    // No BVN or NIN on file yet: ask for one first, then open the account.
+    if (!hasId) {
+      setShowIdPrompt(true);
       return;
     }
     await doProvision();
-  }
-
-  async function handleBvnSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!/^\d{11}$/.test(bvnInput)) {
-      toast.error('BVN must be exactly 11 digits');
-      return;
-    }
-    setBusy(true);
-    try {
-      await updateProfile({ firstName: user!.firstName, lastName: user!.lastName, bvn: bvnInput });
-      await refreshUser();
-      setShowBvnPrompt(false);
-      await doProvision();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save BVN');
-      setBusy(false);
-    }
   }
 
   async function doProvision() {
@@ -345,51 +329,37 @@ export function GroupAccountCard({
           ) : (
             <div className="mt-5">
               <p className="text-sm text-white/70">
-                {user?.bvn
-                  ? 'The group’s account isn’t open yet: the bank didn’t answer when the group was made. Try again.'
-                  : 'Add your BVN to open the group’s bank account. Players pay into it, and it’s in your name as the organiser.'}
+                {!canOpen
+                  ? 'The group’s bank account isn’t open yet. Ask your club admin to open it: it’s in their name, with their BVN and NIN.'
+                  : hasId
+                    ? 'The group’s account isn’t open yet: the bank didn’t answer when the group was made. Try again.'
+                    : 'Add your BVN and NIN to open the group’s bank account. Players pay into it, and it’s in your name as the organiser.'}
               </p>
-              {showBvnPrompt ? (
-                <form onSubmit={handleBvnSubmit} className="mt-4 space-y-3">
-                  <p className="text-xs text-white/80">
-                    Your BVN (Bank Verification Number) is the 11 digits you get by dialling *565*0#. The bank needs it to open an account
-                    in your name. It isn’t shown to players.
-                  </p>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    pattern="\d{11}"
-                    maxLength={11}
-                    value={bvnInput}
-                    onChange={(e) => setBvnInput(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                    placeholder="11-digit BVN"
-                    aria-label="Your BVN"
-                    className="w-full px-3 py-2.5 bg-white/10 border border-white/20 rounded-xl text-sm text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-volt-400"
+              {!canOpen ? null : showIdPrompt ? (
+                <div className="mt-4 bg-white rounded-2xl p-4">
+                  <p className="text-xs text-gray-500 mb-3">The bank opens the account in your name. Your number isn’t shown to players.</p>
+                  <IdentityForm
+                    submitLabel="Open the account"
+                    onDone={async () => {
+                      setShowIdPrompt(false);
+                      await doProvision();
+                    }}
                   />
-                  <div className="flex gap-2">
-                    <button
-                      type="submit"
-                      disabled={busy || bvnInput.length !== 11}
-                      className="px-4 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 disabled:opacity-50 transition-colors"
-                    >
-                      {busy ? 'Opening…' : bvnInput.length === 11 ? 'Open the account' : `${11 - bvnInput.length} digits to go`}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setShowBvnPrompt(false)}
-                      className="px-4 py-2.5 text-sm font-bold text-white/70 hover:text-white transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </form>
+                  <button
+                    type="button"
+                    onClick={() => setShowIdPrompt(false)}
+                    className="mt-2 w-full min-h-11 text-sm font-bold text-gray-500 hover:text-ink transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
               ) : (
                 <button
                   onClick={retryAccount}
                   disabled={busy}
                   className="mt-4 px-4 py-2.5 text-sm font-bold text-ink bg-volt-400 rounded-xl hover:bg-volt-300 disabled:opacity-50 transition-colors"
                 >
-                  {busy ? 'Opening…' : user?.bvn ? 'Try again' : 'Add BVN and open account'}
+                  {busy ? 'Opening…' : hasId ? 'Try again' : 'Add BVN/NIN and open account'}
                 </button>
               )}
             </div>

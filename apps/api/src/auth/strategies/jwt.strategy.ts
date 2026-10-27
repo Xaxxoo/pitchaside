@@ -12,6 +12,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     config: ConfigService,
     private usersService: UsersService,
   ) {
+    const secret = config.get<string>('JWT_SECRET');
+    if (!secret && config.get<string>('NODE_ENV') === 'production') {
+      throw new Error('JWT_SECRET must be set in production.');
+    }
     super({
       jwtFromRequest: (req: Request) => {
         // Try HttpOnly cookie first, fall back to Bearer header for API clients
@@ -19,13 +23,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         if (cookieToken) return cookieToken;
         return ExtractJwt.fromAuthHeaderAsBearerToken()(req);
       },
-      secretOrKey: config.get<string>('JWT_SECRET', 'pitchaside-dev-secret'),
+      secretOrKey: secret || 'pitchaside-dev-secret',
     });
   }
 
-  async validate(payload: { sub: string }) {
+  async validate(payload: { sub: string; typ?: string }) {
+    // Sessions carry only `sub`; anything typed (the 2FA challenge) is not a session.
+    if (payload.typ) throw new UnauthorizedException();
     const user = await this.usersService.findById(payload.sub);
-    if (!user) throw new UnauthorizedException();
+    if (!user || user.removedAt) throw new UnauthorizedException();
     return user;
   }
 }

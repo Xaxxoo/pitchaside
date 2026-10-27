@@ -35,6 +35,9 @@ export interface HttpPulseConfig {
   webhookSecret: string;
 }
 
+/** How long we wait for any single Payrep API call before giving up. */
+const API_TIMEOUT_MS = 30_000;
+
 /**
  * Live PulseMFB client.
  *
@@ -89,6 +92,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`PulseMFB getPrefixes failed (${res.status}): ${await pulseReason(res)}`);
@@ -118,7 +122,7 @@ export class HttpPulseClient implements PulseClient {
       customer_name: input.accountName,
       ...(input.phone ? { customer_phone: input.phone } : {}),
       ...(input.email ? { customer_email: input.email } : {}),
-      ...(input.bvn ? { bvn: input.bvn } : {}),
+      ...(input.bvn ? { bvn: input.bvn } : input.nin ? { nin: input.nin } : {}),
       sweep_mode: 'manual',
       use_prefix: true,
       prefix_id: prefixId,
@@ -129,6 +133,7 @@ export class HttpPulseClient implements PulseClient {
       method: 'POST',
       headers: this.authHeaders('POST', path, body),
       body,
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`Payrep MFB createAccount failed (${res.status}): ${await pulseReason(res)}`);
@@ -153,6 +158,7 @@ export class HttpPulseClient implements PulseClient {
       method: 'POST',
       headers: this.authHeaders('POST', path, body),
       body,
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`Payrep MFB name enquiry failed (${res.status}): ${await pulseReason(res)}`);
@@ -181,9 +187,19 @@ export class HttpPulseClient implements PulseClient {
       method: 'POST',
       headers: this.authHeaders('POST', path, body),
       body,
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
-    if (!res.ok) throw new Error(`Payrep MFB transfer failed (${res.status}): ${await pulseReason(res)}`);
+    if (!res.ok) {
+      // Everything Payrep's support asks for: our reference, their request id, the full reply.
+      const raw = await res.clone().text().catch(() => '');
+      const requestId = res.headers.get('x-request-id') ?? res.headers.get('x-correlation-id') ?? res.headers.get('request-id') ?? '';
+      console.error(
+        `[Payrep] transfer ${input.reference} refused: HTTP ${res.status}${requestId ? ` request-id=${requestId}` : ''} debit=${input.debitAccountNumber} ` +
+          `to=${input.beneficiaryBankCode}/${input.beneficiaryAccountNumber} amount=${input.amount} reply=${raw.slice(0, 1000)}`,
+      );
+      throw new Error(`Payrep MFB transfer failed (${res.status}): ${await pulseReason(res)}`);
+    }
 
     const json = (await res.json()) as Record<string, any>;
     const d = json.data ?? json;
@@ -199,8 +215,11 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
+    // No record at Payrep: the transfer never reached them.
+    if (res.status === 404) return { status: 'not_found' };
     if (!res.ok) throw new Error(`Payrep MFB transfer lookup failed (${res.status}): ${await pulseReason(res)}`);
 
     const json = (await res.json()) as Record<string, any>;
@@ -217,6 +236,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`PulseMFB balance failed (${res.status}): ${await pulseReason(res)}`);
@@ -233,6 +253,7 @@ export class HttpPulseClient implements PulseClient {
     const res = await fetch(`${this.baseUrl}${path}`, {
       method: 'GET',
       headers: this.authHeaders('GET', path, ''),
+      signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
     if (!res.ok) throw new Error(`PulseMFB webhook info failed (${res.status}): ${await pulseReason(res)}`);
@@ -275,7 +296,7 @@ export class HttpPulseClient implements PulseClient {
     // Logs come newest first; stop at the first page that reaches back past `since`.
     for (let page = 1; page <= 10; page++) {
       const path = `/api/v1/external-api/webhooks/logs?page=${page}&limit=50`;
-      const res = await fetch(`${this.baseUrl}${path}`, { method: 'GET', headers: this.authHeaders('GET', path, '') });
+      const res = await fetch(`${this.baseUrl}${path}`, { method: 'GET', headers: this.authHeaders('GET', path, ''), signal: AbortSignal.timeout(API_TIMEOUT_MS) });
       if (!res.ok) throw new Error(`PulseMFB webhook logs failed (${res.status}): ${await pulseReason(res)}`);
       const json = (await res.json()) as Record<string, any>;
       const d = json.data ?? json;
@@ -302,7 +323,7 @@ export class HttpPulseClient implements PulseClient {
       // Once each: Pulse may keep the original entry marked failed after a resend succeeds.
       if (/^(vas|webhook\.test)/.test(log.event) || this.resentLogs.has(log.id)) continue;
       const path = `/api/v1/external-api/webhooks/logs/${encodeURIComponent(log.id)}/resend`;
-      const res = await fetch(`${this.baseUrl}${path}`, { method: 'POST', headers: this.authHeaders('POST', path, '') });
+      const res = await fetch(`${this.baseUrl}${path}`, { method: 'POST', headers: this.authHeaders('POST', path, ''), signal: AbortSignal.timeout(API_TIMEOUT_MS) });
       if (res.ok) {
         this.resentLogs.add(log.id);
         resent++;

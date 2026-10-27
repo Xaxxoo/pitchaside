@@ -1,10 +1,11 @@
-import { Controller, Get, Post, Body, UseGuards, Query } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Delete, Get, NotFoundException, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { UserRole, User } from '../users/entities/user.entity';
+import { AuditAction } from '../audit/entities/audit-log.entity';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { AuditService } from '../audit/audit.service';
@@ -33,6 +34,11 @@ export class AddOrgMemberDto {
   @IsOptional()
   @IsIn([UserRole.MEMBER, UserRole.TREASURER])
   role?: UserRole.MEMBER | UserRole.TREASURER;
+}
+
+export class SetOrgMemberRoleDto {
+  @IsIn([UserRole.MEMBER, UserRole.TREASURER])
+  role: UserRole.MEMBER | UserRole.TREASURER;
 }
 
 /** Never send password hashes or 2FA secrets to the browser. */
@@ -94,6 +100,43 @@ export class AdminController {
     );
 
     return publicUser(newUser);
+  }
+
+  /** Change a co-organiser to treasurer (payments only) or back. The club admin's own role can't change here. */
+  @Patch('org/members/:id/role')
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  async setOrgMemberRole(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string, @Body() body: SetOrgMemberRoleDto) {
+    const target = await this.teamUser(user, id);
+    await this.usersService.setRole(target.id, body.role);
+    return publicUser({ ...target, role: body.role });
+  }
+
+  /** Remove a co-organiser or treasurer: their sessions end now and they can't sign back in. */
+  @Delete('org/members/:id')
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  async removeOrgMember(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    const target = await this.teamUser(user, id);
+    await this.usersService.removeFromOrganization(target.id);
+    await this.auditService.log({
+      action: AuditAction.MEMBER_REMOVED,
+      entityType: 'user',
+      entityId: target.id,
+      userId: user.id,
+      organizationId: user.organizationId,
+      metadata: { email: target.email, role: target.role },
+    });
+    return { removed: true };
+  }
+
+  /** Someone else on this club's team who was added from Admin (never a club admin). */
+  private async teamUser(user: User, id: string) {
+    const target = await this.usersService.findById(id);
+    if (!target || target.removedAt || target.organizationId !== user.organizationId) throw new NotFoundException('Team member not found');
+    if (target.id === user.id) throw new BadRequestException("You can't change your own access here");
+    if (target.role !== UserRole.MEMBER && target.role !== UserRole.TREASURER) {
+      throw new BadRequestException('Only co-organisers and treasurers can be changed or removed');
+    }
+    return target;
   }
 
   @Get('org/audit-log')

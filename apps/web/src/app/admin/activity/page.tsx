@@ -33,7 +33,7 @@ export default function HqActivityPage() {
                 <td className="px-4 py-3 text-ink">{actionLabel(a.action)}</td>
                 <td className="px-4 py-3">
                   {a.clubId ? (
-                    <Link href={`/hq/clubs/${a.clubId}`} className="text-ink hover:text-pitch-600">
+                    <Link href={`/admin/clubs/${a.clubId}`} className="text-ink hover:text-pitch-600">
                       {a.clubName}
                     </Link>
                   ) : (

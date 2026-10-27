@@ -12,7 +12,7 @@ export function photoUrl(key?: string | null) {
  * player app) being signed out as an organiser is normal, so a 401 there must
  * not throw the visitor onto the organiser sign-in page.
  */
-const ORGANISER_PAGES = /^\/(dashboard|groups|players|sessions|competitions|admin|settings|hq)(\/|$)/;
+const ORGANISER_PAGES = /^\/(dashboard|groups|players|sessions|competitions|office|settings)(\/|$)/;
 
 /** Signing in (or up) has no session to refresh: a 401 there is the answer itself ("Invalid credentials"). */
 const SIGN_IN_CALLS = /^\/auth\/(login|register|2fa\/validate|refresh)$/;
@@ -27,16 +27,12 @@ function getCsrfToken(): string | null {
  * In-memory refresh token fallback. Cookies are preferred (HttpOnly, XSS-safe)
  * but some proxy setups (e.g. Vercel rewrites) don't reliably forward
  * Set-Cookie from the upstream, so we also send the token in the request body.
+ * Kept in memory only — never persisted to storage to prevent XSS exposure.
  */
-let storedRefreshToken: string | null =
-  typeof window !== 'undefined' ? sessionStorage.getItem('_prt') : null;
+let storedRefreshToken: string | null = null;
 
 export function storeRefreshToken(token: string | undefined | null) {
   storedRefreshToken = token ?? null;
-  if (typeof window !== 'undefined') {
-    if (token) sessionStorage.setItem('_prt', token);
-    else sessionStorage.removeItem('_prt');
-  }
 }
 
 export function getStoredRefreshToken(): string | null {
@@ -49,6 +45,8 @@ async function silentRefresh(): Promise<boolean> {
   // Deduplicate concurrent refresh attempts
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const body = storedRefreshToken ? JSON.stringify({ refreshToken: storedRefreshToken }) : undefined;
@@ -57,6 +55,7 @@ async function silentRefresh(): Promise<boolean> {
         headers,
         body,
         credentials: 'include',
+        signal: controller.signal,
       });
       if (res.ok) {
         const data = await res.json();
@@ -67,6 +66,7 @@ async function silentRefresh(): Promise<boolean> {
     } catch {
       return false;
     } finally {
+      clearTimeout(timeout);
       refreshPromise = null;
     }
   })();

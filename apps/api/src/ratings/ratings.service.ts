@@ -416,12 +416,18 @@ export class RatingsService {
       .map((p) => ({ id: p.player.id, firstName: p.player.firstName, lastName: p.player.lastName, nickname: p.player.nickname ?? null, photoKey: p.player.photoKey ?? null }));
   }
 
+  /** Max age for a voting link: 30 days after the vote opened. */
+  private static readonly TOKEN_MAX_AGE_MS = 30 * 24 * 3_600_000;
+
   private async loadSessionByToken(token: string) {
     const session = await this.sessionsRepo.findOne({
       where: { votingToken: token },
       relations: ['group', 'payments', 'payments.player'],
     });
     if (!session) throw new NotFoundException('This voting link is invalid');
+    if (session.voteOpensAt && Date.now() - new Date(session.voteOpensAt).getTime() > RatingsService.TOKEN_MAX_AGE_MS) {
+      throw new NotFoundException('This voting link has expired');
+    }
     return session;
   }
 

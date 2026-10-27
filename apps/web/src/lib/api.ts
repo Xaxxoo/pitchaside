@@ -274,8 +274,8 @@ export function createPayment(data: {
   return http.post<IPayment>('/payments', data);
 }
 
-export function markPaid(paymentId: string): Promise<IPayment> {
-  return http.patch<IPayment>(`/payments/${paymentId}/mark-paid`);
+export function markPaid(paymentId: string, source?: 'cash' | 'manual'): Promise<IPayment> {
+  return http.patch<IPayment>(`/payments/${paymentId}/mark-paid`, { source });
 }
 
 export function markUnpaid(paymentId: string): Promise<IPayment> {
@@ -306,8 +306,8 @@ export function endGame(sessionId: string, noShows: string[]): Promise<ISessionW
   return http.post<ISessionWithDetails>(`/sessions/${sessionId}/end`, { noShows });
 }
 
-export function bulkMarkPaid(paymentIds: string[]): Promise<IPayment[]> {
-  return http.patch<IPayment[]>('/payments/bulk-mark-paid', { paymentIds });
+export function bulkMarkPaid(paymentIds: string[], source?: 'cash' | 'manual'): Promise<IPayment[]> {
+  return http.patch<IPayment[]>('/payments/bulk-mark-paid', { paymentIds, source });
 }
 
 // ── Paginated functions ──
@@ -334,11 +334,16 @@ export function getPlayersPaginated(
 
 // ── Profile / Auth ──
 
-export function updateProfile(data: { firstName: string; lastName: string; phone?: string; bvn?: string }): Promise<any> {
+export function updateProfile(data: { firstName: string; lastName: string; phone?: string }): Promise<void> {
   return http.patch('/auth/profile', data);
 }
 
-export function changePassword(data: { currentPassword: string; newPassword: string }): Promise<any> {
+/** The organiser's BVN and/or NIN; either one unlocks a group collection account. */
+export function setIdentity(data: { bvn?: string; nin?: string }): Promise<void> {
+  return http.put('/auth/identity', data);
+}
+
+export function changePassword(data: { currentPassword: string; newPassword: string }): Promise<void> {
   return http.post('/auth/change-password', data);
 }
 
@@ -423,8 +428,8 @@ export function disable2FA(code: string): Promise<{ message: string }> {
   return http.post('/auth/2fa/disable', { code });
 }
 
-export function validate2FALogin(userId: string, code: string): Promise<any> {
-  return http.post('/auth/2fa/validate', { userId, code });
+export function validate2FALogin(challenge: string, code: string): Promise<void> {
+  return http.post('/auth/2fa/validate', { challenge, code });
 }
 
 /** The Games screens' lists: coming up (soonest first), played with money still to collect, played. */

@@ -200,6 +200,7 @@ export class PlayerAuthController {
   @Post('player-auth/reset-password')
   async resetPassword(@Body() dto: ResetPasswordDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.auth.resetPassword(dto.email, dto.code, dto.password);
+    await this.usersService.revokeAllPlayerRefreshTokens(emailKey(dto.email));
     await this.startSession(res, dto.email);
     return result;
   }
@@ -294,6 +295,7 @@ export class PlayerPortalController {
     private readonly playerAuth: PlayerAuthService,
     private readonly configService: ConfigService,
     private readonly photos: PhotosService,
+    private readonly usersService: UsersService,
   ) {}
 
   /** Their own photo, on their record in every club they play for. */
@@ -470,8 +472,13 @@ export class PlayerPortalController {
   }
 
   @Post('password')
-  changePassword(@Body() dto: ChangePasswordDto, @CurrentPerson() person: Person) {
-    return this.playerAuth.changePassword(person, dto.currentPassword ?? '', dto.newPassword);
+  async changePassword(@Body() dto: ChangePasswordDto, @CurrentPerson() person: Person, @Res({ passthrough: true }) res: Response) {
+    const result = await this.playerAuth.changePassword(person, dto.currentPassword ?? '', dto.newPassword);
+    // Other devices are signed out; this one gets a fresh session.
+    await this.usersService.revokeAllPlayerRefreshTokens(person.key);
+    const refreshToken = await this.usersService.createRefreshToken(null, person.key);
+    setPlayerAuthCookies(res, this.configService, this.playerAuth.issuePersonToken(person.key), refreshToken);
+    return result;
   }
 
   @Post('push')
@@ -487,7 +494,7 @@ export class PlayerPortalController {
   }
 
   @Delete('push')
-  unsubscribe(@Body() dto: UnsubscribeDto) {
-    return this.notifications.unsubscribe(dto.endpoint);
+  unsubscribe(@Body() dto: UnsubscribeDto, @CurrentPerson() person: Person) {
+    return this.notifications.unsubscribe(dto.endpoint, { personKey: person.key });
   }
 }

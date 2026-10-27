@@ -27,6 +27,14 @@ import { UserRole } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 
+/** An identity number as the browser sees it: `•••••••4521`, or null. */
+function maskId(value?: string | null) {
+  return value ? `${'•'.repeat(value.length - 4)}${value.slice(-4)}` : null;
+}
+
+/** `typ` of the token login hands out between the password and the 2FA code. */
+export const TWO_FACTOR_CHALLENGE = '2fa';
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -81,13 +89,16 @@ export class AuthService {
 
   async login(dto: LoginDto) {
     const user = await this.usersService.findByEmail(dto.email);
-    if (!user) throw new UnauthorizedException('Invalid credentials');
+    if (!user || user.removedAt) throw new UnauthorizedException('Invalid credentials');
 
     const valid = await bcrypt.compare(dto.password, user.passwordHash);
     if (!valid) throw new UnauthorizedException('Invalid credentials');
 
     if (user.twoFactorEnabled) {
-      return { requires2FA: true, userId: user.id };
+      // Proof the password was right, for the code step only: short-lived, and marked so the JWT
+      // strategy never accepts it as a session.
+      const challenge = this.jwtService.sign({ sub: user.id, typ: TWO_FACTOR_CHALLENGE }, { expiresIn: '5m' });
+      return { requires2FA: true, challenge };
     }
 
     const accessToken = this.jwtService.sign({ sub: user.id });
@@ -134,7 +145,14 @@ export class AuthService {
     return { message: 'If that email exists, a reset link has been sent.' };
   }
 
-  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string; bvn?: string }) {
+  async setIdentity(userId: string, ids: { bvn?: string; nin?: string }) {
+    if (!ids.bvn && !ids.nin) throw new BadRequestException('Enter your BVN and NIN');
+    const user = await this.usersService.setIdentity(userId, ids);
+    if (!user) throw new UnauthorizedException('User not found');
+    return this.sanitizeUser(user, user.organization);
+  }
+
+  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string }) {
     const user = await this.usersService.updateProfile(userId, data);
     if (!user) throw new UnauthorizedException('User not found');
     return this.sanitizeUser(user, user.organization);
@@ -179,9 +197,18 @@ export class AuthService {
     return { message: '2FA disabled successfully' };
   }
 
-  async validate2FALogin(userId: string, code: string) {
+  /** The code step of sign-in: only after the password step, which issued `challenge`. */
+  async validate2FALogin(challenge: string, code: string) {
+    let userId: string;
+    try {
+      const claims = this.jwtService.verify<{ sub: string; typ?: string }>(challenge);
+      if (claims.typ !== TWO_FACTOR_CHALLENGE) throw new Error('not a 2FA challenge');
+      userId = claims.sub;
+    } catch {
+      throw new UnauthorizedException('Sign in again — that took too long');
+    }
     const user = await this.usersService.findById(userId);
-    if (!user || !user.twoFactorSecret) {
+    if (!user || !user.twoFactorSecret || user.removedAt) {
       throw new UnauthorizedException('Invalid request');
     }
 
@@ -207,8 +234,13 @@ export class AuthService {
 
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await this.usersService.updatePassword(userId, passwordHash);
+    // Anyone holding an old session (a stolen cookie, a shared laptop) is signed out; this device
+    // gets a fresh session.
+    await this.usersService.revokeAllRefreshTokens(userId);
+    const accessToken = this.jwtService.sign({ sub: userId });
+    const refreshToken = await this.usersService.createRefreshToken(userId, null);
 
-    return { message: 'Password changed successfully.' };
+    return { message: 'Password changed successfully.', accessToken, refreshToken };
   }
 
   async resetPassword(token: string, newPassword: string) {
@@ -218,6 +250,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await this.usersService.updatePassword(reset.userId, passwordHash);
     await this.usersService.markResetTokenUsed(reset.id);
+    await this.usersService.revokeAllRefreshTokens(reset.userId);
 
     return { message: 'Password has been reset successfully.' };
   }
@@ -230,7 +263,7 @@ export class AuthService {
 
     if (result.userId) {
       const user = await this.usersService.findById(result.userId);
-      if (!user) throw new UnauthorizedException('User not found');
+      if (!user || user.removedAt) throw new UnauthorizedException('User not found');
       const accessToken = this.jwtService.sign({ sub: user.id });
       return { accessToken, refreshToken: result.newRawToken, user: this.sanitizeUser(user, user.organization) };
     }
@@ -265,7 +298,9 @@ export class AuthService {
       lastName: user.lastName,
       email: user.email,
       phone: user.phone ?? null,
-      bvn: user.bvn ?? null,
+      // Never the full number: the app only needs to know there is one, and which.
+      bvn: maskId(user.bvn),
+      nin: maskId(user.nin),
       role: user.role,
       organizationId: user.organizationId,
       organization: organization

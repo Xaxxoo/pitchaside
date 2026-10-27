@@ -47,17 +47,18 @@ function setup(games: any[], opts: { inCount?: number; capacity?: number; voted?
 
 const run = (svc: any, fn: string, now: Date) => svc[fn](now);
 
-describe('Reminders: the organiser sends the link to the group', () => {
-  it('nothing before 6am the day before', async () => {
+describe('Reminders: the organiser sends the link to the group (Fri 5pm, Sat 6:30am)', () => {
+  it('nothing on Friday before 5pm (no early-morning one any more)', async () => {
     const { svc, organisers } = setup([game()]);
-    await run(svc, 'shareInGroup', at('2026-10-30T05:59:00'));
+    for (const t of ['2026-10-30T06:00:00', '2026-10-30T12:00:00', '2026-10-30T16:59:00']) await run(svc, 'shareInGroup', at(t));
     expect(organisers).not.toHaveBeenCalled();
   });
 
-  it('6am: one notice to send the link, with how full it is, opening the ready message', async () => {
+  it('Friday 5pm: one notice to send the link, with how full it is, opening the ready message', async () => {
     const { svc, organisers } = setup([game()]);
-    await run(svc, 'shareInGroup', at('2026-10-30T06:05:00'));
-    await run(svc, 'shareInGroup', at('2026-10-30T06:15:00'));
+    await run(svc, 'shareInGroup', at('2026-10-30T17:00:00'));
+    await run(svc, 'shareInGroup', at('2026-10-30T17:10:00'));
+    await run(svc, 'shareInGroup', at('2026-10-30T23:50:00'));
     expect(organisers).toHaveBeenCalledTimes(1);
     const [org, notice, opts] = organisers.mock.calls[0];
     expect(org).toBe('org');
@@ -67,21 +68,36 @@ describe('Reminders: the organiser sends the link to the group', () => {
     expect(opts).toEqual({ email: true });
   });
 
-  it('5pm: the last call, once', async () => {
+  it('Saturday 6:30am: the last call, once, before kick-off', async () => {
     const { svc, organisers } = setup([game()]);
-    await run(svc, 'shareInGroup', at('2026-10-30T06:05:00'));
     await run(svc, 'shareInGroup', at('2026-10-30T17:00:00'));
-    await run(svc, 'shareInGroup', at('2026-10-30T17:10:00'));
+    await run(svc, 'shareInGroup', at('2026-10-31T06:29:00'));
+    expect(organisers).toHaveBeenCalledTimes(1);
+    await run(svc, 'shareInGroup', at('2026-10-31T06:30:00'));
+    await run(svc, 'shareInGroup', at('2026-10-31T06:40:00'));
     expect(organisers).toHaveBeenCalledTimes(2);
-    expect(organisers.mock.calls[1][1].title).toBe('Last call for Saturday: send the link to the group');
+    expect(organisers.mock.calls[1][1].title).toBe('Last call: send today’s link to the group');
     expect(organisers.mock.calls[1][1].url).toBe('/sessions/sat?send=lastcall');
   });
 
-  it('a game set up after 5pm only gets the last call', async () => {
-    const { svc, organisers } = setup([game()]);
-    await run(svc, 'shareInGroup', at('2026-10-30T19:00:00'));
-    expect(organisers).toHaveBeenCalledTimes(1);
-    expect(organisers.mock.calls[0][1].url).toContain('lastcall');
+  it('a game set up on Saturday morning only gets the last call; one set up Friday night gets both', async () => {
+    let s = setup([game()]);
+    await run(s.svc, 'shareInGroup', at('2026-10-31T07:00:00'));
+    expect(s.organisers).toHaveBeenCalledTimes(1);
+    expect(s.organisers.mock.calls[0][1].url).toContain('lastcall');
+    s = setup([game()]);
+    await run(s.svc, 'shareInGroup', at('2026-10-30T21:00:00'));
+    await run(s.svc, 'shareInGroup', at('2026-10-31T06:35:00'));
+    expect(s.organisers.mock.calls.map((c) => c[1].url)).toEqual(['/sessions/sat?send=invite', '/sessions/sat?send=lastcall']);
+  });
+
+  it('no last call once the game has kicked off, or for a 6am kick-off', async () => {
+    let s = setup([game()]);
+    await run(s.svc, 'shareInGroup', at('2026-10-31T08:00:00'));
+    expect(s.organisers).not.toHaveBeenCalled();
+    s = setup([game({ kickoffTime: '06:00' })]);
+    await run(s.svc, 'shareInGroup', at('2026-10-31T06:30:00'));
+    expect(s.organisers).not.toHaveBeenCalled();
   });
 
   it('a full game, a called-off one, or one not tomorrow: nothing', async () => {
@@ -91,26 +107,26 @@ describe('Reminders: the organiser sends the link to the group', () => {
       [game({ date: '2026-11-01' }), {}],
     ] as const) {
       const { svc, organisers } = setup([g], o);
-      await run(svc, 'shareInGroup', at('2026-10-30T06:05:00'));
+      await run(svc, 'shareInGroup', at('2026-10-30T17:05:00'));
       expect(organisers).not.toHaveBeenCalled();
     }
   });
 
   it('one place left reads "1 place left"; no limit reads how many are in', async () => {
     let s = setup([game()], { inCount: 3, capacity: 4 });
-    await run(s.svc, 'shareInGroup', at('2026-10-30T06:05:00'));
+    await run(s.svc, 'shareInGroup', at('2026-10-30T17:05:00'));
     expect(s.organisers.mock.calls[0][1].body).toContain('3 of 4 in, 1 place left.');
     s = setup([game({ group: { ...game().group, requireRsvp: false } })], { inCount: 3, capacity: 0 });
-    await run(s.svc, 'shareInGroup', at('2026-10-30T06:05:00'));
+    await run(s.svc, 'shareInGroup', at('2026-10-30T17:05:00'));
     expect(s.organisers.mock.calls[0][1].body).toContain('3 in so far.');
   });
 });
 
-describe('Reminders: 6am on match day', () => {
+describe('Reminders: 6:30am on match day', () => {
   it('each player in the squad, with what they owe', async () => {
     const { svc, players } = setup([game()]);
-    await run(svc, 'matchMorning', at('2026-10-31T06:00:00'));
-    await run(svc, 'matchMorning', at('2026-10-31T06:10:00'));
+    await run(svc, 'matchMorning', at('2026-10-31T06:30:00'));
+    await run(svc, 'matchMorning', at('2026-10-31T06:40:00'));
     expect(players).toHaveBeenCalledTimes(2);
     const ada = players.mock.calls.find((c) => c[0][0] === 'ada')![1];
     expect(ada.title).toBe('Match day: Saturday Ballers ⚽');
@@ -121,7 +137,7 @@ describe('Reminders: 6am on match day', () => {
 
   it('not before 6am, not once the game is on, not for a called-off game', async () => {
     for (const [g, now] of [
-      [game(), '2026-10-31T05:59:00'],
+      [game(), '2026-10-31T06:29:00'],
       [game(), '2026-10-31T08:00:00'],
       [game({ status: SessionStatus.CANCELLED }), '2026-10-31T06:30:00'],
       [game({ kickoffTime: null }), '2026-10-31T12:30:00'],
@@ -132,7 +148,7 @@ describe('Reminders: 6am on match day', () => {
     }
   });
 
-  it('an early kick-off skips the 2-hours-before reminder (6am was enough); an evening one keeps it', async () => {
+  it('an early kick-off skips the 2-hours-before reminder (6:30am was enough); an evening one keeps it', async () => {
     let s = setup([game()]);
     await run(s.svc, 'kickOff', at('2026-10-31T06:30:00'));
     expect(s.players).not.toHaveBeenCalled();
@@ -178,5 +194,30 @@ describe('Reminders: the vote is about to close', () => {
     const { svc, players } = setup([ended()], { voteOpen: true, closesAt: at('2026-11-01T21:30:00') });
     await run(svc, 'voteClosing', at('2026-11-01T19:00:00'));
     expect(players.mock.calls[0][1].title).toBe('Voting closes at 9:30pm ⏳');
+  });
+});
+
+describe('Reminders: Friday to Saturday, as the server runs them (every 10 minutes)', () => {
+  it('an 8am Saturday game gets exactly: Fri 5pm group link, Fri 6pm squad, Sat 6:30am last call + squad', async () => {
+    const { svc, players, organisers } = setup([game()]);
+    svc.morningAfter = async () => undefined;
+    svc.duesChasers = async () => undefined;
+    const log: string[] = [];
+    const seen = { p: 0, o: 0 };
+    for (let t = at('2026-10-30T00:00:00').getTime(); t <= at('2026-10-31T12:00:00').getTime(); t += 10 * 60_000) {
+      await svc.tick(new Date(t));
+      const stamp = new Date(t + 3_600_000).toISOString().slice(5, 16).replace('T', ' ');
+      for (const c of organisers.mock.calls.slice(seen.o)) log.push(`${stamp} organiser ${c[1].kind} ${c[1].url}`);
+      const kinds = [...new Set(players.mock.calls.slice(seen.p).map((c) => c[1].kind))];
+      for (const k of kinds) log.push(`${stamp} squad ${k}`);
+      seen.o = organisers.mock.calls.length;
+      seen.p = players.mock.calls.length;
+    }
+    expect(log).toEqual([
+      '10-30 17:00 organiser share_invite /sessions/sat?send=invite',
+      '10-30 18:00 squad reminder_eve',
+      '10-31 06:30 organiser share_invite /sessions/sat?send=lastcall',
+      '10-31 06:30 squad reminder_matchday',
+    ]);
   });
 });

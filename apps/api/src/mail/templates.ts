@@ -263,6 +263,7 @@ const noticeActions: Record<string, string> = {
   reminder_matchday: 'View the game',
   share_invite: 'Send it to the group',
   share_vote: 'Send it to the group',
+  identity_required: 'Open Settings',
 };
 
 export function noticeEmail(input: {

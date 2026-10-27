@@ -70,6 +70,10 @@ export class User {
   @Column({ name: 'bvn', type: 'varchar', length: 11, nullable: true })
   bvn: string | null;
 
+  /** National Identification Number; a BVN or a NIN unlocks a group collection account. */
+  @Column({ name: 'nin', type: 'varchar', length: 11, nullable: true })
+  nin: string | null;
+
   @Column({ name: 'transfer_pin', type: 'varchar', nullable: true })
   transferPin: string | null;
 
@@ -82,6 +86,10 @@ export class User {
 
   @Column({ name: 'transfer_pin_locked_until', type: 'timestamp', nullable: true })
   transferPinLockedUntil: Date | null;
+
+  /** Set when a club admin removes this co-organiser or treasurer: they can't sign in or use a session. */
+  @Column({ name: 'removed_at', type: 'timestamp', nullable: true })
+  removedAt: Date | null;
 
   @CreateDateColumn()
   createdAt: Date;

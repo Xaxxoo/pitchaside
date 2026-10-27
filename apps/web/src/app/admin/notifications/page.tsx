@@ -191,7 +191,7 @@ export default function HqNotificationsPage() {
                       <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{m.to}</td>
                       <td className="px-4 py-3">
                         {m.clubId ? (
-                          <Link href={`/hq/clubs/${m.clubId}`} className="text-ink hover:text-pitch-600">
+                          <Link href={`/admin/clubs/${m.clubId}`} className="text-ink hover:text-pitch-600">
                             {m.clubName}
                           </Link>
                         ) : (

@@ -5,6 +5,7 @@ import { Payment, PaymentStatus } from './entities/payment.entity';
 import { Session, SessionStatus } from '../sessions/entities/session.entity';
 import { BankTransfer } from '../billing/entities/bank-transfer.entity';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
+import { Player } from '../players/entities/player.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 import { naira, shortDate } from '../common/format.util';
@@ -37,7 +38,7 @@ export class PaymentsService {
       });
     }
     if (source === 'transfer' && payments.length) {
-      const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+      const total = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
       const first = payments[0];
       await this.notifications.notifyOrganisers(first.session.group.organizationId, {
         kind: 'payment_received',
@@ -57,6 +58,8 @@ export class PaymentsService {
       .andWhere('group.organizationId = :organizationId', { organizationId })
       .getOne();
     if (!session) throw new NotFoundException('Game not found');
+    const inClub = await this.paymentsRepo.manager.getRepository(Player).exists({ where: { id: dto.playerId, organizationId } });
+    if (!inClub) throw new NotFoundException('Player not found');
 
     const payment = this.paymentsRepo.create(dto);
     if (dto.status === PaymentStatus.PAID) {
@@ -68,7 +71,7 @@ export class PaymentsService {
     return saved;
   }
 
-  async markAsPaid(id: string, organizationId: string, markedBy?: string) {
+  async markAsPaid(id: string, organizationId: string, markedBy?: string, source?: 'cash' | 'manual') {
     const payment = await this.paymentsRepo
       .createQueryBuilder('payment')
       .innerJoinAndSelect('payment.session', 'session')
@@ -77,15 +80,16 @@ export class PaymentsService {
       .andWhere('group.organizationId = :organizationId', { organizationId })
       .getOne();
     if (!payment) throw new NotFoundException('Payment not found');
-    // Already paid (perhaps by transfer): keep when and how, and don't send a second receipt.
     if (payment.status === PaymentStatus.PAID) return payment;
 
-    // Part paid by transfer already: that part comes out of their kept money, the rest was by hand.
+    // Lock the row and re-check inside the transaction to prevent double credit consumption.
     const saved = await this.paymentsRepo.manager.transaction(async (tx) => {
+      const locked = await tx.findOne(Payment, { where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!locked || locked.status === PaymentStatus.PAID) return payment;
       await usePartPaid(tx, payment, payment.session.groupId);
       payment.status = PaymentStatus.PAID;
       payment.paidAt = new Date();
-      payment.source = 'manual';
+      payment.source = source ?? 'manual';
       if (markedBy) payment.markedBy = markedBy;
       return tx.save(payment);
     });
@@ -99,16 +103,20 @@ export class PaymentsService {
     const payment = await this.ownedPayment(id, organizationId);
     if (payment.status === PaymentStatus.PENDING) return payment;
 
-    // Undoing a payment that came by transfer: that money is still in the account, so it goes
-    // to the player's extra to sort, rather than vanishing from the books or paying a game.
-    await releaseToExtra(this.paymentsRepo.manager, payment.session.groupId, [payment]);
-    payment.status = PaymentStatus.PENDING;
-    if (payment.attendance === 'no_show') payment.attendance = 'came';
-    payment.paidAt = null as any;
-    payment.source = null as any;
-    payment.markedBy = null as any;
-    payment.fromCredit = '0';
-    const saved = await this.paymentsRepo.save(payment);
+    const saved = await this.paymentsRepo.manager.transaction(async (tx) => {
+      const locked = await tx.findOne(Payment, { where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!locked || locked.status === PaymentStatus.PENDING) return payment;
+      // Undoing a payment that came by transfer: that money is still in the account, so it goes
+      // to the player's extra to sort, rather than vanishing from the books or paying a game.
+      await releaseToExtra(tx, payment.session.groupId, [payment]);
+      payment.status = PaymentStatus.PENDING;
+      if (payment.attendance === 'no_show') payment.attendance = 'came';
+      payment.paidAt = null;
+      payment.source = null;
+      payment.markedBy = null;
+      payment.fromCredit = '0';
+      return tx.save(payment);
+    });
 
     await this.recalculateSessionTotal(payment.sessionId);
     return saved;
@@ -145,15 +153,19 @@ export class PaymentsService {
       .andWhere('group.organizationId = :organizationId', { organizationId })
       .getOne();
     if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status === PaymentStatus.WAIVED) return payment;
 
-    // Waiving a due they'd already paid by transfer: the money goes to their extra to sort
-    // instead of vanishing from the books.
-    await releaseToExtra(this.paymentsRepo.manager, payment.session.groupId, [payment]);
-    payment.status = PaymentStatus.WAIVED;
-    // Played free: they came.
-    payment.attendance = 'came';
-    if (waivedBy) payment.markedBy = waivedBy;
-    const saved = await this.paymentsRepo.save(payment);
+    const saved = await this.paymentsRepo.manager.transaction(async (tx) => {
+      const locked = await tx.findOne(Payment, { where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!locked || locked.status === PaymentStatus.WAIVED) return payment;
+      // Waiving a due they'd already paid by transfer: the money goes to their extra to sort
+      // instead of vanishing from the books.
+      await releaseToExtra(tx, payment.session.groupId, [payment]);
+      payment.status = PaymentStatus.WAIVED;
+      payment.attendance = 'came';
+      if (waivedBy) payment.markedBy = waivedBy;
+      return tx.save(payment);
+    });
 
     await this.recalculateSessionTotal(payment.sessionId);
     return saved;
@@ -165,13 +177,19 @@ export class PaymentsService {
    */
   async markNoShow(id: string, organizationId: string, markedBy?: string) {
     const payment = await this.ownedPayment(id, organizationId);
-    await releaseToExtra(this.paymentsRepo.manager, payment.session.groupId, [payment]);
-    payment.status = PaymentStatus.WAIVED;
-    payment.attendance = 'no_show';
-    payment.paidAt = null as any;
-    payment.source = null as any;
-    if (markedBy) payment.markedBy = markedBy;
-    const saved = await this.paymentsRepo.save(payment);
+    if (payment.attendance === 'no_show') return payment;
+
+    const saved = await this.paymentsRepo.manager.transaction(async (tx) => {
+      const locked = await tx.findOne(Payment, { where: { id }, lock: { mode: 'pessimistic_write' } });
+      if (!locked || locked.attendance === 'no_show') return payment;
+      await releaseToExtra(tx, payment.session.groupId, [payment]);
+      payment.status = PaymentStatus.WAIVED;
+      payment.attendance = 'no_show';
+      payment.paidAt = null;
+      payment.source = null;
+      if (markedBy) payment.markedBy = markedBy;
+      return tx.save(payment);
+    });
     await this.recalculateSessionTotal(payment.sessionId);
     return saved;
   }
@@ -182,7 +200,7 @@ export class PaymentsService {
     if (payment.attendance === 'no_show') {
       // Back to what they'd owe for the game; in dues groups the game itself costs nothing.
       payment.status = payment.source === 'dues' || Number(payment.amount) === 0 ? PaymentStatus.WAIVED : PaymentStatus.PENDING;
-      payment.markedBy = null as any;
+      payment.markedBy = null;
     }
     payment.attendance = 'came';
     const saved = await this.paymentsRepo.save(payment);
@@ -259,7 +277,7 @@ export class PaymentsService {
     return payment;
   }
 
-  async bulkMarkAsPaid(paymentIds: string[], organizationId: string, markedBy?: string) {
+  async bulkMarkAsPaid(paymentIds: string[], organizationId: string, markedBy?: string, source?: 'cash' | 'manual') {
     const payments: Payment[] = [];
     const sessionIds = new Set<string>();
 
@@ -277,14 +295,16 @@ export class PaymentsService {
       sessionIds.add(payment.sessionId);
     }
 
-    // One at a time, each like Mark paid: a part-paid due uses what they'd already sent.
+    // Lock each row inside the transaction and re-check status to prevent double credit consumption.
     const saved = await this.paymentsRepo.manager.transaction(async (tx) => {
       const out: Payment[] = [];
       for (const payment of payments) {
+        const locked = await tx.findOne(Payment, { where: { id: payment.id }, lock: { mode: 'pessimistic_write' } });
+        if (!locked || locked.status === PaymentStatus.PAID) continue;
         await usePartPaid(tx, payment, payment.session.groupId);
         payment.status = PaymentStatus.PAID;
         payment.paidAt = new Date();
-        payment.source = 'manual';
+        payment.source = source ?? 'manual';
         if (markedBy) payment.markedBy = markedBy;
         out.push(await tx.save(payment));
       }
@@ -299,11 +319,37 @@ export class PaymentsService {
     return saved;
   }
 
+  /**
+   * Bulk-waive every pending payment for the given sessions. Used by super-admins
+   * when an organiser confirms nobody owes anything for upcoming games.
+   */
+  async waiveBySession(sessionIds: string[]): Promise<{ waived: number; sessionIds: string[] }> {
+    if (!sessionIds.length) return { waived: 0, sessionIds: [] };
+    const pending = await this.paymentsRepo.find({
+      where: { sessionId: In(sessionIds), status: PaymentStatus.PENDING },
+      relations: ['session'],
+    });
+    if (!pending.length) return { waived: 0, sessionIds };
+
+    for (const payment of pending) {
+      await releaseToExtra(this.paymentsRepo.manager, payment.session.groupId, [payment]);
+      payment.status = PaymentStatus.WAIVED;
+      payment.attendance = 'came';
+    }
+    await this.paymentsRepo.save(pending);
+
+    const affected = [...new Set(pending.map((p) => p.sessionId))];
+    for (const sid of affected) {
+      await this.recalculateSessionTotal(sid);
+    }
+    return { waived: pending.length, sessionIds: affected };
+  }
+
   async recalculateSessionTotal(sessionId: string) {
     const payments = await this.paymentsRepo.find({
       where: { sessionId, status: PaymentStatus.PAID },
     });
-    const total = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+    const total = Math.round(payments.reduce((sum, p) => sum + Number(p.amount), 0) * 100) / 100;
     await this.sessionsRepo.update(sessionId, { collectedAmount: total });
   }
 }

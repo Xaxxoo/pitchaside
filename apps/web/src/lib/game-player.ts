@@ -3,7 +3,7 @@ import { formatCurrency } from './api';
 
 /** What's still to pay on a due: the fee, less anything they've already sent towards it. */
 export function leftToPay(p: Pick<IPayment, 'amount' | 'paidSoFar'>) {
-  return Math.max(0, Number(p.amount) - (p.paidSoFar ?? 0));
+  return Math.max(0, Number(p.amount) - Number(p.paidSoFar ?? 0));
 }
 
 /** Groups whose weekly, monthly (…) dues cover their games: a game costs nothing extra. */
@@ -45,11 +45,17 @@ function stateNow(p: IPayment, coveredByDues: boolean, before: boolean): PlayerS
         : { key: 'dues_unpaid', label: 'Dues not paid yet', owes: false };
   }
   if (p.status === PaymentStatus.PAID) {
-    // Marked paid by hand: we can't tell cash from anything else, so we don't say cash.
     // Paid from money they'd sent before (more than a game, or a game called off): paid ahead,
     // not a transfer for this game.
     if (p.source === 'transfer' && p.markedBy === 'credit') return { key: 'paid', label: 'Paid from earlier money', owes: false };
-    return { key: 'paid', label: p.source === 'transfer' ? 'Paid by transfer' : 'Marked paid', owes: false };
+    if (p.source === 'transfer') {
+      const label = p.transferAmount && p.transferAmount !== Number(p.amount)
+        ? `Paid ${formatCurrency(p.transferAmount)} by transfer`
+        : 'Paid by transfer';
+      return { key: 'paid', label, owes: false };
+    }
+    if (p.source === 'cash') return { key: 'paid', label: 'Paid in cash', owes: false };
+    return { key: 'paid', label: 'Marked paid', owes: false };
   }
   if (p.status === PaymentStatus.WAIVED) return { key: 'free', label: before ? 'Plays free' : 'Played free', owes: false };
   // Part paid by transfer: what's left, in one line beside Mark paid (what's in shows in their options).

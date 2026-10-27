@@ -12,6 +12,7 @@ import { localDate, prettyTime } from '../common/time.util';
 import { Group } from '../groups/entities/group.entity';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
+import { BankTransfer, TransferStatus } from '../billing/entities/bank-transfer.entity';
 import { MailService } from '../mail/mail.service';
 import { CreateSessionDto, RecurrenceType } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -64,6 +65,8 @@ export class SessionsService {
       dto.recurrenceType || RecurrenceType.NONE,
       dto.recurrenceCount || 1,
     );
+    const today = localDate(0);
+    if (dates.some((d) => d < today)) throw new BadRequestException('Pick today or a day ahead.');
 
     let firstSession: Session | null = null;
 
@@ -214,7 +217,23 @@ export class SessionsService {
     if (!games.length) return sessions;
     const paid = await paidForGames(this.sessionsRepo.manager, games);
     for (const g of games) for (const p of g.payments ?? []) p.gamePaid = paid.get(g.id)?.get(p.playerId) ?? 'unpaid';
+    await this.markTransferAmounts(sessions);
     return sessions;
+  }
+
+  /** Sets payment.transferAmount from bank_transfers for paid-by-transfer payments. */
+  private async markTransferAmounts(sessions: Session[]) {
+    const payments = sessions.flatMap((s) => (s.payments ?? []).filter((p) => p.source === 'transfer' && p.status === PaymentStatus.PAID));
+    if (!payments.length) return;
+    const ids = payments.map((p) => p.id);
+    const transfers = await this.sessionsRepo.manager
+      .getRepository(BankTransfer)
+      .find({ where: { paymentId: In(ids), status: In([TransferStatus.MATCHED, TransferStatus.ASSIGNED]) }, select: ['paymentId', 'amount'] });
+    const byPayment = new Map(transfers.map((t) => [t.paymentId, Number(t.amount)]));
+    for (const p of payments) {
+      const sent = byPayment.get(p.id);
+      if (sent !== undefined) p.transferAmount = sent;
+    }
   }
 
   async findOne(id: string, organizationId: string) {
@@ -280,8 +299,8 @@ export class SessionsService {
     const wasCompleted = session.status === SessionStatus.COMPLETED;
     const wasCancelled = session.status === SessionStatus.CANCELLED;
     session.status = status as SessionStatus;
-    // Full time opens the vote (once: reopening and ending again keeps the first time).
-    if (session.status === SessionStatus.COMPLETED && !session.voteOpensAt) session.voteOpensAt = new Date();
+    // Full time opens (or re-opens) the vote: a game cancelled and re-ended gets a fresh window.
+    if (session.status === SessionStatus.COMPLETED) session.voteOpensAt = new Date();
     const saved = await this.sessionsRepo.save(session);
 
     // Called off: what members paid for it by transfer goes back to them as extra to sort. Back
@@ -318,6 +337,8 @@ export class SessionsService {
    */
   async endGame(id: string, noShows: string[], organizationId: string, markedBy?: string) {
     const session = await this.findOne(id, organizationId);
+    if (session.status === SessionStatus.COMPLETED) throw new BadRequestException('This game has already been ended.');
+    if (session.status === SessionStatus.CANCELLED) throw new BadRequestException('This game is called off.');
     const missing = new Set(noShows);
     for (const p of session.payments ?? []) {
       if (missing.has(p.id)) {
