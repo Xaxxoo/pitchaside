@@ -27,16 +27,12 @@ function getCsrfToken(): string | null {
  * In-memory refresh token fallback. Cookies are preferred (HttpOnly, XSS-safe)
  * but some proxy setups (e.g. Vercel rewrites) don't reliably forward
  * Set-Cookie from the upstream, so we also send the token in the request body.
+ * Kept in memory only — never persisted to storage to prevent XSS exposure.
  */
-let storedRefreshToken: string | null =
-  typeof window !== 'undefined' ? sessionStorage.getItem('_prt') : null;
+let storedRefreshToken: string | null = null;
 
 export function storeRefreshToken(token: string | undefined | null) {
   storedRefreshToken = token ?? null;
-  if (typeof window !== 'undefined') {
-    if (token) sessionStorage.setItem('_prt', token);
-    else sessionStorage.removeItem('_prt');
-  }
 }
 
 export function getStoredRefreshToken(): string | null {

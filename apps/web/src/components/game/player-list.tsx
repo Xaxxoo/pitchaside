@@ -127,6 +127,7 @@ export function PlayerList({
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [confirmBulk, setConfirmBulk] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [menuFor, setMenuFor] = useState<IPayment | null>(null);
 
   const needle = search.trim().toLowerCase();
@@ -301,9 +302,10 @@ export function PlayerList({
         <div className="sticky bottom-24 z-10 mt-3 animate-rise">
           <button
             onClick={() => setConfirmBulk(true)}
-            className="press w-full h-12 rounded-2xl bg-ink text-volt-300 text-[15px] font-bold shadow-lift"
+            disabled={bulkBusy}
+            className="press w-full h-12 rounded-2xl bg-ink text-volt-300 text-[15px] font-bold shadow-lift disabled:opacity-60"
           >
-            Mark {picked.size} paid
+            {bulkBusy ? 'Marking paid…' : `Mark ${picked.size} paid`}
           </button>
         </div>
       )}
@@ -314,10 +316,16 @@ export function PlayerList({
         message={`${pickedRows.map(({ p }) => name(p)).join(', ')}. Use this for cash or transfers with no name on them.`}
         confirmLabel={`Mark ${picked.size} paid`}
         onConfirm={async () => {
+          if (bulkBusy) return;
+          setBulkBusy(true);
           setConfirmBulk(false);
-          await onBulkPaid([...picked]);
-          setPicked(new Set());
-          setSelecting(false);
+          try {
+            await onBulkPaid([...picked]);
+            setPicked(new Set());
+            setSelecting(false);
+          } finally {
+            setBulkBusy(false);
+          }
         }}
         onCancel={() => setConfirmBulk(false)}
       />

@@ -1,7 +1,7 @@
 'use client';
 
 import { Avatar } from '@/components/ratings';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
@@ -100,10 +100,14 @@ export default function GamePage() {
   // A payment by transfer being moved to another of the player's games.
   const [movingPay, setMovingPay] = useState<IPayment | null>(null);
 
+  // Version counter: when multiple fetches are in flight (rapid mutations),
+  // only the latest one updates state so earlier results don't overwrite newer ones.
+  const fetchId = useRef(0);
   const fetchSession = useCallback(() => {
+    const v = ++fetchId.current;
     return getSession(id)
-      .then(setSession)
-      .catch(() => router.push('/sessions'));
+      .then((s) => { if (fetchId.current === v) setSession(s); })
+      .catch(() => { if (fetchId.current === v) router.push('/sessions'); });
   }, [id, router]);
 
   useEffect(() => {

@@ -50,13 +50,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  // Proactive token refresh while logged in
+  // Proactive token refresh while logged in. Uses a localStorage timestamp
+  // so only one tab refreshes at a time — refresh tokens are single-use, and
+  // concurrent refreshes across tabs would invalidate each other.
+  const userId = user?.id;
   useEffect(() => {
-    if (!user) {
+    if (!userId) {
       if (refreshTimer.current) clearInterval(refreshTimer.current);
       return;
     }
+    const SKIP_IF_WITHIN = 10 * 60 * 1000; // another tab refreshed in the last 10 min
+    const LOCK_KEY = '_pa_refresh_ts';
     refreshTimer.current = setInterval(async () => {
+      try {
+        const last = Number(localStorage.getItem(LOCK_KEY) || '0');
+        if (Date.now() - last < SKIP_IF_WITHIN) return; // another tab already refreshed
+        localStorage.setItem(LOCK_KEY, String(Date.now()));
+      } catch { /* localStorage unavailable — refresh anyway */ }
       try {
         const rt = getStoredRefreshToken();
         const res = await http.post<any>('/auth/refresh', rt ? { refreshToken: rt } : undefined);
@@ -66,7 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       if (refreshTimer.current) clearInterval(refreshTimer.current);
     };
-  }, [user]);
+  }, [userId]);
 
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     const res = await http.post<IAuthResponse | TwoFactorRequired>('/auth/login', { email, password });
