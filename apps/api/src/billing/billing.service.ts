@@ -8,6 +8,7 @@ import {
   NotFoundException,
   OnModuleDestroy,
   OnModuleInit,
+  ServiceUnavailableException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -1612,7 +1613,28 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
   async nameEnquiry(groupId: string, organizationId: string, bankCode: string, accountNumber: string) {
     await this.findGroup(groupId, organizationId);
-    return this.pulse.nameEnquiry(bankCode, accountNumber);
+    return { accountName: await this.lookUpName(bankCode, accountNumber) };
+  }
+
+  /**
+   * Who owns an account, from the bank. Says plainly what went wrong instead of failing the
+   * request: the bank has no such account, or the bank didn't answer (worth another try).
+   */
+  private async lookUpName(bankCode: string, accountNumber: string) {
+    const known = bankNameFor(bankCode);
+    const bank = known === 'Unknown Bank' ? 'that bank' : known;
+    let name = '';
+    try {
+      name = (await this.pulse.nameEnquiry(bankCode, accountNumber)).accountName.trim();
+    } catch (err: any) {
+      const raw = String(err?.message ?? err);
+      this.logger.warn(`Name enquiry for ${bankCode}/${accountNumber} failed: ${raw}`);
+      if (/timed? ?out|timeout|aborted|ETIMEDOUT|ECONNRESET|socket hang up|fetch failed|\((5\d\d)\)/i.test(raw)) {
+        throw new ServiceUnavailableException(`${bank} didn't answer. Try again in a moment.`);
+      }
+    }
+    if (!name) throw new BadRequestException(`No account ${accountNumber} at ${bank}. Check the number and the bank.`);
+    return name;
   }
 
   async initiateTransferOut(
@@ -1837,14 +1859,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async verifiedName(bankCode: string, accountNumber: string) {
-    let name = '';
-    try {
-      name = (await this.pulse.nameEnquiry(bankCode, accountNumber)).accountName.trim();
-    } catch (err: any) {
-      this.logger.warn(`Name enquiry for ${bankCode}/${accountNumber} failed: ${err.message}`);
-    }
-    if (!name) throw new BadRequestException("Couldn't confirm who owns that account — check the bank and account number");
-    return name;
+    return this.lookUpName(bankCode, accountNumber);
   }
 
   // ── Saved payee (pitch owner / facility manager) ──
