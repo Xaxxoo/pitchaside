@@ -33,6 +33,13 @@ export class SessionGame {
   @Column({ type: 'int', nullable: true })
   seconds: number | null;
 
+  /** Who was in goal for each side: anyone playing that day (a keeper borrowed from another team too). Null when not recorded. */
+  @Column({ name: 'keeper_a', type: 'uuid', nullable: true })
+  keeperA: string | null;
+
+  @Column({ name: 'keeper_b', type: 'uuid', nullable: true })
+  keeperB: string | null;
+
   /** "Tunde (organiser)", "Ada (captain)": who saved the score. */
   @Column({ name: 'recorded_by', type: 'varchar', nullable: true })
   recordedBy: string | null;

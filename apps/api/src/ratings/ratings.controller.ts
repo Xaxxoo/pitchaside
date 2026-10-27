@@ -118,15 +118,26 @@ export class AwayDto {
 }
 
 export class ScoreDto {
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(99)
-  scoreA: number;
+  scoreA?: number;
 
+  @IsOptional()
   @IsInt()
   @Min(0)
   @Max(99)
-  scoreB: number;
+  scoreB?: number;
+
+  /** Who was in goal for each side (null: not recorded); left out stays as it is. */
+  @IsOptional()
+  @IsUUID()
+  keeperA?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  keeperB?: string | null;
 }
 
 export class GameDto {
@@ -166,6 +177,15 @@ export class GameDto {
   @Min(0)
   @Max(7200)
   seconds?: number;
+
+  /** Who was in goal for each side (null: not recorded). Anyone playing today, a borrowed keeper too. */
+  @IsOptional()
+  @IsUUID()
+  keeperA?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  keeperB?: string | null;
 }
 
 /** Organiser views: vote link + results per game, league table, player ratings. */

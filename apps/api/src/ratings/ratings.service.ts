@@ -26,6 +26,7 @@ import { shortDate } from '../common/format.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { clockRunning, timerChange, timerOf } from './timer';
 import { lateArrivals, playedIn } from './late-arrivals';
+import { checkKeepers } from './keepers';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
@@ -874,6 +875,8 @@ export class RatingsService {
         scoreA: g.scoreA,
         scoreB: g.scoreB,
         seconds: g.seconds ?? null,
+        keeperA: g.keeperA ?? null,
+        keeperB: g.keeperB ?? null,
         recordedBy: g.recordedBy ?? null,
         goals: goals
           .filter((x) => x.gameId === g.id)
@@ -1220,7 +1223,7 @@ export class RatingsService {
   async captainAddGame(
     sessionId: string,
     playerIds: string[],
-    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number },
+    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number; keeperA?: string | null; keeperB?: string | null },
   ) {
     const { organizationId, signedAs, team } = await this.captainToday(sessionId, playerIds);
     if (input.teamA !== team && input.teamB !== team) throw new BadRequestException('You can only add games your team played');
@@ -1471,7 +1474,7 @@ export class RatingsService {
   async addGame(
     sessionId: string,
     organizationId: string,
-    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number },
+    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number; keeperA?: string | null; keeperB?: string | null },
     recordedBy?: string,
   ) {
     const session = await this.loadSession(sessionId, organizationId);
@@ -1482,7 +1485,9 @@ export class RatingsService {
       throw new BadRequestException('Pick two different teams');
     }
     const clean = (n: number) => Math.max(0, Math.min(99, Math.round(Number(n) || 0)));
+    const keepers = this.keepersFor(session, { keeperA: input.keeperA ?? null, keeperB: input.keeperB ?? null });
     const game = this.gamesRepo.create({
+      ...keepers,
       sessionId: session.id,
       teamA: input.teamA,
       teamB: input.teamB,
@@ -1581,7 +1586,12 @@ export class RatingsService {
    * The organiser corrects a saved game's score. Its named scorers stay; a side can't go below
    * the scorers named for it, so they take one off first and the goals and scorers always agree.
    */
-  async updateGame(sessionId: string, gameId: string, organizationId: string, input: { scoreA: number; scoreB: number }) {
+  async updateGame(
+    sessionId: string,
+    gameId: string,
+    organizationId: string,
+    input: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null },
+  ) {
     const session = await this.loadSession(sessionId, organizationId);
     if (session.status === SessionStatus.CANCELLED) throw new BadRequestException('This game was called off');
     const clean = (n: number) => Math.max(0, Math.min(99, Math.round(Number(n) || 0)));
@@ -1589,7 +1599,12 @@ export class RatingsService {
       const game = await tx.findOne(SessionGame, { where: { id: gameId, sessionId }, lock: { mode: 'pessimistic_write' } });
       if (!game) throw new NotFoundException('Game not found');
       const goals = await tx.find(MatchGoal, { where: { gameId } });
-      const next = { scoreA: clean(input.scoreA), scoreB: clean(input.scoreB) };
+      // Left out stays as it is: a keeper can be corrected without touching the score.
+      const next = {
+        scoreA: input.scoreA === undefined ? game.scoreA : clean(input.scoreA),
+        scoreB: input.scoreB === undefined ? game.scoreB : clean(input.scoreB),
+        ...this.keepersFor(session, { keeperA: input.keeperA, keeperB: input.keeperB }, game),
+      };
       for (const [team, score] of [[game.teamA, next.scoreA], [game.teamB, next.scoreB]] as const) {
         const named = goals.filter((g) => g.team === team).length;
         if (named > score) {
@@ -1601,6 +1616,20 @@ export class RatingsService {
       await tx.update(SessionGame, { id: game.id }, next);
     });
     return this.getLineup(sessionId, organizationId);
+  }
+
+  /** Who was in goal, checked: anyone playing today, for either side, never both (see keepers.ts). */
+  private keepersFor(session: Session, input: { keeperA?: string | null; keeperB?: string | null }, current?: Pick<SessionGame, 'keeperA' | 'keeperB'>) {
+    // Only the keepers being set are checked against who's playing: a keeper since taken off the
+    // game doesn't block correcting its score. Both sides are checked together, though.
+    const keeperA = input.keeperA === undefined ? current?.keeperA : input.keeperA;
+    const keeperB = input.keeperB === undefined ? current?.keeperB : input.keeperB;
+    try {
+      if (keeperA && keeperA === keeperB) throw new Error('One person can’t be in goal for both sides');
+      return checkKeepers(session.payments ?? [], input);
+    } catch (err) {
+      throw new BadRequestException((err as Error).message);
+    }
   }
 
   /** What a side is called: "Team Ada" with a captain, else its bib name or colour ("Orange"). */

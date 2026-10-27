@@ -27,7 +27,8 @@ export function SheetTitle({ id, title, sub, onClose }: { id: string; title: str
         </span>
       </button>
     </div>
-    {sub && <p className="-mt-2 pr-1 text-[13px] text-gray-600 leading-snug">{sub}</p>}
+    {/* Under the title row, which is as tall as the title or the close button: never over a two-line title */}
+    {sub && <p className="mt-1 pr-1 text-[13px] text-gray-600 leading-snug">{sub}</p>}
     </div>
   );
 }
