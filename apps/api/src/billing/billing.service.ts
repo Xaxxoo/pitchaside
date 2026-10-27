@@ -49,6 +49,28 @@ export { periodFor };
 const PLATFORM_FEE = 350;
 /** A payout still pending this long was left by a server stop mid-call, so it can be cancelled. */
 const PENDING_CANCEL_AFTER_MS = 15 * 60 * 1000;
+
+/**
+ * A transfer the bank answered with "timed out" (or that we gave up waiting on) may still go
+ * through: it isn't failed until the bank says so, or has no record of it.
+ */
+export function unclearTransferError(message: string) {
+  return /timed? ?out|timeout|aborted|ETIMEDOUT|ECONNRESET|socket hang up|\((5\d\d)\)|fetch failed/i.test(message);
+}
+
+/** What a failed payout says to the organiser: what happened, that no money left, what to do. */
+export function payoutFailureText(raw: string, bankName?: string | null) {
+  const to = bankName ? ` to ${bankName}` : '';
+  if (/insufficient|not enough/i.test(raw)) return `Not enough in the group account for this transfer. No money left the account.`;
+  if (/invalid account|account (number )?not found|beneficiary/i.test(raw)) return `The bank couldn't find that account${to}. Check the account number. No money left the account.`;
+  if (unclearTransferError(raw)) return `The bank timed out sending this${to}. No money left the account. Try again in a few minutes, or send it to another bank.`;
+  return `The bank didn't send this${to}. No money left the account. (${raw.replace(/^Payrep MFB transfer failed \(\d+\): /, '').slice(0, 120)})`;
+}
+
+/** How long a payout can sit unconfirmed before an automatic check asks the bank about it. */
+const FOLLOW_UP_AFTER_MS = 2 * 60 * 1000;
+/** A payout the bank still has no record of after this long never reached it. */
+const NEVER_ARRIVED_AFTER_MS = 30 * 60 * 1000;
 /** Transfers an organiser records by hand get this id prefix; they never count as withdrawable. */
 const MANUAL_PREFIX = 'manual_';
 
@@ -100,6 +122,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BillingService.name);
   private timer?: NodeJS.Timeout;
   private resendTimer?: NodeJS.Timeout;
+  private followUpTimer?: NodeJS.Timeout;
   /**
    * The last notification Payrep sent about each account, kept in memory since the last restart.
    * Lets the app say "Payrep never told us" apart from "we rejected it" without reading the logs.
@@ -136,6 +159,9 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     setTimeout(catchUp, 30_000).unref();
     this.resendTimer = setInterval(catchUp, 15 * 60 * 1000);
     this.resendTimer.unref();
+    // Payouts the bank hasn't confirmed get asked about every 5 minutes.
+    this.followUpTimer = setInterval(() => this.followUpPayouts().catch((err) => this.logger.error(`Payout follow-up failed: ${err.message}`)), 5 * 60 * 1000);
+    this.followUpTimer.unref();
     this.timer = setInterval(() => {
       this.ensureAllCurrentPeriods()
         .catch((err) => this.logger.error(`Dues rollover failed: ${err.message}`))
@@ -149,6 +175,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   onModuleDestroy() {
     if (this.timer) clearInterval(this.timer);
     if (this.resendTimer) clearInterval(this.resendTimer);
+    if (this.followUpTimer) clearInterval(this.followUpTimer);
   }
 
   /** Asks Pulse to deliver again the webhooks that didn't get through, so their money gets recorded. */
@@ -1697,33 +1724,15 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       // Only from pending: if the bank's own status message already moved it, that wins.
       await this.movePayout(payout, PayoutStatus.PENDING, result.status === 'completed' ? PayoutStatus.COMPLETED : PayoutStatus.PROCESSING);
 
-      // Transfer the platform fee to PitchAside's account
-      const feeAccount = this.config.get<string>('PLATFORM_FEE_ACCOUNT');
-      const feeBankCode = this.config.get('PLATFORM_FEE_BANK_CODE', '090713');
-      this.logger.log(`Fee transfer: account=${feeAccount ?? '(not set)'} bankCode=${feeBankCode} from=${group.accountNumber} ref=${reference}-FEE`);
-      if (feeAccount) {
-        try {
-          const feeResult = await this.pulse.transferOut({
-            debitAccountNumber: group.accountNumber,
-            beneficiaryAccountNumber: feeAccount,
-            beneficiaryBankCode: feeBankCode,
-            beneficiaryBankName: 'Payrep Microfinance Bank',
-            beneficiaryName: 'PitchAside',
-            amount: PLATFORM_FEE,
-            narration: `PitchAside service fee – ${group.name}`,
-            reference: `${reference}-FEE`,
-          });
-          this.logger.log(`Fee transfer for payout ${payout.id} succeeded: ${feeResult.status}`);
-        } catch (feeErr: any) {
-          this.logger.error(`Fee transfer for payout ${payout.id} failed: ${feeErr.message}`);
-        }
-      } else {
-        this.logger.warn('PLATFORM_FEE_ACCOUNT not set — fee transfer skipped');
-      }
+      await this.sendFee(payout, group);
     } catch (err: any) {
-      this.logger.error(`Payout ${payout.id} failed: ${err.message}`);
-      // A refund's credit goes back once, whichever of this and the bank's message gets here first.
-      if (await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.FAILED, err.message?.slice(0, 200))) {
+      const raw = String(err?.message ?? err);
+      this.logger.error(`Payout ${payout.id} (${reference}) failed: ${raw}`);
+      if (unclearTransferError(raw)) {
+        // "Timed out" doesn't mean the money stayed: ask the bank before letting it be sent again.
+        await this.settleUnclearPayout(payout, raw);
+      } else if (await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.FAILED, payoutFailureText(raw, to.bankName).slice(0, 200))) {
+        // A refund's credit goes back once, whichever of this and the bank's message gets here first.
         await this.moveRefundCredit(payout, Number(payout.amount));
       }
     }
@@ -1880,6 +1889,96 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
   getNigerianBanks() {
     return NIGERIAN_BANKS;
+  }
+
+  /**
+   * The service fee to PitchAside's account, once a payout has gone. Its reference is the payout's
+   * with -FEE, so the bank refuses a second one for the same payout.
+   */
+  private async sendFee(payout: OutgoingTransfer, group: Pick<Group, 'accountNumber' | 'name'>) {
+    const feeAccount = this.config.get<string>('PLATFORM_FEE_ACCOUNT');
+    const feeBankCode = this.config.get('PLATFORM_FEE_BANK_CODE', '090713');
+    const reference = `${payout.providerReference}-FEE`;
+    this.logger.log(`Fee transfer: account=${feeAccount ?? '(not set)'} bankCode=${feeBankCode} from=${group.accountNumber} ref=${reference}`);
+    if (!feeAccount) {
+      this.logger.warn('PLATFORM_FEE_ACCOUNT not set — fee transfer skipped');
+      return;
+    }
+    try {
+      const feeResult = await this.pulse.transferOut({
+        debitAccountNumber: group.accountNumber!,
+        beneficiaryAccountNumber: feeAccount,
+        beneficiaryBankCode: feeBankCode,
+        beneficiaryBankName: 'Payrep Microfinance Bank',
+        beneficiaryName: 'PitchAside',
+        amount: PLATFORM_FEE,
+        narration: `PitchAside service fee – ${group.name}`,
+        reference,
+      });
+      this.logger.log(`Fee transfer for payout ${payout.id} succeeded: ${feeResult.status}`);
+    } catch (feeErr: any) {
+      this.logger.error(`Fee transfer for payout ${payout.id} failed: ${feeErr.message}`);
+    }
+  }
+
+  /** The group a payout came from, for its fee. */
+  private async groupOf(payout: OutgoingTransfer) {
+    return this.groupsRepo.findOne({ where: { id: payout.groupId }, select: ['id', 'accountNumber', 'name'] });
+  }
+
+  /**
+   * After an unclear answer ("timed out"): what does the bank say about this transfer? Sent or
+   * failed, it's settled now. No record of it: it never left, so it's failed and the money is
+   * free again. Still going, or the bank can't be asked: it stays held (processing) and the
+   * follow-up checks again, so nothing can be sent twice.
+   */
+  private async settleUnclearPayout(payout: OutgoingTransfer, raw: string) {
+    let status = 'unknown';
+    let reason: string | undefined;
+    try {
+      const bank = await this.pulse.getTransfer(payout.providerReference!);
+      status = bank.status;
+      reason = bank.errorMessage;
+    } catch (err: any) {
+      this.logger.warn(`Couldn't check payout ${payout.id} with the bank: ${err.message}`);
+    }
+    if (/complet|success/i.test(status)) {
+      if (await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.COMPLETED)) {
+        const group = await this.groupOf(payout);
+        if (group) await this.sendFee(payout, group);
+      }
+    } else if (/fail|revers/i.test(status) || status === 'not_found') {
+      if (await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.FAILED, payoutFailureText(reason ?? raw, payout.beneficiaryBankName).slice(0, 200))) {
+        await this.moveRefundCredit(payout, Number(payout.amount));
+      }
+    } else {
+      await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.PROCESSING, 'The bank is slow to confirm this one. The money is held until it does: we check every few minutes.');
+    }
+  }
+
+  /** Every few minutes: payouts still waiting on the bank get asked about, so none sit unclear for long. */
+  async followUpPayouts(now = Date.now()) {
+    const waiting = await this.payoutsRepo.find({ where: { status: PayoutStatus.PROCESSING }, order: { createdAt: 'ASC' }, take: 50 });
+    for (const payout of waiting) {
+      const age = now - new Date(payout.createdAt).getTime();
+      if (age < FOLLOW_UP_AFTER_MS || !payout.providerReference) continue;
+      try {
+        const bank = await this.pulse.getTransfer(payout.providerReference);
+        if (/complet|success/i.test(bank.status)) {
+          await this.handlePayoutWebhook(payout.providerReference, 'completed');
+          // One the bank was slow to confirm hasn't had its fee sent yet (the -FEE reference stops a second).
+          if (payout.errorMessage?.startsWith('The bank is slow to confirm')) {
+            const group = await this.groupOf(payout);
+            if (group) await this.sendFee(payout, group);
+          }
+        }
+        else if (/fail|revers/i.test(bank.status)) await this.handlePayoutWebhook(payout.providerReference, 'failed', payoutFailureText(bank.errorMessage ?? bank.status, payout.beneficiaryBankName));
+        else if (bank.status === 'not_found' && age > NEVER_ARRIVED_AFTER_MS)
+          await this.handlePayoutWebhook(payout.providerReference, 'failed', payoutFailureText('timed out', payout.beneficiaryBankName));
+      } catch (err: any) {
+        this.logger.warn(`Follow-up on payout ${payout.id} failed: ${err.message}`);
+      }
+    }
   }
 
   /** Query Payrep for the real status of every `processing` payout and reconcile. */

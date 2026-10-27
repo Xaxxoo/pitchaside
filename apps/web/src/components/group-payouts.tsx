@@ -41,11 +41,23 @@ const statusStyles: Record<OutgoingTransfer['status'], string> = {
 /** Plain words for each state, so nothing relies on the colour alone. */
 const statusWords: Record<OutgoingTransfer['status'], string> = {
   pending: 'Waiting',
-  processing: 'On the way',
+  processing: 'Checking with bank',
   completed: 'Sent',
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
+
+/**
+ * What a payout's note says, in plain words. Older failures were saved with the bank's raw reply
+ * ("Payrep MFB transfer failed (400): Transfer request timed out…"): read the same way as new ones.
+ */
+function payoutNote(p: OutgoingTransfer) {
+  const raw = p.errorMessage ?? '';
+  if (!raw.startsWith('Payrep MFB')) return raw;
+  const to = p.beneficiaryBankName ? ` to ${p.beneficiaryBankName}` : '';
+  if (/timed? ?out|timeout/i.test(raw)) return `The bank timed out sending this${to}. No money left the account. Try again in a few minutes, or send it to another bank.`;
+  return `The bank didn't send this${to}. No money left the account. (${raw.replace(/^Payrep MFB [^:]*\(\d+\): /, '').slice(0, 120)})`;
+}
 
 type PayoutFilter = 'all' | 'sent' | 'waiting' | 'failed';
 const FILTERS: [PayoutFilter, string, OutgoingTransfer['status'][]][] = [
@@ -505,15 +517,27 @@ export function PayoutsPanel({
                   <p className={`font-display text-[15px] font-extrabold tabular-nums ${p.status === 'failed' || p.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-ink'}`}>
                     −{formatCurrency(Number(p.amount))}
                   </p>
-                  {Number(p.fee) > 0 && <p className="text-[11px] text-gray-500 tabular-nums">+ {formatCurrency(Number(p.fee))} fee</p>}
+                  {/* A transfer that didn't go costs nothing: say so rather than show a fee */}
+                  {p.status === 'failed' || p.status === 'cancelled' ? (
+                    <p className="text-[11px] text-gray-500">No fee taken</p>
+                  ) : (
+                    Number(p.fee) > 0 && <p className="text-[11px] text-gray-500 tabular-nums">+ {formatCurrency(Number(p.fee))} fee</p>
+                  )}
                   <span className={`mt-1 inline-block text-[10px] font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider ${statusStyles[p.status]}`}>
                     {statusWords[p.status]}
                   </span>
                 </div>
               </div>
-              {p.errorMessage && <p className="mt-2 ml-[52px] text-xs text-kit-600 bg-kit-500/10 rounded-lg px-3 py-1.5">{p.errorMessage}</p>}
+              {p.errorMessage && (
+                <div className={`mt-2 ml-[52px] rounded-xl px-3 py-2 text-[13px] leading-snug ${p.status === 'processing' ? 'bg-sky-300/20 text-ink' : 'bg-kit-500/10 text-kit-600'}`}>
+                  <p>{payoutNote(p)}</p>
+                  {/* For Payrep's support, if it keeps happening */}
+                  {p.providerReference && <p className="mt-1 text-[11px] text-gray-500 tabular-nums select-all">Ref {p.providerReference}</p>}
+                </div>
+              )}
               <div className="ml-[52px] flex flex-wrap items-center gap-2 empty:hidden">
-                {!p.refundPlayerId &&
+                {/* "What was it for?" only for money that went (or may still) */}
+                {!p.refundPlayerId && p.status !== 'failed' && p.status !== 'cancelled' &&
                   (canSend ? (
                     <button
                       onClick={() => setPicking(p)}

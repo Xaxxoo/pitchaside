@@ -67,6 +67,7 @@ export interface NameEnquiryResult {
 }
 
 export interface TransferStatusResult {
+  /** Payrep's word for it ("completed", "failed", "processing"…), or "not_found" when it has no record of the reference. */
   status: string;
   errorMessage?: string;
 }

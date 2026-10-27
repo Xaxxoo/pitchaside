@@ -209,6 +209,8 @@ export class HttpPulseClient implements PulseClient {
       signal: AbortSignal.timeout(API_TIMEOUT_MS),
     });
 
+    // No record at Payrep: the transfer never reached them.
+    if (res.status === 404) return { status: 'not_found' };
     if (!res.ok) throw new Error(`Payrep MFB transfer lookup failed (${res.status}): ${await pulseReason(res)}`);
 
     const json = (await res.json()) as Record<string, any>;
