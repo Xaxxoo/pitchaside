@@ -59,13 +59,17 @@ export function unclearTransferError(message: string) {
   return /timed? ?out|timeout|aborted|ETIMEDOUT|ECONNRESET|socket hang up|\((5\d\d)\)|fetch failed/i.test(message);
 }
 
-/** What a failed payout says to the organiser: what happened, that no money left, what to do. */
+/**
+ * What a failed payout says to the organiser, in a line or two: what happened and that nothing
+ * was sent. The bank's full reply stays in the server log.
+ */
 export function payoutFailureText(raw: string, bankName?: string | null) {
-  const to = bankName ? ` to ${bankName}` : '';
-  if (/insufficient|not enough/i.test(raw)) return `Not enough in the group account for this transfer. No money left the account.`;
-  if (/invalid account|account (number )?not found|beneficiary/i.test(raw)) return `The bank couldn't find that account${to}. Check the account number. No money left the account.`;
-  if (unclearTransferError(raw)) return `The bank timed out sending this${to}. No money left the account. Try again in a few minutes, or send it to another bank.`;
-  return `The bank didn't send this${to}. No money left the account. (${raw.replace(/^Payrep MFB transfer failed \(\d+\): /, '').slice(0, 120)})`;
+  const at = bankName ? ` at ${bankName}` : '';
+  if (/insufficient|not enough/i.test(raw)) return 'Not enough in the group account. Nothing was sent.';
+  if (/invalid account|account (number )?not found|beneficiary/i.test(raw)) return `Account not found${at}. Check the number. Nothing was sent.`;
+  if (unclearTransferError(raw)) return `${bankName ?? 'The bank'} didn't answer. Nothing was sent. Try again shortly.`;
+  const reason = raw.replace(/^Payrep MFB transfer failed \(\d+\): /, '').replace(/\.$/, '').slice(0, 60);
+  return `Didn’t go through${bankName ? ` to ${bankName}` : ''}${reason ? ` (${reason})` : ''}. Nothing was sent.`;
 }
 
 /** How long a payout can sit unconfirmed before an automatic check asks the bank about it. */
