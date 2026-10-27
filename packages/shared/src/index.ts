@@ -183,6 +183,8 @@ export interface IUser {
   organization?: IOrganization;
   twoFactorEnabled?: boolean;
   emailVerified?: boolean;
+  /** Emails when a notification can't reach them (on unless switched off). */
+  emailNotices?: boolean;
   createdAt: string;
 }
 

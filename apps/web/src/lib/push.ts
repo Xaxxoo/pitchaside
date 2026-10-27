@@ -31,7 +31,9 @@ export async function getPushState(): Promise<PushState> {
   if (Notification.permission === 'denied') return 'denied';
   const reg = await navigator.serviceWorker.getRegistration();
   const sub = await reg?.pushManager.getSubscription();
-  return sub ? 'on' : 'off';
+  if (sub) return 'on';
+  // Nothing to offer while the server can't send them (no push keys set up).
+  return (await getPublicKey()) ? 'off' : 'unconfigured';
 }
 
 function urlBase64ToUint8Array(base64: string) {
@@ -49,11 +51,17 @@ export async function requestPushPermission(): Promise<PushState> {
   return 'ready';
 }
 
-async function getPublicKey(): Promise<string | null> {
-  const response = await fetch(`${BASE_URL}/push/public-key`);
-  if (!response.ok) return null;
-  const { publicKey } = await response.json();
-  return publicKey || null;
+let publicKeyOnce: Promise<string | null> | null = null;
+function getPublicKey(): Promise<string | null> {
+  publicKeyOnce ??= fetch(`${BASE_URL}/push/public-key`)
+    .then(async (response) => (response.ok ? ((await response.json()).publicKey as string) || null : null))
+    .catch(() => null)
+    .then((key) => {
+      // A failed look is tried again next time.
+      if (!key) publicKeyOnce = null;
+      return key;
+    });
+  return publicKeyOnce;
 }
 
 /** Subscribe this device and hand the subscription to `save`. */
@@ -77,4 +85,69 @@ export async function subscribePush(save: (sub: PushSubscriptionJSON) => Promise
 export async function enablePush(save: (sub: PushSubscriptionJSON) => Promise<unknown>): Promise<PushState> {
   const permission = await requestPushPermission();
   return permission === 'ready' ? subscribePush(save) : permission;
+}
+
+/** Set when someone switches notifications off on this phone: nothing switches them back on by itself. */
+const OFF_KEY = 'pa_push_off';
+
+export function pushTurnedOff() {
+  try {
+    return localStorage.getItem(OFF_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberOff(off: boolean) {
+  try {
+    if (off) localStorage.setItem(OFF_KEY, '1');
+    else localStorage.removeItem(OFF_KEY);
+  } catch {
+    /* only this visit, then */
+  }
+}
+
+/**
+ * On by default: once this phone has allowed notifications, they're switched on for whoever is
+ * signed in, with no tap (a new phone they've allowed before, a second account, a subscription
+ * the phone dropped). Not if they switched them off here. Quiet when it can't.
+ */
+export async function keepPushOn(save: (sub: PushSubscriptionJSON) => Promise<unknown>): Promise<PushState> {
+  try {
+    if (pushTurnedOff()) return getPushState();
+    if (!pushSupported() || !window.isSecureContext || Notification.permission !== 'granted') return getPushState();
+    return await subscribePush(save);
+  } catch {
+    return getPushState();
+  }
+}
+
+/** The switch turned on: ask the phone (one tap on its "Allow"), then subscribe, straight away where it lets us. */
+export async function turnPushOn(save: (sub: PushSubscriptionJSON) => Promise<unknown>): Promise<PushState> {
+  rememberOff(false);
+  if (Notification.permission === 'granted') return subscribePush(save);
+  const asked = await requestPushPermission();
+  if (asked !== 'ready') return asked;
+  try {
+    return await subscribePush(save);
+  } catch {
+    // Some iPhones want the subscribe in a second tap: the switch says "Finish".
+    return 'ready';
+  }
+}
+
+/** The switch turned off: this phone stops getting them, and stays off until switched back on. */
+export async function turnPushOff(remove: (endpoint: string) => Promise<unknown>): Promise<PushState> {
+  rememberOff(true);
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = await reg?.pushManager.getSubscription();
+    if (sub) {
+      await remove(sub.endpoint).catch(() => undefined);
+      await sub.unsubscribe();
+    }
+  } catch {
+    /* off here regardless */
+  }
+  return 'off';
 }

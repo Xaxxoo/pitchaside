@@ -1,5 +1,6 @@
 'use client';
 
+import { PushKeeper } from '@/components/notify';
 import { InstallNudge } from '@/components/pwa';
 import { TourHost } from '@/components/onboarding/tour';
 import { openTour } from '@/lib/onboarding';
@@ -212,6 +213,7 @@ export function PlayerShell({ children }: { children: React.ReactNode }) {
       </div>
 
       <TourHost side="player" done={!!profile.player.photoKey} />
+      <PushKeeper side="player" />
 
       {/* Until it's on their home screen: a nudge just above the tab bar, every visit */}
       <div className="md:hidden fixed bottom-[calc(max(env(safe-area-inset-bottom),0.75rem)+5rem)] inset-x-3 z-40 max-w-md mx-auto">

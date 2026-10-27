@@ -233,7 +233,8 @@ export class NotificationsService implements OnModuleInit {
    * 'email' = an email if we have their address, 'whatsapp' = WhatsApp/SMS.
    */
   get fallback(): 'none' | 'email' | 'whatsapp' {
-    const mode = this.config.get('NOTIFY_FALLBACK', 'none');
+    // Email by default: everyone gets told, by notification or else by email, unless they switch it off.
+    const mode = this.config.get('NOTIFY_FALLBACK', 'email');
     return mode === 'whatsapp' || mode === 'email' ? mode : 'none';
   }
 
@@ -300,7 +301,7 @@ export class NotificationsService implements OnModuleInit {
         }),
       );
       const needsFallback = notice.critical || pushed === 0;
-      if (this.fallback === 'email' && needsFallback && player.email) {
+      if (this.fallback === 'email' && needsFallback && player.email && player.emailNotices !== false) {
         await this.emailPlayer(player, notice);
       }
       if (this.fallback === 'whatsapp' && needsFallback && player.phone) {
@@ -329,7 +330,7 @@ export class NotificationsService implements OnModuleInit {
       const theirs = subs.filter((s) => s.userId === user.id);
       const sent = await this.push(theirs, notice);
       pushed += sent;
-      if (opts.email && sent === 0 && this.fallback === 'email' && user.email) {
+      if (opts.email && sent === 0 && this.fallback === 'email' && user.email && user.emailNotices !== false) {
         const record = this.messagesRepo.create({
           organizationId,
           channel: 'email',
@@ -360,6 +361,12 @@ export class NotificationsService implements OnModuleInit {
         provider: 'web-push',
       }),
     );
+  }
+
+  /** An organiser switches their emails on or off. */
+  async setOrganiserEmails(userId: string, on: boolean) {
+    await this.usersRepo.update(userId, { emailNotices: on });
+    return { emailNotices: on };
   }
 
   /** Fire-and-forget wrapper so a notification problem never breaks the request. */

@@ -1028,6 +1028,15 @@ export function subscribeOrganiserPush(sub: PushSubscriptionJSON) {
   return http.post('/push/subscribe', sub);
 }
 
+export function unsubscribeOrganiserPush(endpoint: string) {
+  return http.delete('/push/subscribe', { endpoint });
+}
+
+/** Emails when a notification can't reach this organiser: on unless switched off. */
+export function setOrganiserEmails(email: boolean) {
+  return http.patch<{ emailNotices: boolean }>('/notifications/settings', { email });
+}
+
 // ── Post-match voting, ratings & league table ──
 
 export type VoteCategory =

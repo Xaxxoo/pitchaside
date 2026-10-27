@@ -1,12 +1,11 @@
 'use client';
 
+import { NotificationSettings } from '@/components/notify';
 import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { updateProfile, changePassword, setup2FA, verify2FA, disable2FA, getTransferPinStatus, setTransferPin, changeTransferPin } from '@/lib/api';
-import { PushToggle } from '@/components/pwa';
-import { subscribeOrganiserPush } from '@/lib/api';
 import { PageHeader } from '@/components/brand';
 import { VerifyEmailRow } from '@/components/verify-email-modal';
 import { IdentityForm } from '@/components/identity-form';
@@ -157,8 +156,8 @@ export default function SettingsPage() {
       <PageHeader eyebrow="Your account" title="Settings" subtitle="Profile, password and security" />
 
       <div className="mb-4">
-        <PushToggle save={subscribeOrganiserPush} />
-        <p className="text-[11px] text-gray-500 mt-1.5 px-1">Get a ping on this device when money lands, a game fills up or a payment comes in with no name.</p>
+        <NotificationSettings side="organiser" emailOn={user.emailNotices !== false} email={user.email} onEmailChanged={() => refreshUser()} />
+        <p className="text-[12px] leading-snug text-gray-500 mt-1.5 px-1">When money lands, when to send the link to the group, and when voting closes.</p>
       </div>
 
       {/* Profile Section */}

@@ -51,6 +51,10 @@ export class Player {
   @Column({ type: 'varchar', length: 12, nullable: true })
   keeper: KeeperPref;
 
+  /** Emails when a notification can't reach them: on unless they switch it off. */
+  @Column({ name: 'email_notices', default: true })
+  emailNotices: boolean;
+
   /** Their photo's key in player_photos (served at /api/photos/:key); null for none. */
   @Column({ name: 'photo_key', type: 'varchar', length: 32, nullable: true })
   photoKey: string | null;

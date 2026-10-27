@@ -295,6 +295,13 @@ export class PlayerAuthService {
   }
 
   /** In goal or not, the same in every club they play for. */
+  /** Emails on or off, for every club they play in. */
+  async setEmailNotices(person: Person, on: boolean) {
+    for (const p of person.players) p.emailNotices = on;
+    if (person.players.length) await this.playersRepo.save(person.players);
+    return { emailNotices: on };
+  }
+
   async setKeeper(person: Person, keeper: KeeperPref) {
     for (const p of person.players) p.keeper = keeper;
     if (person.players.length) await this.playersRepo.save(person.players);

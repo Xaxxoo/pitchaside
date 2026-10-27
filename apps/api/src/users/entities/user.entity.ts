@@ -22,6 +22,10 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  /** Emails when a notification can't reach them: on unless they switch it off. */
+  @Column({ name: 'email_notices', default: true })
+  emailNotices: boolean;
+
   @Column()
   firstName: string;
 

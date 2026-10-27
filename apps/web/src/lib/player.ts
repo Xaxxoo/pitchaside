@@ -213,7 +213,7 @@ export type PlayerGroup = {
 export type Organiser = { clubName: string; email: string } | null;
 
 export interface PlayerHome {
-  player: { id: string; firstName: string; lastName: string; nickname: string | null; photoKey?: string | null; keeper?: KeeperPref; email: string; phone: string | null };
+  player: { id: string; firstName: string; lastName: string; nickname: string | null; photoKey?: string | null; keeper?: KeeperPref; emailNotices?: boolean; email: string; phone: string | null };
   organiser: Organiser;
   groups: PlayerGroup[];
   upcoming: {
@@ -470,6 +470,11 @@ export function setCaptainAway(sessionId: string, playerId: string, at: number |
 }
 
 /** Happy in goal, rather not, or don't mind (null): the same in every club. */
+/** Emails when a notification can't reach them: on unless they switch it off. */
+export function setMyEmailNotices(email: boolean) {
+  return request<{ emailNotices: boolean }>('PATCH', '/me/notices', { email });
+}
+
 export function setMyKeeper(keeper: KeeperPref) {
   return request<{ keeper: KeeperPref }>('PATCH', '/me/keeper', { keeper });
 }

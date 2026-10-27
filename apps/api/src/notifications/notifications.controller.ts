@@ -1,6 +1,6 @@
-import { Body, Controller, Delete, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { IsObject, IsString, IsUrl } from 'class-validator';
+import { IsBoolean, IsObject, IsString, IsUrl } from 'class-validator';
 import { NotificationsService } from './notifications.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -13,6 +13,11 @@ export class PushSubscriptionDto {
 
   @IsObject()
   keys: { p256dh: string; auth: string };
+}
+
+export class NoticesDto {
+  @IsBoolean()
+  email: boolean;
 }
 
 export class UnsubscribeDto {
@@ -48,6 +53,13 @@ export class NotificationsController {
   @Delete('push/subscribe')
   unsubscribe(@Body() dto: UnsubscribeDto, @CurrentUser() user: User) {
     return this.notifications.unsubscribe(dto.endpoint, { userId: user.id });
+  }
+
+  /** Emails on or off for this organiser (on unless they switch it off). */
+  @UseGuards(JwtAuthGuard)
+  @Patch('notifications/settings')
+  settings(@Body() dto: NoticesDto, @CurrentUser() user: User) {
+    return this.notifications.setOrganiserEmails(user.id, dto.email);
   }
 
   /** WhatsApp/SMS outbox — in mock mode this is where test messages (incl. codes) show up. */
