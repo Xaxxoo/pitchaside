@@ -42,7 +42,10 @@ describe('PaymentsService', () => {
     };
     // Mark paid runs in a transaction: no membership here, so nothing is part paid.
     (paymentsRepo as any).manager = {
-      transaction: (fn: (tx: unknown) => unknown) => fn({ findOne: async () => null, save: (x: unknown) => paymentsRepo.save(x) }),
+      transaction: (fn: (tx: unknown) => unknown) => fn({
+        findOne: async (entity: any) => entity === Payment ? { status: PaymentStatus.PENDING } : null,
+        save: (x: unknown) => paymentsRepo.save(x),
+      }),
     };
     sessionsRepo = {
       update: jest.fn(),
@@ -104,7 +107,8 @@ describe('PaymentsService', () => {
     it('moves a due already paid by transfer to the member\'s extra to sort', async () => {
       const payment = { ...mockPayment, status: PaymentStatus.PAID, source: 'transfer', session: { groupId: 'group-1' } };
       const membership = { groupId: 'group-1', playerId: 'player-1', credit: '0.00' };
-      const tx = { findOne: jest.fn().mockResolvedValue(membership), save: jest.fn() };
+      const innerTx = { findOne: jest.fn().mockResolvedValue(membership), save: jest.fn() };
+      const tx = { findOne: jest.fn().mockResolvedValue(membership), save: jest.fn(), transaction: (fn: any) => fn(innerTx) };
       (paymentsRepo as any).manager = { transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
       paymentsRepo.createQueryBuilder.mockReturnValue({ ...mockQueryBuilder, getOne: jest.fn().mockResolvedValue(payment) });
       paymentsRepo.find.mockResolvedValue([]);
@@ -120,7 +124,8 @@ describe('PaymentsService', () => {
     const transferPaid = () => {
       const payment: any = { ...mockPayment, status: PaymentStatus.PAID, source: 'transfer', session: { groupId: 'group-1' } };
       const membership = { groupId: 'group-1', playerId: 'player-1', credit: '0.00' };
-      const tx = { findOne: jest.fn().mockResolvedValue(membership), save: jest.fn() };
+      const innerTx = { findOne: jest.fn().mockResolvedValue(membership), save: jest.fn() };
+      const tx = { findOne: jest.fn().mockResolvedValue(membership), save: jest.fn(), transaction: (fn: any) => fn(innerTx) };
       (paymentsRepo as any).manager = { transaction: (fn: (t: typeof tx) => unknown) => fn(tx) };
       paymentsRepo.createQueryBuilder.mockReturnValue({ ...mockQueryBuilder, getOne: jest.fn().mockResolvedValue(payment) });
       paymentsRepo.save.mockImplementation(async (x) => x);
