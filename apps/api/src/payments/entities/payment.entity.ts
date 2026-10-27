@@ -46,14 +46,14 @@ export class Payment {
   @Column({ type: 'enum', enum: PaymentStatus, default: PaymentStatus.PENDING })
   status: PaymentStatus;
 
-  @Column({ nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   paidAt: Date | null;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   markedBy: string | null;
 
   /** 'manual' when an admin marked it, 'transfer' when reconciled from a bank transfer. */
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   source: string | null;
 
   /** Match-day side: 'A'–'F' (colours in the UI); null = not picked yet. */
