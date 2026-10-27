@@ -79,6 +79,11 @@ export class TimerDto {
   @IsBoolean()
   start?: boolean;
 
+  /** true pauses the running clock, false resumes it. */
+  @IsOptional()
+  @IsBoolean()
+  pause?: boolean;
+
   @IsOptional()
   @IsInt()
   @Min(1)

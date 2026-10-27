@@ -55,6 +55,20 @@ describe('PlayersService', () => {
   });
 
   describe('create', () => {
+    it('says who already has the number instead of a server error', async () => {
+      playersRepo.findOne.mockResolvedValue({ ...mockPlayer, id: 'player-2', firstName: 'Ada', lastName: 'Obi' });
+      await expect(service.create({ firstName: 'New', lastName: 'Guy', phone: '08012345678' }, 'org-1')).rejects.toThrow(
+        'Ada Obi already has this number',
+      );
+      expect(playersRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('two saves at once: the second gets the same plain answer', async () => {
+      playersRepo.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({ ...mockPlayer, id: 'player-2', firstName: 'Ada', lastName: 'Obi' });
+      playersRepo.save.mockRejectedValueOnce(Object.assign(new Error('duplicate'), { constraint: 'UQ_players_org_phone' }));
+      await expect(service.create({ firstName: 'New', lastName: 'Guy', phone: '08012345678' }, 'org-1')).rejects.toThrow('Ada Obi already has this number');
+    });
+
     it('should create player with organization association', async () => {
       const dto = { firstName: 'John', lastName: 'Doe', phone: '08012345678' };
       playersRepo.create.mockReturnValue({ ...dto, organizationId: 'org-1' });

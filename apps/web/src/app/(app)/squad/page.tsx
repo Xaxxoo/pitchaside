@@ -6,7 +6,8 @@ import { PageHeader } from '@/components/brand';
 import { EmptyState } from '@/components/empty-state';
 import { GroupSwitch } from '@/components/group-switch';
 import { InviteSheet } from '@/components/home/invite-sheet';
-import { InviteIcon } from '@/components/icons';
+import { ICON_PATHS, InviteIcon, icon } from '@/components/icons';
+import { GroupSettingsSheet } from '@/components/group/group-settings';
 import { GroupSquad } from '@/components/squad/group-squad';
 import { GroupTable } from '@/components/squad/group-table';
 import { GroupStats, type StatSort } from '@/components/squad/group-stats';
@@ -33,6 +34,7 @@ export default function SquadPage() {
   const [view, setView] = useState<View>(asView(params.get('view')));
   const [sort, setSort] = useState<StatSort>((params.get('sort') as StatSort) || 'rating');
   const [showInvite, setShowInvite] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   // A link naming a group switches to it, for the whole app, until another group is picked here.
   const [asked, setAsked] = useState(params.get('group'));
@@ -92,7 +94,24 @@ export default function SquadPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <PageHeader title="Squad" subtitle="Your players: who’s coming, and how the squad is made up." />
+      <PageHeader
+        title="Squad"
+        subtitle="Your players, their table and their stats."
+        actions={
+          // Editing the group in plain sight, not only inside the group switch
+          group && canManage ? (
+            <button
+              onClick={() => setEditing(true)}
+              aria-haspopup="dialog"
+              aria-label={`Edit group ${group.name}: name, pitch, day, kick-off, fee`}
+              className="press shrink-0 inline-flex items-center gap-1.5 h-11 px-3.5 rounded-full bg-white border border-gray-200 text-sm font-bold text-ink hover:border-ink"
+            >
+              {icon(ICON_PATHS.pencil)}
+              <span aria-hidden>Edit group</span>
+            </button>
+          ) : undefined
+        }
+      />
       {!group ? (
         <EmptyState icon="users" title="No groups yet" description="Create a group, then invite your players to it." actionLabel="Create a group" actionHref="/groups/new" />
       ) : (
@@ -124,6 +143,14 @@ export default function SquadPage() {
               </button>
             )}
           </div>
+          {editing && (
+            <GroupSettingsSheet
+              group={group}
+              onClose={() => setEditing(false)}
+              onSaved={() => getGroups().then(setGroups).catch(() => {})}
+              onDeleted={() => getGroups().then(setGroups).catch(() => {})}
+            />
+          )}
           {showInvite && billing && (
             <InviteSheet group={group} billing={billing} canManage={canManage} onBilling={setBilling} onClose={() => setShowInvite(false)} />
           )}

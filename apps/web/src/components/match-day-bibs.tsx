@@ -82,6 +82,8 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   const noBib = byTeam(null);
 
   const myTeam = lineup.myTeam;
+  // Games are already saved and they aren't on a side: they came late and pick once.
+  const late = !myTeam && !!lineup.live?.games.length;
   return (
     <div className="mt-4 rounded-2xl bg-white/[0.07] p-3.5 space-y-3 text-white">
       <ConfirmDialog
@@ -98,7 +100,14 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
       />
       {lineup.bibsOpen ? (
         <div>
-          <p className="text-[13px] font-bold text-white mb-2">{Object.keys(lineup.captains).length || lineup.bibs && Object.values(lineup.bibs).some((b) => b?.name) ? 'Which team are you in?' : 'Which bib are you in?'}</p>
+          {late ? (
+            <div className="mb-2">
+              <p className="text-[13px] font-bold text-white">Came late? Pick the side you’re joining</p>
+              <p className="mt-0.5 text-[12px] leading-snug text-white/70">The scores are in, so this is once: you stay on that side, and only the games from now count for you.</p>
+            </div>
+          ) : (
+            <p className="text-[13px] font-bold text-white mb-2">{Object.keys(lineup.captains).length || lineup.bibs && Object.values(lineup.bibs).some((b) => b?.name) ? 'Which team are you in?' : 'Which bib are you in?'}</p>
+          )}
           <div className="flex flex-wrap gap-2">
             {teams.map((t) => {
               const mine = lineup.myTeam === t;

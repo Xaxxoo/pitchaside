@@ -24,7 +24,8 @@ import { GamePaid, paidForGames } from '../payments/game-dues';
 import { localDate } from '../common/time.util';
 import { shortDate } from '../common/format.util';
 import { NotificationsService } from '../notifications/notifications.service';
-import { timerChange, timerOf } from './timer';
+import { clockRunning, timerChange, timerOf } from './timer';
+import { lateArrivals, playedIn } from './late-arrivals';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
@@ -922,7 +923,7 @@ export class RatingsService {
     if (session.kind !== SessionKind.GAME) throw new BadRequestException('Only games have a plan');
     if (session.status === SessionStatus.CANCELLED) throw new BadRequestException('This game was called off, so it has no plan');
     if (session.status === SessionStatus.COMPLETED) throw new BadRequestException('This game has ended, so its plan can’t change');
-    const running = session.timerStartedAt && new Date(session.timerStartedAt).getTime() + timerOf(session).minutes * 60_000 > Date.now();
+    const running = clockRunning(session);
     let plan: MatchPlan | null = null;
     if (input != null) {
       try {
@@ -975,17 +976,17 @@ export class RatingsService {
     return timerOf(await this.loadSession(sessionId, organizationId));
   }
 
-  async setTimer(sessionId: string, organizationId: string, input: { start?: boolean; minutes?: number }) {
+  async setTimer(sessionId: string, organizationId: string, input: { start?: boolean; minutes?: number; pause?: boolean }) {
     const session = await this.loadSession(sessionId, organizationId);
     return this.changeTimer(session, input);
   }
 
-  private async changeTimer(session: Session, input: { start?: boolean; minutes?: number }) {
+  private async changeTimer(session: Session, input: { start?: boolean; minutes?: number; pause?: boolean }) {
     if (session.kind !== SessionKind.GAME) throw new BadRequestException('Only games have a timer');
     if (session.status === SessionStatus.CANCELLED) throw new BadRequestException('This game was called off');
     let patch;
     try {
-      patch = timerChange(input);
+      patch = timerChange(input, session);
     } catch (err) {
       throw new BadRequestException((err as Error).message);
     }
@@ -1031,7 +1032,19 @@ export class RatingsService {
     const session = await this.loadSession(sessionId, organizationId);
     if (session.kind === SessionKind.DUES) throw new BadRequestException('Dues periods don’t have a lineup');
     if (await this.scoresIn(session.id)) {
-      throw new BadRequestException('Teams are locked because scores are in. Delete the scores to change the teams.');
+      // Scores are in, so the sides stay as the games were played. The one change still allowed:
+      // someone who came late (not on a side yet) goes onto one, from here on.
+      const late = lateArrivals(session, input);
+      if (late === 'locked') throw new BadRequestException('Teams are locked because scores are in. Delete the scores to change the teams.');
+      if (late === 'ended') throw new BadRequestException('This game has ended, so no one can join a side now');
+      const changed = (session.payments ?? []).filter((p) => p.playerId in late);
+      const now = new Date();
+      for (const p of changed) {
+        p.team = late[p.playerId];
+        p.joinedSideAt = now;
+      }
+      await this.sessionsRepo.manager.save(changed);
+      return this.getLineup(sessionId, organizationId);
     }
     let count = session.teamCount;
     if (input.teamCount !== undefined) {
@@ -1057,6 +1070,8 @@ export class RatingsService {
         if (next !== p.team) {
           p.captain = false;
           p.viceCaptain = false;
+          // No scores yet, so every game from here counts for them.
+          p.joinedSideAt = null;
         }
         p.team = next;
       }
@@ -1335,8 +1350,8 @@ export class RatingsService {
       },
       teamCount: session.teamCount,
       ...(await this.planOf(session, false)),
-      bibsOpen: this.bibsOpen(session, locked),
-      bibsClosed: locked || this.bibsClosed(session),
+      bibsOpen: this.bibsOpen(session, locked, locked && !mine.team),
+      bibsClosed: (locked && !!mine.team) || this.bibsClosed(session),
       myTeam: this.teamOf(session, mine.team),
       captains: this.captainsOf(session),
       /** Each side's bib colour and name for this game (its own, else the group's). */
@@ -1375,13 +1390,14 @@ export class RatingsService {
   /**
    * Players pick their own side from match day until the first score goes in, unless the game
    * was called off. After that the teams are what the scores were played by, so nobody can move
-   * onto the winning side and rewrite the day's results.
+   * onto the winning side and rewrite the day's results. `late`: they came after the first score
+   * and aren't on a side yet, so they can still pick one until full time.
    */
-  private bibsOpen(session: Session, scoresIn: boolean) {
+  private bibsOpen(session: Session, scoresIn: boolean, late = false) {
     return (
       session.status !== SessionStatus.CANCELLED &&
       localDate(0) >= String(session.date).slice(0, 10) &&
-      !scoresIn &&
+      (!scoresIn || (late && session.status === SessionStatus.UPCOMING)) &&
       !this.bibsClosed(session)
     );
   }
@@ -1397,7 +1413,9 @@ export class RatingsService {
     const mine = session?.payments?.find((p) => playerIds.includes(p.playerId));
     if (!session || session.kind !== SessionKind.GAME || !mine) throw new NotFoundException("You're not in this game");
     const locked = await this.scoresIn(session.id);
-    if (!this.bibsOpen(session, locked)) {
+    // Came late: the scores are in, but they aren't on a side yet, so they can join one (once).
+    const late = locked && !mine.team;
+    if (!this.bibsOpen(session, locked, late) || (late && team === null)) {
       throw new BadRequestException(
         locked || this.bibsClosed(session) ? 'Teams are set: the scores are in' : 'Picking teams opens on match day',
       );
@@ -1408,6 +1426,7 @@ export class RatingsService {
     if (team !== mine.team) {
       mine.captain = false;
       mine.viceCaptain = false;
+      mine.joinedSideAt = late ? new Date() : null;
     }
     mine.team = team;
     await this.sessionsRepo.manager.save(mine);
@@ -1641,10 +1660,11 @@ export class RatingsService {
 
     const replay: SkillGame[] = [];
     for (const session of sessions) {
-      const side = (team: string) =>
-        (session.payments ?? []).filter((p) => p.player && this.teamOf(session, p.team) === team).map((p) => p.playerId);
+      // Who was on a side for this game: someone who came late only from when they joined it.
+      const side = (team: string, g: SessionGame) =>
+        (session.payments ?? []).filter((p) => p.player && this.teamOf(session, p.team) === team && playedIn(p, g)).map((p) => p.playerId);
       for (const g of bySession.get(session.id) ?? []) {
-        replay.push({ sideA: side(g.teamA), sideB: side(g.teamB), scoreA: g.scoreA, scoreB: g.scoreB });
+        replay.push({ sideA: side(g.teamA, g), sideB: side(g.teamB, g), scoreA: g.scoreA, scoreB: g.scoreB });
       }
     }
     return replaySkill(replay, starts);
@@ -1807,8 +1827,9 @@ export class RatingsService {
           evidence.set(member.id, ev);
 
           if (side) {
+            const pay = session.payments?.find((p) => p.playerId === member.id);
             for (const g of gamesBySession.get(session.id) ?? []) {
-              if (g.teamA !== side && g.teamB !== side) continue;
+              if ((g.teamA !== side && g.teamB !== side) || !playedIn(pay, g)) continue;
               const mine = g.teamA === side ? g.scoreA : g.scoreB;
               const theirs = g.teamA === side ? g.scoreB : g.scoreA;
               if (mine > theirs) s.record.w += 1;
@@ -1869,11 +1890,12 @@ export class RatingsService {
 
     return Promise.all(
       sessions.map(async (s) => {
-        const myTeam = s.payments?.find((p) => p.playerId === playerId)?.team ?? null;
+        const pay = s.payments?.find((p) => p.playerId === playerId);
+        const myTeam = pay?.team ?? null;
         const dayGames = games.filter((g) => g.sessionId === s.id);
         const record = { w: 0, d: 0, l: 0 };
         for (const g of dayGames) {
-          if (!myTeam || (g.teamA !== myTeam && g.teamB !== myTeam)) continue;
+          if (!myTeam || (g.teamA !== myTeam && g.teamB !== myTeam) || !playedIn(pay, g)) continue;
           const mine = g.teamA === myTeam ? g.scoreA : g.scoreB;
           const theirs = g.teamA === myTeam ? g.scoreB : g.scoreA;
           if (mine > theirs) record.w++;

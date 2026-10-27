@@ -414,14 +414,17 @@ export function liveDay(
   day: Day,
   plan: MatchPlan,
   gamesDone: number,
-  clock: { startedAt: string | null; minutes: number } | null,
+  clock: { startedAt: string | null; minutes: number; pausedAt?: string | null } | null,
   now: number,
   date?: string,
   kickoff?: string | null,
 ): LiveDay {
   const started = clock?.startedAt ? Date.parse(clock.startedAt) : NaN;
-  const endsAt = started + (clock?.minutes ?? 0) * 60_000;
-  const running = Number.isFinite(started) && now < endsAt;
+  // Paused: the game is still on, its clock stands still, and it ends later by however long it's been paused.
+  const pausedAt = clock?.pausedAt ? Date.parse(clock.pausedAt) : NaN;
+  const paused = Number.isFinite(started) && Number.isFinite(pausedAt);
+  const endsAt = started + (clock?.minutes ?? 0) * 60_000 + (paused ? Math.max(0, now - pausedAt) : 0);
+  const running = Number.isFinite(started) && (paused || now < endsAt);
   const playing = running ? (day.fixtures[gamesDone] ?? null) : null;
   const next = running ? gamesDone + 1 : gamesDone;
   // Whole minutes: the next game can't start before the minute it's due.
@@ -431,5 +434,5 @@ export function liveDay(
     at == null
       ? { games: day.fixtures.slice(next), late: 0, dropped: 0, lastMinutes: null }
       : catchUp(day.fixtures, next, at, plan.pitchMinutes);
-  return { playing, elapsed: running ? (now - started) / 60_000 : null, ahead };
+  return { playing, elapsed: running ? ((paused ? pausedAt : now) - started) / 60_000 : null, ahead };
 }

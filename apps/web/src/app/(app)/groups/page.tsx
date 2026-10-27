@@ -9,6 +9,8 @@ import { Pagination } from '@/components/pagination';
 import { useToast } from '@/components/toast';
 import { PageHeader } from '@/components/brand';
 import { JerseyBadge } from '@/components/illustrations';
+import { ICON_PATHS, icon } from '@/components/icons';
+import { GroupSettingsSheet } from '@/components/group/group-settings';
 import { frequencyShort } from '@/lib/billing';
 import { getGroupsPaginated, exportGroupsCsv, formatCurrency, type IGroupWithMembers, type PaginatedResponse } from '@/lib/api';
 
@@ -20,6 +22,7 @@ export default function GroupsPage() {
   const [meta, setMeta] = useState({ page: 1, limit: 10, total: 0, totalPages: 1 });
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<IGroupWithMembers | null>(null);
 
   function fetchGroups(p = page) {
     return getGroupsPaginated(p, 10)
@@ -95,20 +98,20 @@ export default function GroupsPage() {
       ) : (
         <>
           {/* One card of rows, like the home's lists. No "16/28 full": membership has no cap (the
-              limit is per game). Tapping a group switches to it on Home; its settings (and
-              deleting it) are in the group switch. */}
+              limit is per game). Tapping a group switches to it on Home; Edit changes its details
+              (and deletes it), as the group switch does. */}
           <ul className="bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
             {groups.map((group) => {
               const memberCount = group.memberships?.length || 0;
               const where = [group.location, group.schedule].filter(Boolean).join(', ');
               return (
-                <li key={group.id}>
+                <li key={group.id} className="flex items-center">
                   <button
                     onClick={() => {
                       setGroupId(group.id);
                       router.push('/dashboard');
                     }}
-                    className="w-full flex items-center gap-3 px-4 min-h-[76px] py-3 text-left hover:bg-chalk transition-colors"
+                    className="flex-1 min-w-0 flex items-center gap-3 pl-4 pr-2 min-h-[76px] py-3 text-left hover:bg-chalk transition-colors"
                   >
                     <JerseyBadge label={group.name.charAt(0).toUpperCase()} name={group.name} className="w-11 h-11 shrink-0" />
                     <span className="flex-1 min-w-0">
@@ -122,14 +125,28 @@ export default function GroupsPage() {
                         where && <span className="block text-xs text-gray-500 mt-0.5 truncate">{where}</span>
                       )}
                     </span>
-                    <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                    </svg>
+                  </button>
+                  <button
+                    onClick={() => setEditing(group)}
+                    aria-haspopup="dialog"
+                    aria-label={`Edit ${group.name}`}
+                    className="press shrink-0 mr-3 inline-flex items-center gap-1.5 h-11 px-3 rounded-xl border border-gray-200 text-[13px] font-bold text-ink hover:border-ink"
+                  >
+                    {icon(ICON_PATHS.pencil)}
+                    <span aria-hidden>Edit</span>
                   </button>
                 </li>
               );
             })}
           </ul>
+          {editing && (
+            <GroupSettingsSheet
+              group={editing}
+              onClose={() => setEditing(null)}
+              onSaved={() => fetchGroups()}
+              onDeleted={() => fetchGroups()}
+            />
+          )}
           <Pagination
             page={meta.page}
             totalPages={meta.totalPages}

@@ -80,7 +80,8 @@ export function DayPlan({
   // The clock ticks the plan on: every second while a game runs (for the swaps), else now and then.
   const [now, setNow] = useState(() => Date.now());
   const started = clock?.timer.startedAt ? Date.parse(clock.timer.startedAt) : NaN;
-  const running = Number.isFinite(started) && Date.now() + (clock?.offset ?? 0) < started + (clock?.timer.minutes ?? 0) * 60_000;
+  // Paused counts as on: the game isn't over, it's just stood still.
+  const running = Number.isFinite(started) && (!!clock?.timer.pausedAt || Date.now() + (clock?.offset ?? 0) < started + (clock?.timer.minutes ?? 0) * 60_000);
   useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), running ? 1000 : 20_000);
     return () => window.clearInterval(id);

@@ -72,6 +72,10 @@ export class Session {
   @Column({ name: 'timer_started_at', type: 'timestamptz', nullable: true })
   timerStartedAt: Date | null;
 
+  /** When the running clock was paused; null while it runs. Resuming moves the start on by the pause. */
+  @Column({ name: 'timer_paused_at', type: 'timestamptz', nullable: true })
+  timerPausedAt: Date | null;
+
   /** This game's bibs, when the organiser changed them for the day. Null: the group's bibs. */
   @Column({ type: 'jsonb', nullable: true })
   bibs: Bibs | null;

@@ -362,8 +362,10 @@ export interface GameTimer {
   on?: boolean;
   /** Today's game length in minutes: the day's own, else the group's, else 7. */
   minutes: number;
-  /** When the running game's clock started; null while it isn't running. */
+  /** When the running game's clock started (moved on by any pauses); null while it isn't running. */
   startedAt: string | null;
+  /** When it was paused; null (or missing, from an older server) while it runs. */
+  pausedAt?: string | null;
   /** The server's time when sent, so every phone counts down from the same clock. */
   now: string;
 }

@@ -191,13 +191,16 @@ export function buildWsDay({ plan, teamCount, date, squad }: DayInput, saved: Ws
  * clock runs (and how far in), else the game up next. No running late: the last game simply ends
  * when the booking does.
  */
-export function wsLive(day: WsDay, clock: { startedAt: string | null; minutes: number } | null, now: number): LiveDay {
+export function wsLive(day: WsDay, clock: { startedAt: string | null; minutes: number; pausedAt?: string | null } | null, now: number): LiveDay {
   const current = day.fixtures.find((f) => f.n === day.ws.played.length) ?? null;
   const started = clock?.startedAt ? Date.parse(clock.startedAt) : NaN;
-  const running = !!current && Number.isFinite(started) && now < started + (clock?.minutes ?? 0) * 60_000;
+  const pausedAt = clock?.pausedAt ? Date.parse(clock.pausedAt) : NaN;
+  // A paused game is still on: the clock just stands still where it stopped.
+  const paused = Number.isFinite(started) && Number.isFinite(pausedAt);
+  const running = !!current && Number.isFinite(started) && (paused || now < started + (clock?.minutes ?? 0) * 60_000);
   return {
     playing: running ? current : null,
-    elapsed: running ? (now - started) / 60_000 : null,
+    elapsed: running ? ((paused ? pausedAt : now) - started) / 60_000 : null,
     ahead: { games: !running && current ? [current] : [], late: 0, dropped: 0, lastMinutes: null },
   };
 }
