@@ -334,16 +334,16 @@ export function getPlayersPaginated(
 
 // ── Profile / Auth ──
 
-export function updateProfile(data: { firstName: string; lastName: string; phone?: string }): Promise<any> {
+export function updateProfile(data: { firstName: string; lastName: string; phone?: string }): Promise<void> {
   return http.patch('/auth/profile', data);
 }
 
 /** The organiser's BVN and/or NIN; either one unlocks a group collection account. */
-export function setIdentity(data: { bvn?: string; nin?: string }): Promise<any> {
+export function setIdentity(data: { bvn?: string; nin?: string }): Promise<void> {
   return http.put('/auth/identity', data);
 }
 
-export function changePassword(data: { currentPassword: string; newPassword: string }): Promise<any> {
+export function changePassword(data: { currentPassword: string; newPassword: string }): Promise<void> {
   return http.post('/auth/change-password', data);
 }
 
@@ -428,7 +428,7 @@ export function disable2FA(code: string): Promise<{ message: string }> {
   return http.post('/auth/2fa/disable', { code });
 }
 
-export function validate2FALogin(challenge: string, code: string): Promise<any> {
+export function validate2FALogin(challenge: string, code: string): Promise<void> {
   return http.post('/auth/2fa/validate', { challenge, code });
 }
 

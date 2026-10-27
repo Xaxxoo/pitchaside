@@ -101,6 +101,7 @@ export function PlayerSignupForm({
         value={form.password}
         onChange={(v) => setForm({ ...form, password: v })}
         autoComplete="new-password"
+        minLength={8}
         hint="At least 8 characters. You'll sign in with your email and this password."
       />
       <button

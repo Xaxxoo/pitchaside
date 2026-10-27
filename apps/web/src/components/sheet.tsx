@@ -120,7 +120,7 @@ export function Sheet({
         ref={panelRef}
         tabIndex={-1}
         style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
-        className={`relative bg-white rounded-t-[28px] sm:rounded-3xl shadow-lift w-full sm:max-w-md max-h-sheet flex flex-col outline-none transition-transform duration-200 ${
+        className={`relative bg-white rounded-t-[28px] sm:rounded-3xl shadow-lift w-full sm:max-w-lg max-h-sheet flex flex-col outline-none transition-transform duration-200 ${
           closing ? 'animate-[sheet-out_200ms_ease-in_both] sm:animate-[fade-out_200ms_ease-in_both]' : 'animate-slide-up sm:animate-fade-in-up'
         }`}
         onClick={(e) => e.stopPropagation()}

@@ -3,7 +3,7 @@ import { formatCurrency } from './api';
 
 /** What's still to pay on a due: the fee, less anything they've already sent towards it. */
 export function leftToPay(p: Pick<IPayment, 'amount' | 'paidSoFar'>) {
-  return Math.max(0, Number(p.amount) - (p.paidSoFar ?? 0));
+  return Math.max(0, Number(p.amount) - Number(p.paidSoFar ?? 0));
 }
 
 /** Groups whose weekly, monthly (…) dues cover their games: a game costs nothing extra. */

@@ -11,15 +11,20 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [sent, setSent] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (cooldown > 0) return;
     setSubmitting(true);
     try {
       await http.post('/auth/forgot-password', { email });
       setSent(true);
     } catch (err: any) {
       toast.error(err.message || 'Could not send reset email. Please try again.');
+      // Prevent hammering: 30-second cooldown after a failed attempt too.
+      setCooldown(30);
+      const t = setInterval(() => setCooldown((c) => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
     } finally {
       setSubmitting(false);
     }
@@ -80,10 +85,10 @@ export default function ForgotPasswordPage() {
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || cooldown > 0}
           className="w-full py-3 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
         >
-          {submitting ? 'Sending...' : 'Send Reset Link'}
+          {submitting ? 'Sending...' : cooldown > 0 ? `Try again in ${cooldown}s` : 'Send Reset Link'}
         </button>
       </form>
 
