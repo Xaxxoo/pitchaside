@@ -203,6 +203,61 @@ export interface HqMessages {
   messages: PaginatedResponse<HqMessage>;
 }
 
+export interface GroupDiagnostics {
+  group: {
+    id: string;
+    name: string;
+    accountNumber: string | null;
+    bankName: string | null;
+    paymentType: string;
+    feePerPlayer: number;
+    clubId: string;
+    clubName: string;
+  };
+  balance: {
+    bankBalance: number | string;
+    ledgerIn: number;
+    manualIn: number;
+    ledgerOut: number;
+    available: number;
+  };
+  payoutStats: {
+    payoutCount: number;
+    failedPayouts: number;
+    completedPayouts: number;
+    processingPayouts: number;
+    pendingPayouts: number;
+    cancelledPayouts: number;
+  };
+  recentPayouts: {
+    id: string;
+    amount: number;
+    fee: number;
+    status: string;
+    beneficiaryName: string;
+    beneficiaryAccount: string;
+    beneficiaryBankName: string;
+    providerReference: string;
+    errorMessage: string | null;
+    createdAt: string;
+  }[];
+  recentTransfers: {
+    id: string;
+    amount: number;
+    senderName: string;
+    narration: string;
+    status: string;
+    receivedAt: string;
+  }[];
+  members: {
+    playerId: string;
+    name: string;
+    credit: number;
+    extra: number;
+    waiting: number;
+  }[];
+}
+
 export type ClubSort = 'newest' | 'collected' | 'outstanding' | 'players';
 
 function qs(params: Record<string, string | number | undefined>) {
@@ -229,6 +284,8 @@ export const hq = {
     http.post<{ audience: number; delivered: number; missed: number }>('/admin/platform/notifications/push', input),
   activity: (p: { page?: number; limit?: number }) =>
     http.get<PaginatedResponse<HqActivity>>(`/admin/platform/activity${qs(p)}`),
+  groupDiagnostics: (groupId: string) =>
+    http.get<GroupDiagnostics>(`/admin/platform/groups/${groupId}/diagnostics`),
 };
 
 // ── Formatting ──

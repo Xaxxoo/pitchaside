@@ -1,10 +1,11 @@
 'use client';
 
-import { use } from 'react';
+import { use, useState } from 'react';
 import { BackButton } from '@/components/back-button';
 import { PageHeader } from '@/components/brand';
+import { Sheet } from '@/components/sheet';
 import { formatCurrency } from '@/lib/api';
-import { hq, actionLabel, dayTime, shortDay } from '@/lib/hq';
+import { hq, actionLabel, compactNaira, dayTime, shortDay, type GroupDiagnostics } from '@/lib/hq';
 import { LoadError, Panel, Pill, Table, TableSkeletonRows, Tile, useLoad } from '@/components/hq-ui';
 
 const roleLabels: Record<string, string> = {
@@ -27,6 +28,28 @@ const sessionTones = { upcoming: 'volt', completed: 'good', cancelled: 'muted' }
 export default function HqClubPage({ params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = use(paramsPromise);
   const { data: club, error } = useLoad(() => hq.club(params.id), [params.id]);
+
+  const [diagGroupId, setDiagGroupId] = useState<string | null>(null);
+  const [diagData, setDiagData] = useState<GroupDiagnostics | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagError, setDiagError] = useState<string | null>(null);
+
+  function openDiag(groupId: string) {
+    setDiagGroupId(groupId);
+    setDiagData(null);
+    setDiagError(null);
+    setDiagLoading(true);
+    hq.groupDiagnostics(groupId)
+      .then(setDiagData)
+      .catch((err: Error) => setDiagError(err.message))
+      .finally(() => setDiagLoading(false));
+  }
+
+  function closeDiag() {
+    setDiagGroupId(null);
+    setDiagData(null);
+    setDiagError(null);
+  }
 
   if (error) {
     return (
@@ -97,6 +120,13 @@ export default function HqClubPage({ params: paramsPromise }: { params: Promise<
                           <Pill tone="bad">{g.unmatchedTransfers} unmatched</Pill>
                         </p>
                       )}
+                      <button
+                        type="button"
+                        onClick={() => openDiag(g.id)}
+                        className="mt-1 text-[11px] font-bold text-pitch-600 hover:text-pitch-800 transition-colors"
+                      >
+                        Diagnose
+                      </button>
                     </td>
                     <td className="px-4 py-3 tabular-nums font-semibold text-ink">{formatCurrency(g.collected)}</td>
                     <td className="px-4 py-3 tabular-nums text-gray-600">{formatCurrency(g.outstanding)}</td>
@@ -175,6 +205,153 @@ export default function HqClubPage({ params: paramsPromise }: { params: Promise<
           </Panel>
         </div>
       </div>
+
+      {diagGroupId && (
+        <Sheet titleId="diag-title" onClose={closeDiag} align="left">
+          <h2 id="diag-title" className="text-lg font-bold text-ink mb-4">
+            Group diagnostics
+          </h2>
+
+          {diagLoading && (
+            <div className="space-y-3 animate-pulse">
+              <div className="h-20 bg-gray-100 rounded-2xl" />
+              <div className="h-20 bg-gray-100 rounded-2xl" />
+              <div className="h-20 bg-gray-100 rounded-2xl" />
+            </div>
+          )}
+
+          {diagError && <LoadError message={diagError} />}
+
+          {diagData && (
+            <div className="space-y-5">
+              {/* Group header */}
+              <p className="text-sm text-gray-500">
+                <span className="font-bold text-ink">{diagData.group.name}</span>
+                {diagData.group.accountNumber && (
+                  <> &middot; <span className="tabular-nums">{diagData.group.accountNumber}</span> ({diagData.group.bankName})</>
+                )}
+              </p>
+
+              {/* Balance tiles */}
+              <div className="grid grid-cols-2 gap-2">
+                <Tile
+                  label="Bank balance"
+                  tone="volt"
+                  value={typeof diagData.balance.bankBalance === 'number' ? compactNaira(diagData.balance.bankBalance) : diagData.balance.bankBalance}
+                />
+                <Tile label="Available" value={compactNaira(diagData.balance.available)} />
+                <Tile label="Total in" value={compactNaira(diagData.balance.ledgerIn)} />
+                <Tile label="Total out" value={compactNaira(diagData.balance.ledgerOut)} />
+              </div>
+
+              {/* Payout stats */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Payout stats</h3>
+                <div className="flex flex-wrap gap-1.5">
+                  <Pill tone="good">{diagData.payoutStats.completedPayouts} completed</Pill>
+                  <Pill tone="bad">{diagData.payoutStats.failedPayouts} failed</Pill>
+                  <Pill tone="warn">{diagData.payoutStats.processingPayouts} processing</Pill>
+                  <Pill tone="muted">{diagData.payoutStats.pendingPayouts} pending</Pill>
+                </div>
+              </div>
+
+              {/* Recent payouts */}
+              {diagData.recentPayouts.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Recent payouts</h3>
+                  <div className="overflow-x-auto -mx-6 px-6">
+                    <table className="w-full text-xs text-left" style={{ minWidth: 460 }}>
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="pb-2 pr-3 font-bold uppercase tracking-wider text-gray-500">Status</th>
+                          <th className="pb-2 pr-3 font-bold uppercase tracking-wider text-gray-500">Amount</th>
+                          <th className="pb-2 pr-3 font-bold uppercase tracking-wider text-gray-500">Beneficiary</th>
+                          <th className="pb-2 font-bold uppercase tracking-wider text-gray-500">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {diagData.recentPayouts.map((p) => (
+                          <tr key={p.id}>
+                            <td className="py-2 pr-3">
+                              <Pill tone={p.status === 'completed' ? 'good' : p.status === 'failed' ? 'bad' : 'muted'}>
+                                {p.status}
+                              </Pill>
+                            </td>
+                            <td className="py-2 pr-3 tabular-nums text-ink">{formatCurrency(p.amount)}</td>
+                            <td className="py-2 pr-3 text-ink max-w-[140px] truncate">{p.beneficiaryName}</td>
+                            <td className="py-2 whitespace-nowrap text-gray-500">{dayTime(p.createdAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Show error messages for failed payouts */}
+                  {diagData.recentPayouts.filter((p) => p.errorMessage).map((p) => (
+                    <p key={p.id} className="mt-1 text-xs text-kit-600">
+                      <span className="font-bold">{p.beneficiaryName}:</span> {p.errorMessage}
+                    </p>
+                  ))}
+                </div>
+              )}
+
+              {/* Recent transfers */}
+              {diagData.recentTransfers.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Recent transfers</h3>
+                  <div className="overflow-x-auto -mx-6 px-6">
+                    <table className="w-full text-xs text-left" style={{ minWidth: 380 }}>
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="pb-2 pr-3 font-bold uppercase tracking-wider text-gray-500">Status</th>
+                          <th className="pb-2 pr-3 font-bold uppercase tracking-wider text-gray-500">Amount</th>
+                          <th className="pb-2 pr-3 font-bold uppercase tracking-wider text-gray-500">Sender</th>
+                          <th className="pb-2 font-bold uppercase tracking-wider text-gray-500">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {diagData.recentTransfers.map((t) => (
+                          <tr key={t.id}>
+                            <td className="py-2 pr-3">
+                              <Pill tone={t.status === 'matched' ? 'good' : t.status === 'unmatched' ? 'bad' : 'muted'}>
+                                {t.status}
+                              </Pill>
+                            </td>
+                            <td className="py-2 pr-3 tabular-nums text-ink">{formatCurrency(t.amount)}</td>
+                            <td className="py-2 pr-3 text-ink max-w-[140px] truncate">{t.senderName}</td>
+                            <td className="py-2 whitespace-nowrap text-gray-500">{dayTime(t.receivedAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Members */}
+              {diagData.members.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                    Members ({diagData.members.length})
+                  </h3>
+                  <ul className="space-y-1.5">
+                    {diagData.members.map((m) => (
+                      <li key={m.playerId} className="flex items-center justify-between text-xs">
+                        <span className="text-ink font-medium truncate mr-2">{m.name}</span>
+                        <span className="flex gap-2 shrink-0 tabular-nums text-gray-500">
+                          {m.credit > 0 && <span className="text-pitch-600">+{formatCurrency(m.credit)}</span>}
+                          {m.extra > 0 && <span className="text-amber-600">{formatCurrency(m.extra)} extra</span>}
+                          {m.waiting > 0 && <span className="text-kit-600">{formatCurrency(m.waiting)} waiting</span>}
+                          {m.credit === 0 && m.extra === 0 && m.waiting === 0 && <span>—</span>}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </Sheet>
+      )}
     </>
   );
 }
