@@ -321,8 +321,8 @@ export class SessionsService {
           (session.payments ?? []).filter((p) => p.attendance !== 'no_show').map((p) => p.playerId),
           {
             kind: 'vote_open',
-            title: `Who was Player of the Match? 🏆`,
-            body: `${session.group.name}: Player of the Match, your Best VII and a few awards. About a minute.`,
+            title: `Full time! Who ran the show? 🏆`,
+            body: `${session.group.name}: vote Player of the Match and your Best VII. One minute.`,
             url: `/v/${token}`,
           },
         );
@@ -421,8 +421,8 @@ export class SessionsService {
     const squad = (session.payments ?? []).filter((p) => p.attendance !== 'no_show').length;
     const { delivered, missed } = await this.notifications.notifyPlayers(waiting, {
       kind: 'vote_nudge',
-      title: 'Who was Player of the Match? 🏆',
-      body: `${session.group?.name ?? 'Your group'}: ${voted.size}/${squad} have voted. About a minute.`,
+      title: 'Your vote is still missing ⏳',
+      body: `${session.group?.name ?? 'Your group'}: ${voted.size} of ${squad} have voted. Don’t let the others pick Player of the Match.`,
       url: `/v/${token}`,
     });
     return { sent: delivered, missed, waiting: waiting.length };

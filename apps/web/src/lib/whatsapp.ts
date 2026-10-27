@@ -97,19 +97,24 @@ export function groupInviteMessage(g: Parameters<typeof gameInviteMessage>[0] & 
 
 /** The vote link for the group chat: at full time, or as the last call before it closes. */
 export function groupVoteMessage(v: { groupName: string; link: string; ballots: number; squadSize: number; closes?: string | null; closing?: boolean }) {
+  // Last call: the turnout is the nudge (nobody wants someone else picking their Player of the Match).
   if (v.closing) {
+    const left = Math.max(0, v.squadSize - v.ballots);
     return [
-      `⏳ Voting closes${v.closes ? ` ${v.closes}` : ' soon'}. ${v.ballots} of ${v.squadSize} have voted.`,
-      `${v.groupName}: pick Player of the Match and your Best VII (about a minute):`,
+      `⏳ Last call, ${v.groupName}! Voting closes ${v.closes ?? 'soon'}.`,
+      v.ballots
+        ? `${v.ballots} of ${v.squadSize} have voted${left ? `, ${left} still to go` : ''}. Don’t let the others pick your Player of the Match 👀`
+        : 'Nobody has voted yet. Be the one who decides 👀',
+      `One minute 👇`,
       v.link,
     ].join('\n');
   }
+  // Full time: the day just ended, so the message is about who stood out, not about a form.
   return [
-    `🏆 Full time, ${v.groupName}!`,
-    `Vote for Player of the Match and your Best VII (about a minute):`,
+    `🏁 FULL TIME, ${v.groupName}!`,
+    `Who ran the show today? 🔥`,
+    `Vote Player of the Match and your Best VII. One minute 👇`,
     v.link,
-    v.closes ? `Voting closes ${v.closes}.` : '',
-  ]
-    .filter(Boolean)
-    .join('\n');
+    v.closes ? `Winners revealed when voting closes, ${v.closes}.` : 'Winners revealed when voting closes.',
+  ].join('\n');
 }

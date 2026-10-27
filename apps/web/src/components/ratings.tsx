@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { groupVoteMessage } from '@/lib/whatsapp';
 import { photoUrl } from '@/lib/http';
 import type { Bibs } from '@pitchaside/shared';
 import { teamName } from '@/lib/teams';
@@ -338,7 +339,7 @@ export function SessionVotingCard({
   if (!voting) return null;
 
   const share = () => {
-    const text = `⚽ ${groupName} — vote for Player of the Match and your Best VII (about a minute): ${voting.link}`;
+    const text = groupVoteMessage({ groupName, link: voting.link, ballots: voting.ballots, squadSize: voting.squadSize, closes: voting.closesAt ? closeTime(voting.closesAt) : null });
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
   };
   const copy = () =>
@@ -468,7 +469,7 @@ export function timeLeft(at: string, now = Date.now()) {
  * When the vote closes, kept up to date: quiet while there's time ("Closes tomorrow at 10pm"),
  * then a pulsing countdown for the last 3 hours ("Closes in 2h 40m"). Nothing once it's shut.
  */
-export function VoteClock({ closesAt, tone = 'light', className = '' }: { closesAt?: string | null; tone?: 'light' | 'sun'; className?: string }) {
+export function VoteClock({ closesAt, tone = 'light', className = '' }: { closesAt?: string | null; tone?: 'light' | 'sun' | 'dark'; className?: string }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!closesAt) return;
@@ -479,7 +480,7 @@ export function VoteClock({ closesAt, tone = 'light', className = '' }: { closes
   const left = timeLeft(closesAt, now);
   if (!left) return null;
   const soon = new Date(closesAt).getTime() - now <= 3 * 3_600_000;
-  if (!soon) return <span className={`text-xs ${tone === 'sun' ? 'text-ink/70' : 'text-gray-500'} ${className}`}>Closes {closeWords(closesAt, new Date(now))}</span>;
+  if (!soon) return <span className={`text-xs ${tone === 'sun' ? 'text-ink/70' : tone === 'dark' ? 'text-white/65' : 'text-gray-500'} ${className}`}>Closes {closeWords(closesAt, new Date(now))}</span>;
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full bg-kit-500 px-2 py-0.5 text-[11px] font-extrabold text-ink tabular-nums whitespace-nowrap animate-pop-in ${className}`} role="timer" aria-label={`Voting closes in ${left}`}>
       <span className="relative flex w-1.5 h-1.5" aria-hidden>

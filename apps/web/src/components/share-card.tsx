@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { BallSpinner } from '@/components/skeleton';
+import { matchCaption, type MatchWordsCard } from '@/lib/match-words';
 
 /**
  * "Share match card": opens a sheet with the match-day card image, then shares
@@ -65,7 +66,7 @@ export function ShareCardButton({
       <button type="button" onClick={() => setOpen(true)} className={className} aria-label={label} title={label}>
         {children}
       </button>
-      {open && <ShareSheet path={path} heading={heading} fileName={fileName} caption={caption} onClose={() => setOpen(false)} />}
+      {open && <ShareSheet path={path} token={page ? undefined : token} heading={heading} fileName={fileName} caption={caption} onClose={() => setOpen(false)} />}
     </>
   );
 }
@@ -76,7 +77,30 @@ function imageOf(path: string) {
   return `${p}/image${q ? `?${q}` : ''}`;
 }
 
-function ShareSheet({ path, heading, fileName, caption, onClose }: { path: string; heading: string; fileName: string; caption: string; onClose: () => void }) {
+function ShareSheet({
+  path,
+  token,
+  heading,
+  fileName,
+  caption: given,
+  onClose,
+}: {
+  path: string;
+  /** A match card: its caption is written from the result itself (who won, or a call to vote). */
+  token?: string;
+  heading: string;
+  fileName: string;
+  caption: string;
+  onClose: () => void;
+}) {
+  const [caption, setCaption] = useState(given);
+  useEffect(() => {
+    if (!token) return;
+    fetch(`/api/public/votes/${encodeURIComponent(token)}/card`)
+      .then((res) => (res.ok ? (res.json() as Promise<MatchWordsCard>) : null))
+      .then((card) => card && setCaption(matchCaption(card)))
+      .catch(() => {});
+  }, [token]);
   const [file, setFile] = useState<File | null>(null);
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
