@@ -22,7 +22,8 @@ import {
   type RsvpBoard,
   type SessionVoting,
 } from '@/lib/api';
-import { openWhatsApp } from '@/lib/whatsapp';
+import { gameInviteMessage, openWhatsApp } from '@/lib/whatsapp';
+import { WhatsAppGlyph } from '@/components/game/group-message-sheet';
 import { isVotingOpen } from '@/lib/game-status';
 import { formatAccountNumber, frequencyShort, paymentShareText } from '@/lib/billing';
 import { CountUp, CountUpNaira, LiveDot, stagger } from '@/components/motion';
@@ -457,28 +458,29 @@ export function MoneyCard({
 
         {/* Where players pay: the number first, then copy and share */}
         {account && (
-          <div className="mt-3 flex items-center gap-1.5 rounded-2xl border border-white/10 pl-3.5 pr-1.5 py-1.5">
-            <span className="flex-1 min-w-0">
-              <span className="block font-display text-[17px] font-extrabold tracking-[0.04em] tabular-nums text-white select-all">
+          <div className="mt-3 rounded-2xl border border-white/10 pl-3.5 pr-1.5 py-1.5">
+            <div className="flex items-center gap-1.5">
+              <span className="flex-1 min-w-0 font-display text-[17px] font-extrabold tracking-[0.04em] tabular-nums text-white select-all">
                 {formatAccountNumber(account.accountNumber)}
               </span>
-              <span className="block text-[11px] font-semibold text-white/65 truncate">
-                {account.bankName} · {account.accountName}
-              </span>
+              <button
+                onClick={() => copyNumber(account.accountNumber)}
+                aria-label="Copy account number"
+                className="press w-11 h-11 shrink-0 rounded-xl border border-white/15 text-white flex items-center justify-center hover:bg-white/10 transition-colors"
+              >
+                {copiedNumber ? <TickSmall /> : <CopySmall />}
+              </button>
+              <button
+                onClick={onOpenAccount}
+                className="press h-11 shrink-0 px-3 rounded-xl border border-white/15 text-[13px] font-bold text-white hover:bg-white/10 transition-colors"
+              >
+                Share
+              </button>
+            </div>
+            {/* Under the number at full width, so the account name isn't cut off by the buttons */}
+            <span className="block pr-2 pb-1 text-[12px] font-semibold leading-snug text-white/65">
+              {account.bankName} · {account.accountName}
             </span>
-            <button
-              onClick={() => copyNumber(account.accountNumber)}
-              aria-label="Copy account number"
-              className="press w-11 h-11 shrink-0 rounded-xl border border-white/15 text-white flex items-center justify-center hover:bg-white/10 transition-colors"
-            >
-              {copiedNumber ? <TickSmall /> : <CopySmall />}
-            </button>
-            <button
-              onClick={onOpenAccount}
-              className="press h-11 shrink-0 px-3 rounded-xl border border-white/15 text-[13px] font-bold text-white hover:bg-white/10 transition-colors"
-            >
-              Share
-            </button>
           </div>
         )}
 
@@ -752,6 +754,9 @@ export function GameCard({
             open={gameOpen}
             onToggle={toggleGame}
             vote={vote}
+            inviteLink={money.billing?.link}
+            groupName={group.name}
+            where={group.location}
           />
         ) : (
           <div>
@@ -805,7 +810,14 @@ function GameSection({
   open,
   onToggle,
   vote,
+  inviteLink,
+  groupName,
+  where,
 }: {
+  /** The group's join link: with it the game can be shared on WhatsApp from here. */
+  inviteLink?: string;
+  groupName: string;
+  where?: string | null;
   game: ISessionWithDetails;
   rsvp: RsvpBoard | null;
   canManage: boolean;
@@ -875,16 +887,7 @@ function GameSection({
           href: `${gameHref}?tab=payments`,
         }
       : null,
-    openSpots > 0
-      ? {
-          key: 'open',
-          dot: 'bg-white/25',
-          label: played
-            ? `${openSpots} spot${openSpots === 1 ? '' : 's'} weren't filled`
-            : `${openSpots} spot${openSpots === 1 ? '' : 's'} free${openAmount > 0 ? ` · ${formatCurrency(openAmount)} if filled` : ''}`,
-          href: `${gameHref}?tab=teams`,
-        }
-      : null,
+    // Places still free are in the headline ("17 of 28 in") and on the game page, not a row here.
   ].filter(Boolean) as { key: string; dot: string; label: string; href: string }[];
 
   return (
@@ -1003,7 +1006,36 @@ function GameSection({
 
       </Collapse>
 
-      <PrimaryAction phase={phase} game={game} owing={owing.length} canManage={canManage} reminding={reminding} onRemind={onRemind} />
+      {/* Before the game (and on the day, for late arrivals) it can be shared from here too: Share
+          sits beside the main button, smaller, as on the game page. */}
+      {inviteLink && (phase === 'before' || phase === 'matchday') ? (
+        <div className="mt-4 flex gap-2">
+          <button
+            onClick={() =>
+              openWhatsApp(
+                gameInviteMessage({
+                  groupName,
+                  when: `${when.replace(',', '')}${kickoff ? ` · ${prettyTime(kickoff)}` : ''}`,
+                  where,
+                  inCount: taken,
+                  places: capacity || undefined,
+                  link: inviteLink,
+                }),
+              )
+            }
+            aria-label="Share the game on WhatsApp"
+            className="press shrink-0 inline-flex items-center justify-center gap-1.5 h-12 px-4 rounded-2xl bg-white/10 text-white text-[15px] font-bold hover:bg-white/20 transition-colors"
+          >
+            <WhatsAppGlyph className="w-5 h-5" />
+            Share
+          </button>
+          <div className="flex-1 min-w-0 [&>*]:mt-0">
+            <PrimaryAction phase={phase} game={game} owing={owing.length} canManage={canManage} reminding={reminding} onRemind={onRemind} />
+          </div>
+        </div>
+      ) : (
+        <PrimaryAction phase={phase} game={game} owing={owing.length} canManage={canManage} reminding={reminding} onRemind={onRemind} />
+      )}
       {/* A played game nobody ended: voting only opens once it is */}
       {phase === 'after' && game.status !== 'completed' && canManage && (
         <button

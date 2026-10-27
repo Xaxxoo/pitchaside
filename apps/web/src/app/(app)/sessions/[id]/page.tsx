@@ -488,6 +488,10 @@ export default function GamePage() {
         <AddToGameSheet
           members={notOnGame}
           late={!before}
+          onQr={isGame ? () => {
+            setAdding(false);
+            setShowQr(true);
+          } : undefined}
           onClose={() => setAdding(false)}
           onAddNew={async (p) => {
             try {
@@ -603,7 +607,6 @@ export default function GamePage() {
               canMove={(p) => p.status === PaymentStatus.PAID && p.source === 'transfer' && otherDues(p).length > 0}
               busyId={busyId}
               onAdd={canAdd ? () => setAdding(true) : undefined}
-              onQr={isGame && session.status === 'upcoming' ? () => setShowQr(true) : undefined}
               onAction={onPlayerAction}
               onBulkPaid={async (ids) => {
                 try {

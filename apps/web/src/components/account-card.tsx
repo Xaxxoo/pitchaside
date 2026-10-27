@@ -194,9 +194,10 @@ export function PayIntoCard({
             aria-label={`Copy payment code ${reference}`}
             className="press mt-4 w-full flex items-center justify-between gap-3 rounded-2xl bg-volt-400 text-ink px-4 py-3 text-left"
           >
-            <span>
-              <span className="block text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink/60">Payment code · put it in the description</span>
-              <span className="font-display text-2xl font-extrabold tracking-[0.12em]">{reference}</span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-extrabold uppercase tracking-[0.14em] text-ink/60">Payment code</span>
+              <span className="block font-display text-2xl font-extrabold tracking-[0.12em]">{reference}</span>
+              <span className="block text-[12px] font-semibold text-ink/70 truncate">Put it in the transfer note</span>
             </span>
             <span className="shrink-0 inline-flex items-center min-h-11 px-3.5 rounded-xl text-[13px] font-bold bg-ink text-volt-300">
               {copied === 'ref' ? 'Copied ✓' : 'Copy'}
@@ -310,8 +311,9 @@ export function SendCard({
                 className="press mt-4 w-full flex items-center justify-between gap-3 rounded-2xl bg-volt-400 text-ink px-4 py-3 text-left"
               >
                 <span className="min-w-0">
-                  <span className="block text-[11px] font-bold text-ink/70">Payment code · put it in the description</span>
-                  <span className="font-display text-2xl font-extrabold tracking-[0.12em]">{reference}</span>
+                  <span className="block text-[11px] font-bold text-ink/70">Payment code</span>
+                  <span className="block font-display text-2xl font-extrabold tracking-[0.12em]">{reference}</span>
+                  <span className="block text-[12px] font-semibold text-ink/70 truncate">Put it in the transfer note</span>
                 </span>
                 <span className="shrink-0 inline-flex items-center min-h-11 px-3.5 rounded-xl text-[13px] font-bold bg-ink text-volt-300">
                   {copied === 'ref' ? 'Copied ✓' : 'Copy'}

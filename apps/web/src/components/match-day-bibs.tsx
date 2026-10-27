@@ -10,6 +10,7 @@ import type { TeamKey } from '@/lib/api';
 import { getGameLineup, getGameTimer, pickBib, type GameLineup, type GamePaid } from '@/lib/player';
 import { GameTimer, type TimerApi } from '@/components/game-timer';
 import { Avatar } from '@/components/ratings';
+import { Collapse } from '@/components/collapse';
 
 const WATCH: TimerApi = { load: getGameTimer };
 
@@ -31,6 +32,7 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   const toast = useToast();
   const [lineup, setLineup] = useState<GameLineup | null>(null);
   const [saving, setSaving] = useState<TeamKey | null>(null);
+  const [teamsOpen, setTeamsOpen] = useState(false);
   // A captain switching sides is asked first: the armband stays with the side they leave.
   const [switching, setSwitching] = useState<TeamKey | null>(null);
 
@@ -79,6 +81,7 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   }
 
   const byTeam = (t: TeamKey | null) => lineup.squad.filter((p) => p.team === t);
+  const sidesNow = teams.filter((t) => byTeam(t).length);
   const noBib = byTeam(null);
 
   const myTeam = lineup.myTeam;
@@ -141,8 +144,36 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
       {lineup.live && lineup.live.games.length > 0 && <Live live={lineup.live} captains={lineup.captains} bibs={lineup.bibs} myTeam={lineup.myTeam} />}
 
 
+      {/* The teams fold into one line: the card stays short, and a tap shows everyone */}
       {lineup.squad.some((p) => p.team) && (
-        <div className="space-y-2">
+        <button
+          type="button"
+          onClick={() => setTeamsOpen((o) => !o)}
+          aria-expanded={teamsOpen}
+          aria-controls={`${sessionId}-teams`}
+          className="press w-full min-h-12 flex items-center gap-2.5 -mx-1 px-1 rounded-xl text-left hover:bg-white/[0.06]"
+        >
+          <span className="flex-1 min-w-0">
+            <span className="block text-[13px] font-bold text-white">{teamsOpen ? 'Hide the teams' : 'See the teams'}</span>
+            <span className="block text-[12px] font-semibold text-white/65 truncate tabular-nums">
+              {sidesNow.length <= 2
+                ? sidesNow.map((t) => `${teamName(t, lineup.captains, lineup.bibs)} ${byTeam(t).length}`).join(' · ')
+                : `${sidesNow.length} teams · ${lineup.squad.filter((p) => p.team).length} players`}
+            </span>
+          </span>
+          <span className="shrink-0 flex -space-x-1" aria-hidden>
+            {sidesNow.map((t) => (
+              <span key={t} className="w-3.5 h-3.5 rounded-full ring-2 ring-[#123a22]" style={bibFill(t, lineup.bibs)} />
+            ))}
+          </span>
+          <svg className={`w-4 h-4 shrink-0 text-white/60 transition-transform duration-300 ${teamsOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.75} stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          </svg>
+        </button>
+      )}
+      {lineup.squad.some((p) => p.team) && (
+        <Collapse open={teamsOpen} id={`${sessionId}-teams`}>
+        <div className="space-y-2 pb-1">
           {teams
             .filter((t) => byTeam(t).length)
             .map((t) => (
@@ -178,6 +209,7 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
             </div>
           )}
         </div>
+        </Collapse>
       )}
     </div>
   );

@@ -97,7 +97,6 @@ export function PlayerList({
   canMove,
   busyId,
   onAdd,
-  onQr,
   onAction,
   onBulkPaid,
 }: {
@@ -110,10 +109,8 @@ export function PlayerList({
   /** Paid by transfer, and they have another unpaid game it could pay instead. */
   canMove?: (p: IPayment) => boolean;
   busyId: string | null;
-  /** Put a group member on the game by hand; before it's played. */
+  /** Put players on the game by hand (from the group, someone new, or the QR code). */
   onAdd?: () => void;
-  /** Opens this game's QR code. */
-  onQr?: () => void;
   onAction: (p: IPayment, action: Action) => void;
   onBulkPaid: (ids: string[]) => Promise<void>;
 }) {
@@ -149,6 +146,26 @@ export function PlayerList({
     ] as { key: Filter; label: string }[]
   ).filter((f) => (f.key === 'to_pay' ? !coveredByDues : f.key === 'no_show' ? count('no_show') > 0 : true));
 
+  // Adding players: the list's first row, shaped like a player, so it's found where players are.
+  const addRow = onAdd && !selecting && !needle && (
+    <li>
+      <button onClick={onAdd} className="press w-full flex items-center gap-3 px-3.5 min-h-16 py-2.5 text-left hover:bg-chalk/70">
+        <span className="w-10 h-10 shrink-0 rounded-full border-2 border-dashed border-gray-300 text-ink flex items-center justify-center" aria-hidden>
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.75} stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </span>
+        <span className="flex-1 min-w-0">
+          <span className="block text-[15px] font-bold text-ink">Add players</span>
+          <span className="block text-[13px] text-gray-500 truncate">Group, someone new, or QR code</span>
+        </span>
+        <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+        </svg>
+      </button>
+    </li>
+  );
+
   function togglePick(id: string) {
     setPicked((prev) => {
       const next = new Set(prev);
@@ -160,47 +177,24 @@ export function PlayerList({
 
   return (
     <section aria-labelledby="players-title">
+      {/* One job per row: the title (with Select, which changes how the list works), then the
+          filter. Adding players is the list's first row, so it never crowds the title. */}
       <div className="flex items-center justify-between gap-3">
         <h2 id="players-title" className="text-base font-bold text-ink">
-          {before ? 'Who’s in' : 'Who played'}
+          {before ? 'Who’s in' : 'Who played'} <span className="font-semibold text-gray-500 tabular-nums">· {rows.length}</span>
         </h2>
-        <div className="flex items-center gap-1 shrink-0">
-          {!coveredByDues && count('to_pay') > 1 && (
-            <button
-              onClick={() => {
-                setSelecting(!selecting);
-                setPicked(new Set());
-              }}
-              className="min-h-11 px-2 text-[13px] font-bold text-pitch-700 hover:text-ink"
-            >
-              {selecting ? 'Cancel' : 'Select'}
-            </button>
-          )}
-          {onQr && !selecting && (
-            <button
-              onClick={onQr}
-              aria-label="Game QR code"
-              className="press inline-flex items-center gap-1.5 min-h-11 pl-2.5 pr-3.5 rounded-full bg-white border border-gray-200 text-[13px] font-bold text-ink hover:border-ink"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
-              </svg>
-              QR
-            </button>
-          )}
-          {onAdd && !selecting && (
-            <button
-              onClick={onAdd}
-              className="press inline-flex items-center gap-1 min-h-11 pl-2.5 pr-3.5 rounded-full bg-white border border-gray-200 text-[13px] font-bold text-ink hover:border-ink"
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
-              Add players
-            </button>
-          )}
-        </div>
+        {!coveredByDues && count('to_pay') > 1 && (
+          <button
+            onClick={() => {
+              setSelecting(!selecting);
+              setPicked(new Set());
+            }}
+            aria-pressed={selecting}
+            className="press shrink-0 min-h-11 -mr-1 px-2 text-[14px] font-bold text-pitch-700 hover:text-ink"
+          >
+            {selecting ? 'Cancel' : 'Select to mark paid'}
+          </button>
+        )}
       </div>
 
       {/* Who to show as a dropdown, with search beside it once the list is long */}
@@ -228,18 +222,30 @@ export function PlayerList({
       {selecting && selectable.length > 0 && (
         <button
           onClick={() => setPicked(picked.size === selectable.length ? new Set() : new Set(selectable.map(({ p }) => p.id)))}
-          className="mt-2 h-9 px-1 text-[13px] font-bold text-ink"
+          className="mt-2 min-h-11 px-1 text-[13px] font-bold text-ink"
         >
           {picked.size === selectable.length ? 'Clear' : `Select all ${selectable.length} shown`}
         </button>
       )}
 
       {visible.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500">
-          {needle ? `No one called “${search.trim()}”.` : shown === 'to_pay' ? (before ? 'Everyone who’s in has paid.' : 'Everyone who came has paid.') : 'No one here.'}
-        </p>
+        // Said as a row of the list it stands in for, not a line floating in the middle
+        <ul className="mt-3 bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
+          {addRow}
+          <li className="flex items-center gap-3 px-3.5 min-h-16">
+            <span className="w-10 h-10 shrink-0 rounded-full bg-volt-300 text-ink flex items-center justify-center" aria-hidden>
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d={needle ? 'm21 21-5.2-5.2M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z' : 'm4.5 12.75 6 6 9-13.5'} />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1 truncate text-[15px] font-bold text-ink">
+              {needle ? `No one called “${search.trim()}”` : shown === 'to_pay' ? (before ? 'Everyone in has paid' : 'Everyone who came has paid') : 'No one here'}
+            </span>
+          </li>
+        </ul>
       ) : (
         <ul className="mt-3 bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
+          {addRow}
           {visible.map(({ p, s }, i) => {
             const busy = busyId === p.id;
             const canPick = selecting && s.key === 'to_pay';
@@ -281,7 +287,7 @@ export function PlayerList({
                     <button
                       onClick={() => onAction(p, 'paid')}
                       disabled={busy}
-                      className="press relative shrink-0 h-9 px-3.5 rounded-xl bg-ink text-volt-300 text-[13px] font-bold hover:bg-pitch-900 disabled:opacity-50"
+                      className="press relative shrink-0 h-11 px-3.5 rounded-xl bg-ink text-volt-300 text-[13px] font-bold hover:bg-pitch-900 disabled:opacity-50"
                     >
                       {busy ? '…' : 'Mark paid'}
                     </button>

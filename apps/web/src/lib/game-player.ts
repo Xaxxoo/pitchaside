@@ -32,7 +32,8 @@ export interface PlayerState {
 export function playerState(p: IPayment, coveredByDues: boolean, before = false): PlayerState {
   const s = stateNow(p, coveredByDues, before);
   // Before the game, everyone listed has said they're in: say so first ("In · paid by transfer").
-  return before && s.key !== 'no_show' ? { ...s, label: `In · ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}` } : s;
+  // A part payment keeps its line short ("₦500 left to pay") so it fits beside Mark paid.
+  return before && s.key !== 'no_show' && !p.paidSoFar ? { ...s, label: `In · ${s.label.charAt(0).toLowerCase()}${s.label.slice(1)}` } : s;
 }
 
 function stateNow(p: IPayment, coveredByDues: boolean, before: boolean): PlayerState {

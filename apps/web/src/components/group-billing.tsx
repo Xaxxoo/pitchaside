@@ -1253,7 +1253,10 @@ export function TransfersPanel({
           description="When players pay into the group account, they show up here with what they paid for."
         />
       ) : placed.length + notPlayers.length === 0 ? (
-        <p className="text-sm text-gray-500 text-center py-4">No one’s payment is in yet.</p>
+        <p className="flex items-center gap-2.5 min-h-14 px-4 rounded-3xl bg-white border border-gray-100 text-[14px] font-semibold text-gray-600">
+          <span className="w-2 h-2 shrink-0 rounded-full bg-gray-300" aria-hidden />
+          No player’s payment is in yet
+        </p>
       ) : listed.length === 0 ? (
         <div className="text-center py-4">
           <p className="text-sm text-gray-500">{q ? `Nothing matches “${search.trim()}”.` : 'Nothing here yet.'}</p>

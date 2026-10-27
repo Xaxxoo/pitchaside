@@ -22,7 +22,7 @@ export function FormHero({
           <h1 className="text-[30px] leading-none font-extrabold text-ink mt-1.5">{title}</h1>
           <p className="text-sm text-ink/70 mt-2 max-w-xs">{subtitle}</p>
         </div>
-        <div className="w-32 sm:w-40 shrink-0 -mb-px">{art}</div>
+        <div className="w-24 sm:w-40 shrink-0 -mb-px">{art}</div>
       </div>
     </div>
   );

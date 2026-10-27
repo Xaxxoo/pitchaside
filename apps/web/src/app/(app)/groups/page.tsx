@@ -116,8 +116,8 @@ export default function GroupsPage() {
                     <JerseyBadge label={group.name.charAt(0).toUpperCase()} name={group.name} className="w-11 h-11 shrink-0" />
                     <span className="flex-1 min-w-0">
                       <span className="block text-[15px] font-bold text-ink leading-snug truncate">{group.name}</span>
-                      <span className="block text-xs text-gray-600 mt-0.5 tabular-nums">
-                        {memberCount} member{memberCount === 1 ? '' : 's'}, {formatCurrency(group.feePerPlayer)} {frequencyShort(group.paymentType) || 'per game'}
+                      <span className="block text-xs text-gray-600 mt-0.5 tabular-nums truncate">
+                        {memberCount} player{memberCount === 1 ? '' : 's'} · {formatCurrency(group.feePerPlayer)} {frequencyShort(group.paymentType) || 'per game'}
                       </span>
                       {!group.accountNumber ? (
                         <span className="block text-xs font-semibold text-amber-700 mt-0.5">No bank account yet</span>
@@ -129,11 +129,11 @@ export default function GroupsPage() {
                   <button
                     onClick={() => setEditing(group)}
                     aria-haspopup="dialog"
-                    aria-label={`Edit ${group.name}`}
-                    className="press shrink-0 mr-3 inline-flex items-center gap-1.5 h-11 px-3 rounded-xl border border-gray-200 text-[13px] font-bold text-ink hover:border-ink"
+                    aria-label={`Edit group ${group.name}`}
+                    title="Edit group"
+                    className="press shrink-0 mr-3 w-11 h-11 inline-flex items-center justify-center rounded-full bg-chalk text-ink hover:bg-ink hover:text-volt-300 transition-colors"
                   >
                     {icon(ICON_PATHS.pencil)}
-                    <span aria-hidden>Edit</span>
                   </button>
                 </li>
               );

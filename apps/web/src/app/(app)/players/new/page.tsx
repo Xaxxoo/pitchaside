@@ -102,7 +102,7 @@ export default function NewPlayerPage() {
         tone="sky"
         eyebrow="Players"
         title="Add a player"
-        subtitle="Add their contact details so you can track games and payments."
+        subtitle="Their name and number, for games and payments."
         art={
           <svg viewBox="0 0 160 150" className="w-full h-auto" aria-hidden>
             <Player x={78} y={146} scale={0.92} pose="celebrate" kit={palette.kit} skin={skins[0]} hair="afro" number={23} numberColor={palette.white} />

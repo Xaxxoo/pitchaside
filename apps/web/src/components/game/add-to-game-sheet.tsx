@@ -24,6 +24,7 @@ export function AddToGameSheet({
   late = false,
   onAdd,
   onAddNew,
+  onQr,
   onClose,
 }: {
   /** Group members not on this game yet. */
@@ -33,6 +34,8 @@ export function AddToGameSheet({
   onAdd: (m: GroupMember) => Promise<void>;
   /** Left out where only group members can be added. */
   onAddNew?: (p: NewPlayer) => Promise<void>;
+  /** Shows the game's QR code: players scan it to join themselves. */
+  onQr?: () => void;
   onClose: () => void;
 }) {
   const titleId = useId();
@@ -137,6 +140,25 @@ export function AddToGameSheet({
             );
           })}
         </ul>
+      )}
+
+      {onQr && (
+        <button
+          type="button"
+          onClick={onQr}
+          className="press mt-3 w-full min-h-14 flex items-center gap-3 px-3.5 rounded-3xl bg-chalk text-left hover:bg-gray-100"
+        >
+          <span className="w-10 h-10 shrink-0 rounded-full bg-white flex items-center justify-center text-ink" aria-hidden>
+            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 3.75 9.375v-4.5ZM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 0 1-1.125-1.125v-4.5ZM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0 1 13.5 9.375v-4.5Z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75ZM6.75 16.5h.75v.75h-.75v-.75ZM16.5 6.75h.75v.75h-.75v-.75ZM13.5 13.5h.75v.75h-.75v-.75ZM13.5 19.5h.75v.75h-.75v-.75ZM19.5 13.5h.75v.75h-.75v-.75ZM19.5 19.5h.75v.75h-.75v-.75ZM16.5 16.5h.75v.75h-.75v-.75Z" />
+            </svg>
+          </span>
+          <span className="flex-1 min-w-0">
+            <span className="block text-[15px] font-bold text-ink">Show the game’s QR code</span>
+            <span className="block text-[13px] text-gray-600 truncate">They scan it and join themselves</span>
+          </span>
+        </button>
       )}
 
       {onAddNew && (

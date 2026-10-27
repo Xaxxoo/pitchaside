@@ -205,7 +205,7 @@ export function TeamsStep({
             <BibShirt key={t} team={t} bibs={lineup.bibs} className="w-7 h-7" />
           ))}
         </span>
-        <span className="flex-1 min-w-0 text-[14px] font-bold text-ink">Bibs and names for this game</span>
+        <span className="flex-1 min-w-0 truncate text-[14px] font-bold text-ink">Bibs and names</span>
         <span className="shrink-0 text-[13px] font-bold text-pitch-700">Change</span>
       </button>
 

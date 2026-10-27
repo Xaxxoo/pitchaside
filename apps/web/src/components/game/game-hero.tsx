@@ -153,13 +153,9 @@ export function GameHero({
           </span>
         </div>
         <h1 className="mt-1 font-display text-[28px] leading-none font-extrabold tabular-nums">{title}</h1>
-        {(time || venue) && (
-          <p className="mt-1.5 flex items-center gap-1.5 text-[13px] font-semibold text-white/75 min-w-0">
-            {time && <span className="shrink-0">{time} kick-off</span>}
-            {time && venue && <span className="text-white/40" aria-hidden>·</span>}
-            {venue && <span className="truncate">{venue}</span>}
-          </p>
-        )}
+        {/* Kick-off, then the venue on its own line, so a long venue is never cut off */}
+        {time && <p className="mt-1.5 text-[13px] font-semibold text-white/85">{time} kick-off</p>}
+        {venue && <p className={`${time ? 'mt-0.5' : 'mt-1.5'} text-[13px] font-semibold text-white/65`}>{venue}</p>}
 
         <div className="mt-3 grid grid-cols-2 gap-2">
           <Cell label={isDues ? 'Dues paid' : before ? 'Players in' : 'Players'} share={players.share} note={players.note}>

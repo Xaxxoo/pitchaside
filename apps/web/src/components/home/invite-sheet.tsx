@@ -140,19 +140,20 @@ export function InviteSheet({
       </div>
 
       {canManage && (
-        <div className="mt-3 rounded-2xl bg-kit-500/[0.07] border border-kit-500/30 px-3.5 py-3">
-          <p className="text-sm font-bold text-ink">Reset link</p>
-          <p className="text-xs text-gray-700 mt-0.5 leading-snug">
-            Makes a new link. The old one stops working straight away, so anyone you&apos;ve sent it to will need the new one.
-          </p>
-          <button
-            onClick={() => setConfirmRegen(true)}
-            disabled={busy}
-            className="press mt-2 min-h-11 px-3.5 rounded-xl border border-[#b23a12] text-sm font-bold text-[#b23a12] hover:bg-kit-500/10 disabled:opacity-60 transition-colors"
-          >
-            {busy ? 'Resetting…' : 'Reset link…'}
-          </button>
-        </div>
+        // Rare and risky, so quiet: a small row at the bottom, and the confirm says what it does
+        <button
+          onClick={() => setConfirmRegen(true)}
+          disabled={busy}
+          className="press mt-3 w-full min-h-11 flex items-center justify-between gap-3 px-1 text-left disabled:opacity-60"
+        >
+          <span className="min-w-0">
+            <span className="block text-[14px] font-bold text-[#b23a12]">{busy ? 'Resetting…' : 'Reset the link'}</span>
+            <span className="block text-[12px] text-gray-500 truncate">The old link stops working</span>
+          </span>
+          <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+            <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+          </svg>
+        </button>
       )}
 
       <ConfirmDialog

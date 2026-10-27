@@ -35,7 +35,7 @@ export function MatchDayFields({ value, onChange, idPrefix = 'g' }: { value: Mat
           checked={value.timerOn}
           onChange={(timerOn) => onChange({ timerOn })}
           title="Match timer"
-          sub="A countdown for each game on match day, on your phone and players’ too. Turn it off if the pitch keeps the time."
+          sub="A countdown on every phone in the game. Off if the pitch keeps time."
         />
         {value.timerOn && (
           <div>
@@ -52,7 +52,7 @@ export function MatchDayFields({ value, onChange, idPrefix = 'g' }: { value: Mat
               less="One minute less"
               more="One minute more"
             />
-            <p className="mt-1.5 text-xs text-gray-500">Minutes. The timer starts from this; change it on the day if you need to.</p>
+            <p className="mt-1.5 text-xs text-gray-500">Minutes. You can change it on the day.</p>
           </div>
         )}
       </div>
@@ -73,12 +73,14 @@ export function MatchDayFields({ value, onChange, idPrefix = 'g' }: { value: Mat
               <BibShirt key={s} team={s} bibs={value.bibs} className="w-8 h-8" />
             ))}
           </span>
-          <span id={id('bibs-now')} className="flex-1 min-w-0 text-[14px] font-semibold text-ink truncate">
-            {SIDES.slice(0, 4).map((s) => teamName(s, undefined, value.bibs)).join(', ')}
+          {/* The shirts show the colours; the names are for screen readers */}
+          <span id={id('bibs-now')} className="flex-1 min-w-0 text-[14px] font-semibold text-ink">
+            <span aria-hidden>4 sides</span>
+            <span className="sr-only">{SIDES.slice(0, 4).map((s) => teamName(s, undefined, value.bibs)).join(', ')}</span>
           </span>
           <span className="shrink-0 text-[13px] font-bold text-pitch-700">Change</span>
         </button>
-        <p className="mt-1.5 text-xs text-gray-500">Games from now on start with these; games already played keep theirs. Change one game on its Teams step.</p>
+        <p className="mt-1.5 text-xs text-gray-500">Games already played keep theirs. One game can change on its Teams step.</p>
       </div>
 
       {bibsOpen && (
