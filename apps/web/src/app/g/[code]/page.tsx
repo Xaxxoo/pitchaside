@@ -12,6 +12,8 @@ import { PlayerSignupForm, type SignupData } from '@/components/player-signup-fo
 import { formatCurrency, getPublicGroup, invitedBy, type PublicGroup } from '@/lib/api';
 import { frequencyShort } from '@/lib/billing';
 import { getPlayerGame, getPlayerHome, joinAsPlayer, signupFromLink, type JoinResult } from '@/lib/player';
+import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
+import { AccountRow, KnownAccountPicker } from '@/components/known-account-picker';
 import { PaymentType } from '@pitchaside/shared';
 
 type Stage = 'signup' | 'signin' | 'joined';
@@ -22,6 +24,12 @@ export default function GroupLinkPage() {
   const [notFound, setNotFound] = useState(false);
   const [stage, setStage] = useState<Stage>('signup');
   const [signedIn, setSignedIn] = useState(false);
+  // Who is signed in on this phone now, and the other player accounts it has used (names and
+  // emails only): the link offers them by name instead of a blank form.
+  const [me, setMe] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+  const [accounts, setAccounts] = useState<KnownAccount[]>([]);
+  // Already in this group: they go straight in, never through joining again.
+  const [openingAs, setOpeningAs] = useState<string | null>(null);
   const [lastEmail, setLastEmail] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,24 +42,39 @@ export default function GroupLinkPage() {
   useEffect(() => {
     const wanted = new URLSearchParams(window.location.search).get('game');
     setGame(wanted);
-    // Check if user has a valid player session via cookie
+    const known = knownAccounts();
+    setAccounts(known);
+    // Been here before with an account: lead with signing in (by name), not a new sign-up form.
+    if (known.length) {
+      setStage('signin');
+      setLastEmail(known[0].email);
+    }
+    const groupLoad = getPublicGroup(code);
+    groupLoad.then(setGroup).catch(() => setNotFound(true));
+    // Signed in already (the session cookie): who as, and whether they're in this group
     getPlayerHome()
-      .then(async () => {
+      .then(async (home) => {
         setSignedIn(true);
-        if (!wanted) return;
-        // Already in the group: straight to the game. Not in it yet: they join below first.
-        setGoingToGame(true);
-        try {
-          await getPlayerGame(wanted);
-          router.replace(`/me/games/${wanted}`);
-        } catch {
-          setGoingToGame(false);
+        setMe({ firstName: home.player.firstName, lastName: home.player.lastName, email: home.player.email });
+        setAccounts(knownAccounts());
+        if (wanted) {
+          // Already in the group: straight to the game. Not in it yet: they join below first.
+          setGoingToGame(true);
+          try {
+            await getPlayerGame(wanted);
+            router.replace(`/me/games/${wanted}`);
+          } catch {
+            setGoingToGame(false);
+          }
+          return;
+        }
+        const g = await groupLoad.catch(() => null);
+        if (g?.groupId && home.groups.some((x) => x.id === g.groupId)) {
+          setOpeningAs(home.player.firstName);
+          router.replace(`/me?group=${g.groupId}`);
         }
       })
       .catch(() => setSignedIn(false));
-    getPublicGroup(code)
-      .then(setGroup)
-      .catch(() => setNotFound(true));
   }, [code]);
 
   function done(res: JoinResult) {
@@ -59,6 +82,12 @@ export default function GroupLinkPage() {
     if (game) {
       setGoingToGame(true);
       router.replace(`/me/games/${game}?welcome=1`);
+      return;
+    }
+    // They were in the group all along: open it, rather than a "you're already in" stop.
+    if (res.alreadyMember) {
+      setOpeningAs(res.firstName);
+      router.replace(`/me?group=${res.groupId}`);
       return;
     }
     setJoined(res);
@@ -112,13 +141,31 @@ export default function GroupLinkPage() {
     );
   }
 
-  if (!group || goingToGame) {
+  if (!group || goingToGame || openingAs) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <BallLoader label={goingToGame ? 'Taking you to the game…' : 'Opening the dressing room…'} />
+        <BallLoader
+          label={
+            goingToGame
+              ? 'Taking you to the game…'
+              : openingAs && group
+                ? `You’re already in ${group.groupName}, ${openingAs}. Opening it…`
+                : 'Opening the dressing room…'
+          }
+        />
       </div>
     );
   }
+
+  // The accounts to offer by name: the one signed in first, then the others this phone has used
+  const others = accounts.filter((a) => a.email !== me?.email?.trim().toLowerCase());
+  const chosenAccount = accounts.find((a) => a.email === lastEmail);
+  const useAccount = (email: string) => {
+    setError(null);
+    setSignedIn(false);
+    setLastEmail(email);
+    setStage('signin');
+  };
 
   if (stage === 'joined' && joined) {
     // Per game: nothing is owed until they say they're in for a game, so send them to the games.
@@ -227,33 +274,62 @@ export default function GroupLinkPage() {
           {signedIn ? (
             <div className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-3">
               <h2 className="text-xl font-extrabold text-ink">Join {group.groupName}</h2>
-              <p className="text-sm text-gray-500">You&apos;re already signed in to PitchAside.</p>
+              {/* Which account joins, said by name, so someone with two picks the right one */}
+              {me && <AccountRow name={`${me.firstName} ${me.lastName}`} email={me.email} current />}
               <button
                 onClick={joinSignedIn}
                 disabled={busy}
                 className="w-full py-3.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {busy && <BallSpinner />}
-                {game ? 'Join and see the game' : `Join ${group.groupName}`}
+                {game ? 'Join and see the game' : me ? `Join as ${me.firstName}` : `Join ${group.groupName}`}
               </button>
-              <button onClick={() => setSignedIn(false)} className="w-full text-xs font-semibold text-gray-500 hover:text-ink">
-                Not you? Use another account
+              {others.length > 0 && (
+                <div className="pt-1">
+                  <p className="text-[12px] font-bold text-gray-500">Or use another account on this phone</p>
+                  <ul className="mt-1.5 space-y-1.5">
+                    {others.map((a) => (
+                      <li key={a.email}>
+                        <AccountRow name={[a.firstName, a.lastName].filter(Boolean).join(' ')} email={a.email} onPick={() => useAccount(a.email)} />
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <button onClick={() => useAccount('')} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
+                {others.length ? 'A different account' : 'Not you? Use another account'}
               </button>
             </div>
           ) : stage === 'signin' ? (
+            <>
+            {/* Accounts this phone has used: one tap fills the email, so they only type the password */}
+            <KnownAccountPicker accounts={accounts} chosen={lastEmail} onPick={(email) => { setError(null); setLastEmail(email); }} />
             <PasswordSignIn
-              title="Welcome back"
-              subtitle={game ? `Sign in and we'll take you to the game.` : `Sign in and we'll add you to ${group.groupName}.`}
+              key={chosenAccount?.email ?? 'other'}
+              title={chosenAccount ? `Welcome back, ${chosenAccount.firstName}` : 'Welcome back'}
+              subtitle={game ? `Sign in and we'll take you to the game.` : `Sign in and you're in ${group.groupName}.`}
               cta={game ? 'Sign in and see the game' : `Sign in & join`}
               initialEmail={lastEmail}
               onSignedIn={onSignedIn}
               footer={
-                <button onClick={() => { setError(null); setStage('signup'); }} className="w-full text-xs font-semibold text-gray-500 hover:text-ink">
+                <button onClick={() => { setError(null); setStage('signup'); }} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
                   New to PitchAside? Create an account
                 </button>
               }
             />
+            </>
           ) : (
+            <>
+            <button
+              onClick={() => {
+                setError(null);
+                setStage('signin');
+              }}
+              className="press mb-3 w-full min-h-12 flex items-center justify-between gap-3 px-4 rounded-2xl bg-chalk text-left"
+            >
+              <span className="text-[14px] font-bold text-ink">Already play on PitchAside?</span>
+              <span className="shrink-0 text-[14px] font-bold text-pitch-700">Sign in ›</span>
+            </button>
             <PlayerSignupForm
               subtitle={
                 game
@@ -268,29 +344,10 @@ export default function GroupLinkPage() {
                 setStage('signin');
               }}
             />
+            </>
           )}
         </div>
 
-        {/* Paying without their code wouldn't match them, so members pay from their own page. */}
-        <p className="mt-6 text-center text-sm text-gray-600">
-          Already a member?{' '}
-          {game ? (
-            <button
-              onClick={() => {
-                setError(null);
-                setStage('signin');
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              className="min-h-11 font-bold text-pitch-700 hover:text-ink"
-            >
-              Sign in to see the game
-            </button>
-          ) : (
-            <Link href="/me" className="font-bold text-pitch-700 hover:text-ink">
-              Sign in to see what you owe
-            </Link>
-          )}
-        </p>
       </div>
     </div>
   );
@@ -317,3 +374,4 @@ function CopyButton({ text }: { text: string }) {
     </button>
   );
 }
+

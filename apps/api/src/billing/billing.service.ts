@@ -436,6 +436,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       order: { createdAt: 'ASC' },
     });
     return {
+      /** So a signed-in player's phone can tell they're already in it, and skip joining. */
+      groupId: group.id,
       groupName: group.name,
       organizationName: group.organization?.name,
       organiserName: owner?.firstName?.trim() || null,
@@ -552,9 +554,9 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     return {
       alreadyMember,
       ...(gameId ? { gameId, onGame } : {}),
-      groupId: group.id,
       firstName: player.firstName,
       paymentRef: membership.paymentRef,
+      // Carries groupId too
       ...(await this.getPublicGroup(group.inviteCode)),
     };
   }
