@@ -126,7 +126,7 @@ export function gameMoney(game: ISessionWithDetails) {
   const paid = payments.filter((p) => gameStatusOf(p) === PaymentStatus.PAID);
   const owing = payments.filter((p) => gameStatusOf(p) === PaymentStatus.PENDING);
   // Marked paid by hand on the game page; we can't tell whether that was cash, so we don't say cash.
-  const byHand = paid.filter((p) => p.source === 'manual').reduce((sum, p) => sum + Number(p.amount), 0);
+  const byHand = paid.filter((p) => p.source === 'manual' || p.source === 'cash').reduce((sum, p) => sum + Number(p.amount), 0);
   const coveredByDues = Number(game.targetAmount) === 0 && payments.length > 0;
   return { payments, paid, owing, byHand, coveredByDues };
 }

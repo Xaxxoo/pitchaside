@@ -93,7 +93,7 @@ export function HowPaidSheet({
             {choice ? `Use this ${formatCurrency(Number(choice.amount))}` : 'Pick a transfer'}
           </button>
           <button disabled={busy} onClick={onOtherWay} className="w-full h-11 text-[15px] font-bold text-ink hover:text-pitch-700 disabled:opacity-40">
-            Paid in cash or another way
+            Paid in cash
           </button>
         </div>
       }

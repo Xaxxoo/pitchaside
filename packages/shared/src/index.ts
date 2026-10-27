@@ -112,11 +112,13 @@ export interface IPayment {
   paidAt?: string;
   markedBy?: string;
   /** 'dues' on a game's ₦0 entry in a group whose period dues cover games. */
-  source?: 'manual' | 'transfer' | 'dues' | null;
+  source?: 'manual' | 'transfer' | 'dues' | 'cash' | null;
   /** On games: paid for this game — their own due, or the period's dues that cover it. */
   gamePaid?: 'paid' | 'unpaid' | 'waived';
   /** Already sent towards this due by transfer (a part payment); only on a player's oldest unpaid due. */
   paidSoFar?: number;
+  /** The actual amount the player sent by transfer, when it differs from the due. */
+  transferAmount?: number;
   /** Whether they turned up: not set until the game is ended (counts as came), 'came', or 'no_show'. */
   attendance?: 'came' | 'no_show' | null;
   player?: IPlayer;

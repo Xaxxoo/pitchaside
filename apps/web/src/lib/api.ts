@@ -274,8 +274,8 @@ export function createPayment(data: {
   return http.post<IPayment>('/payments', data);
 }
 
-export function markPaid(paymentId: string): Promise<IPayment> {
-  return http.patch<IPayment>(`/payments/${paymentId}/mark-paid`);
+export function markPaid(paymentId: string, source?: 'cash' | 'manual'): Promise<IPayment> {
+  return http.patch<IPayment>(`/payments/${paymentId}/mark-paid`, { source });
 }
 
 export function markUnpaid(paymentId: string): Promise<IPayment> {
@@ -306,8 +306,8 @@ export function endGame(sessionId: string, noShows: string[]): Promise<ISessionW
   return http.post<ISessionWithDetails>(`/sessions/${sessionId}/end`, { noShows });
 }
 
-export function bulkMarkPaid(paymentIds: string[]): Promise<IPayment[]> {
-  return http.patch<IPayment[]>('/payments/bulk-mark-paid', { paymentIds });
+export function bulkMarkPaid(paymentIds: string[], source?: 'cash' | 'manual'): Promise<IPayment[]> {
+  return http.patch<IPayment[]>('/payments/bulk-mark-paid', { paymentIds, source });
 }
 
 // ── Paginated functions ──

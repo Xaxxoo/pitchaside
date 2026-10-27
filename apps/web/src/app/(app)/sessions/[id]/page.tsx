@@ -261,7 +261,9 @@ export default function GamePage() {
       setMovingPay(p);
       return;
     }
-    if (action === 'paid') {
+    if (action === 'cash') {
+      act(p, () => markPaid(p.id, 'cash'), `${first} paid in cash`);
+    } else if (action === 'paid') {
       // With money waiting for a name, ask whether it was one of those; otherwise just mark paid.
       if (unnamed.length) setHowPaid(p.id);
       else act(p, () => markPaid(p.id), `${first} marked paid`);
@@ -440,7 +442,7 @@ export default function GamePage() {
             onUseTransfer={(t, outcome) => payWithTransfer(p.id, t, outcome)}
             onOtherWay={() => {
               setHowPaid(null);
-              act(p, () => markPaid(p.id), `${nameOfPayment(p).split(' ')[0]} marked paid`);
+              act(p, () => markPaid(p.id, 'cash'), `${nameOfPayment(p).split(' ')[0]} paid in cash`);
             }}
             onClose={() => setHowPaid(null)}
           />

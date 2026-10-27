@@ -92,4 +92,7 @@ export class Payment {
    * sessions are loaded. Only on their oldest unpaid due in the group, which is where it goes.
    */
   paidSoFar?: number;
+
+  /** Not stored: the actual amount the player sent by transfer, set when sessions are loaded. */
+  transferAmount?: number;
 }

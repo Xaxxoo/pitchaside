@@ -71,7 +71,7 @@ export class PaymentsService {
     return saved;
   }
 
-  async markAsPaid(id: string, organizationId: string, markedBy?: string) {
+  async markAsPaid(id: string, organizationId: string, markedBy?: string, source?: 'cash' | 'manual') {
     const payment = await this.paymentsRepo
       .createQueryBuilder('payment')
       .innerJoinAndSelect('payment.session', 'session')
@@ -88,7 +88,7 @@ export class PaymentsService {
       await usePartPaid(tx, payment, payment.session.groupId);
       payment.status = PaymentStatus.PAID;
       payment.paidAt = new Date();
-      payment.source = 'manual';
+      payment.source = source ?? 'manual';
       if (markedBy) payment.markedBy = markedBy;
       return tx.save(payment);
     });
@@ -262,7 +262,7 @@ export class PaymentsService {
     return payment;
   }
 
-  async bulkMarkAsPaid(paymentIds: string[], organizationId: string, markedBy?: string) {
+  async bulkMarkAsPaid(paymentIds: string[], organizationId: string, markedBy?: string, source?: 'cash' | 'manual') {
     const payments: Payment[] = [];
     const sessionIds = new Set<string>();
 
@@ -287,7 +287,7 @@ export class PaymentsService {
         await usePartPaid(tx, payment, payment.session.groupId);
         payment.status = PaymentStatus.PAID;
         payment.paidAt = new Date();
-        payment.source = 'manual';
+        payment.source = source ?? 'manual';
         if (markedBy) payment.markedBy = markedBy;
         out.push(await tx.save(payment));
       }

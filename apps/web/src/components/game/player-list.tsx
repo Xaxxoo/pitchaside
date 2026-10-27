@@ -13,7 +13,7 @@ import { leftToPay, playerState, type PlayerStateKey } from '@/lib/game-player';
 
 
 type Filter = 'to_pay' | 'paid' | 'no_show' | 'all';
-type Action = 'paid' | 'no_show' | 'came' | 'free' | 'unpaid' | 'out' | 'details' | 'move';
+type Action = 'paid' | 'cash' | 'no_show' | 'came' | 'free' | 'unpaid' | 'out' | 'details' | 'move';
 
 const fullName = (p: IPayment) => (p.player ? `${p.player.firstName} ${p.player.lastName}` : 'Player');
 /** What they go by: their nickname, else their full name. */
@@ -45,7 +45,8 @@ function actionsFor(p: IPayment, key: PlayerStateKey, before: boolean): { action
     switch (key) {
       case 'to_pay':
         return [
-          { action: 'paid', title: 'Mark paid', detail: markPaidRest ?? 'They paid ahead in cash, or by a transfer with no name on it.' },
+          { action: 'cash', title: 'Paid cash', detail: 'They handed you money for this game.' },
+          { action: 'paid', title: 'Mark paid', detail: markPaidRest ?? 'Paid another way — a transfer with no name, or someone paid for them.' },
           { action: 'free', title: 'Let them play free', detail: 'They won’t be charged for this game.' },
           takeOff,
         ];
@@ -60,7 +61,8 @@ function actionsFor(p: IPayment, key: PlayerStateKey, before: boolean): { action
   switch (key) {
     case 'to_pay':
       return [
-        { action: 'paid', title: 'Mark paid', detail: markPaidRest ?? 'They paid in cash, or by a transfer with no name on it.' },
+        { action: 'cash', title: 'Paid cash', detail: 'They handed you money for this game.' },
+        { action: 'paid', title: 'Mark paid', detail: markPaidRest ?? 'Paid another way — a transfer with no name, or someone paid for them.' },
         { action: 'no_show', title: 'Didn’t come', detail: 'Said they were in and didn’t show. Nothing to pay.' },
         { action: 'free', title: 'Played free', detail: 'They came. Don’t charge them for this game.' },
       ];

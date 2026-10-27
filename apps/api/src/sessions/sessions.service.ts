@@ -12,6 +12,7 @@ import { localDate, prettyTime } from '../common/time.util';
 import { Group } from '../groups/entities/group.entity';
 import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { Payment, PaymentStatus } from '../payments/entities/payment.entity';
+import { BankTransfer, TransferStatus } from '../billing/entities/bank-transfer.entity';
 import { MailService } from '../mail/mail.service';
 import { CreateSessionDto, RecurrenceType } from './dto/create-session.dto';
 import { UpdateSessionDto } from './dto/update-session.dto';
@@ -214,7 +215,23 @@ export class SessionsService {
     if (!games.length) return sessions;
     const paid = await paidForGames(this.sessionsRepo.manager, games);
     for (const g of games) for (const p of g.payments ?? []) p.gamePaid = paid.get(g.id)?.get(p.playerId) ?? 'unpaid';
+    await this.markTransferAmounts(sessions);
     return sessions;
+  }
+
+  /** Sets payment.transferAmount from bank_transfers for paid-by-transfer payments. */
+  private async markTransferAmounts(sessions: Session[]) {
+    const payments = sessions.flatMap((s) => (s.payments ?? []).filter((p) => p.source === 'transfer' && p.status === PaymentStatus.PAID));
+    if (!payments.length) return;
+    const ids = payments.map((p) => p.id);
+    const transfers = await this.sessionsRepo.manager
+      .getRepository(BankTransfer)
+      .find({ where: { paymentId: In(ids), status: In([TransferStatus.MATCHED, TransferStatus.ASSIGNED]) }, select: ['paymentId', 'amount'] });
+    const byPayment = new Map(transfers.map((t) => [t.paymentId, Number(t.amount)]));
+    for (const p of payments) {
+      const sent = byPayment.get(p.id);
+      if (sent !== undefined) p.transferAmount = sent;
+    }
   }
 
   async findOne(id: string, organizationId: string) {
