@@ -45,6 +45,8 @@ async function silentRefresh(): Promise<boolean> {
   // Deduplicate concurrent refresh attempts
   if (refreshPromise) return refreshPromise;
   refreshPromise = (async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10_000);
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
       const body = storedRefreshToken ? JSON.stringify({ refreshToken: storedRefreshToken }) : undefined;
@@ -53,6 +55,7 @@ async function silentRefresh(): Promise<boolean> {
         headers,
         body,
         credentials: 'include',
+        signal: controller.signal,
       });
       if (res.ok) {
         const data = await res.json();
@@ -63,6 +66,7 @@ async function silentRefresh(): Promise<boolean> {
     } catch {
       return false;
     } finally {
+      clearTimeout(timeout);
       refreshPromise = null;
     }
   })();

@@ -153,10 +153,12 @@ export default function GamePage() {
   const liveDay = !!session && isGameKind && session.status === 'upcoming' && String(session.date).slice(0, 10) <= localToday();
   useEffect(() => {
     if (!liveDay) return;
-    const look = () => document.visibilityState === 'visible' && getLineup(id).then(setLineup).catch(() => undefined);
+    let stale = false;
+    const look = () => document.visibilityState === 'visible' && getLineup(id).then((l) => { if (!stale) setLineup(l); }).catch(() => undefined);
     const timer = window.setInterval(look, 20_000);
     document.addEventListener('visibilitychange', look);
     return () => {
+      stale = true;
       window.clearInterval(timer);
       document.removeEventListener('visibilitychange', look);
     };

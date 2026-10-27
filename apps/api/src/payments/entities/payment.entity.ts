@@ -47,14 +47,14 @@ export class Payment {
   status: PaymentStatus;
 
   @Column({ nullable: true })
-  paidAt: Date;
+  paidAt: Date | null;
 
   @Column({ nullable: true })
-  markedBy: string;
+  markedBy: string | null;
 
   /** 'manual' when an admin marked it, 'transfer' when reconciled from a bank transfer. */
   @Column({ nullable: true })
-  source: string;
+  source: string | null;
 
   /** Match-day side: 'A'–'F' (colours in the UI); null = not picked yet. */
   @Column({ type: 'varchar', nullable: true })

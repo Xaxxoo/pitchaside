@@ -281,7 +281,7 @@ export default function Dashboard() {
         detail:
           names.slice(0, 3).join(', ') +
           (names.length > 3 ? ` +${names.length - 3}` : '') +
-          (!coveredByDues && Number(owing[0]?.amount) > 0 ? ` · ${formatCurrency(owing[0].amount)} each` : ''),
+          (!coveredByDues && Number(owing[0]?.amount) > 0 ? ` · ${formatCurrency(Number(owing[0].amount))} each` : ''),
         tone: 'sun',
         icon: (
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>

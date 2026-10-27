@@ -107,10 +107,11 @@ export interface IPayment {
   id: string;
   sessionId: string;
   playerId: string;
-  amount: number;
+  /** PostgreSQL decimal: may serialize as a string; wrap with `Number()` before arithmetic. */
+  amount: number | string;
   status: PaymentStatus;
-  paidAt?: string;
-  markedBy?: string;
+  paidAt?: string | null;
+  markedBy?: string | null;
   /** 'dues' on a game's ₦0 entry in a group whose period dues cover games. */
   source?: 'manual' | 'transfer' | 'dues' | 'cash' | null;
   /** On games: paid for this game — their own due, or the period's dues that cover it. */
@@ -128,8 +129,12 @@ export interface IPayment {
 
 export enum AuditAction {
   PAYMENT_MARKED_PAID = 'payment_marked_paid',
+  PAYMENT_MARKED_UNPAID = 'payment_marked_unpaid',
   PAYMENT_WAIVED = 'payment_waived',
+  PAYMENT_NO_SHOW = 'payment_no_show',
+  PAYMENT_CAME = 'payment_came',
   PAYMENT_BULK_MARKED_PAID = 'payment_bulk_marked_paid',
+  PAYMENT_MOVED = 'payment_moved',
   SESSION_CREATED = 'session_created',
   SESSION_STATUS_CHANGED = 'session_status_changed',
   GROUP_CREATED = 'group_created',

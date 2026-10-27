@@ -416,7 +416,7 @@ function PlayerMoney({
           </span>
         </span>
         <span className="shrink-0 text-right">
-          <span className="block font-display text-[15px] font-extrabold text-ink tabular-nums">{formatCurrency(p.amount)}</span>
+          <span className="block font-display text-[15px] font-extrabold text-ink tabular-nums">{formatCurrency(Number(p.amount))}</span>
           <span className={`inline-block mt-0.5 px-2 py-0.5 rounded-full text-[11px] font-bold ${chip.cls}`}>{chip.text}</span>
         </span>
       </li>

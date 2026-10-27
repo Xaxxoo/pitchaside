@@ -111,9 +111,9 @@ export class PaymentsService {
       await releaseToExtra(tx, payment.session.groupId, [payment]);
       payment.status = PaymentStatus.PENDING;
       if (payment.attendance === 'no_show') payment.attendance = 'came';
-      payment.paidAt = null as any;
-      payment.source = null as any;
-      payment.markedBy = null as any;
+      payment.paidAt = null;
+      payment.source = null;
+      payment.markedBy = null;
       payment.fromCredit = '0';
       return tx.save(payment);
     });
@@ -185,8 +185,8 @@ export class PaymentsService {
       await releaseToExtra(tx, payment.session.groupId, [payment]);
       payment.status = PaymentStatus.WAIVED;
       payment.attendance = 'no_show';
-      payment.paidAt = null as any;
-      payment.source = null as any;
+      payment.paidAt = null;
+      payment.source = null;
       if (markedBy) payment.markedBy = markedBy;
       return tx.save(payment);
     });
@@ -200,7 +200,7 @@ export class PaymentsService {
     if (payment.attendance === 'no_show') {
       // Back to what they'd owe for the game; in dues groups the game itself costs nothing.
       payment.status = payment.source === 'dues' || Number(payment.amount) === 0 ? PaymentStatus.WAIVED : PaymentStatus.PENDING;
-      payment.markedBy = null as any;
+      payment.markedBy = null;
     }
     payment.attendance = 'came';
     const saved = await this.paymentsRepo.save(payment);
