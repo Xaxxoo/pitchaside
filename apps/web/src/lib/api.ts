@@ -620,6 +620,8 @@ export interface ExtraMoney {
   /** Extra put aside for someone not in the group yet, or no one knows who. */
   waiting: number;
   waitingNote: string | null;
+  /** The player asked from their app: the group can keep it, or send it back. */
+  request?: { kind: 'give' | 'refund'; amount: number; at: string | null } | null;
   lastTransfer: { id: string; amount: number; receivedAt: string } | null;
 }
 
@@ -669,6 +671,11 @@ export const KEPT_REASON_WORDS: Record<KeptReason | 'player_gave', string> = {
   sorted_in_person: 'Sorted out in person',
   other: 'Another reason',
 };
+
+/** The member offered their extra to the group from the player app: accept it. Organisers only. */
+export function acceptExtraGift(groupId: string, playerId: string): Promise<{ kept: number }> {
+  return http.post(`/groups/${groupId}/extra/${playerId}/accept-gift`);
+}
 
 /** The group keeps a member's extra: nobody is owed it any more. Organisers only. */
 export function keepExtraForGroup(groupId: string, playerId: string, reason: KeptReason, note?: string): Promise<{ kept: number }> {

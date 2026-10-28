@@ -207,6 +207,12 @@ export class StartGroupDto {
  * guessing is held back by the per-account limit instead (see rate-limit.ts).
  */
 @UseGuards(ThrottlerGuard)
+/** What a player asks about money the organiser holds for them. */
+class HeldMoneyRequestDto {
+  @IsIn(['give', 'refund'])
+  kind: 'give' | 'refund';
+}
+
 @Controller()
 export class PlayerAuthController {
   constructor(
@@ -505,6 +511,23 @@ export class PlayerPortalController {
   @Delete('games/:id/match-day/goals/:goalId')
   deleteGoal(@Param('id') id: string, @Param('goalId') goalId: string, @CurrentPerson() person: Person) {
     return this.portal.deleteGoal(person, id, goalId);
+  }
+
+  /** Money the organiser holds for them: use it for their own games, at once. */
+  @Post('groups/:groupId/held-money/use')
+  useHeldMoney(@Param('groupId', ParseUUIDPipe) groupId: string, @CurrentPerson() person: Person) {
+    return this.portal.useHeldMoney(person, groupId);
+  }
+
+  /** Ask the organiser to keep it for the group or send it back; nothing moves until they act. */
+  @Post('groups/:groupId/held-money/request')
+  requestHeldMoney(@Param('groupId', ParseUUIDPipe) groupId: string, @Body() dto: HeldMoneyRequestDto, @CurrentPerson() person: Person) {
+    return this.portal.requestAboutHeldMoney(person, groupId, dto.kind);
+  }
+
+  @Delete('groups/:groupId/held-money/request')
+  cancelHeldMoneyRequest(@Param('groupId', ParseUUIDPipe) groupId: string, @CurrentPerson() person: Person) {
+    return this.portal.requestAboutHeldMoney(person, groupId, null);
   }
 
   /** The bib the player was handed on the day. */

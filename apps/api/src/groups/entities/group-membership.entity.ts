@@ -6,6 +6,8 @@ import {
   ManyToOne,
   JoinColumn,
   Unique,
+  BeforeInsert,
+  BeforeUpdate,
 } from 'typeorm';
 import { Group } from './group.entity';
 import { Player } from '../../players/entities/player.entity';
@@ -70,6 +72,31 @@ export class GroupMembership {
   @Column({ name: 'waiting_note', type: 'varchar', length: 120, nullable: true })
   waitingNote: string | null;
 
+  /**
+   * What the member asked about their extra, for the organiser to act on: `give` (the group can
+   * keep it) or `refund` (send it back). Null when there's nothing pending.
+   */
+  @Column({ name: 'extra_request', type: 'varchar', length: 10, nullable: true })
+  extraRequest: 'give' | 'refund' | null;
+
+  /** How much the request was for: accepting never takes more than this, even if more extra arrives. */
+  @Column({ name: 'extra_request_amount', type: 'decimal', precision: 12, scale: 2, nullable: true })
+  extraRequestAmount: string | null;
+
+  @Column({ name: 'extra_request_at', type: 'timestamptz', nullable: true })
+  extraRequestAt: Date | null;
+
   @CreateDateColumn()
   joinedAt: Date;
+
+  /** A request is about held money: once there's none left (sorted any way at all), it's gone too. */
+  @BeforeInsert()
+  @BeforeUpdate()
+  dropRequestWhenNothingHeld() {
+    if (this.extra !== undefined && Number(this.extra ?? 0) <= 0.001 && this.extraRequest) {
+      this.extraRequest = null;
+      this.extraRequestAmount = null;
+      this.extraRequestAt = null;
+    }
+  }
 }

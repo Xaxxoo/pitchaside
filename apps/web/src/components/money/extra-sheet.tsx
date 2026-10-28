@@ -9,7 +9,7 @@ import { Avatar } from '@/components/ratings';
 import { KEPT_REASON_WORDS, formatCurrency, getGiveExtraPreview, type ExtraMoney, type ExtraSource, type GiveExtraPreview, type KeptReason, type OwedItem } from '@/lib/api';
 import { owedLabel, type MatchMember } from '@/lib/give-outcome';
 
-type Choice = 'someone' | 'unknown' | 'keep' | 'back' | 'group' | 'release';
+type Choice = 'someone' | 'unknown' | 'keep' | 'back' | 'group' | 'release' | 'accept';
 
 /** "Sat 17 Oct", or "October 2026 dues". */
 const dueLabel = (d: { date: string; label: string | null; kind: string }) =>
@@ -37,6 +37,7 @@ export function ExtraSheet({
   onHold,
   onRelease,
   onKeepForGroup,
+  onAcceptGift,
   onClose,
 }: {
   groupId: string;
@@ -52,13 +53,18 @@ export function ExtraSheet({
   onRelease: () => void;
   /** The group keeps it (nobody is owed it). Left out for treasurers: only organisers decide that. */
   onKeepForGroup?: (reason: KeptReason, note: string) => void;
+  /** They offered it to the group from their app: accept. Left out for treasurers. */
+  onAcceptGift?: () => void;
   onClose: () => void;
 }) {
   const waiting = source === 'waiting';
   const amount = waiting ? item.waiting : item.extra;
   const titleId = useId();
   const first = item.name.split(' ')[0];
-  const [choice, setChoice] = useState<Choice | null>(null);
+  // What they asked for from their app comes ready picked: accept their offer, or send it back.
+  const ask = waiting ? null : item.request ?? null;
+  const offered = ask ? Math.min(ask.amount, amount) : 0;
+  const [choice, setChoice] = useState<Choice | null>(ask?.kind === 'refund' ? 'back' : ask?.kind === 'give' && onAcceptGift ? 'accept' : null);
   const [query, setQuery] = useState('');
   const [to, setTo] = useState<MatchMember | null>(null);
   const [preview, setPreview] = useState<GiveExtraPreview | null>(null);
@@ -93,6 +99,9 @@ export function ExtraSheet({
         { key: 'release', title: `Put it back with ${first}’s extra`, hint: 'It wasn’t for anyone else' },
       ]
     : [
+        ...(ask?.kind === 'give' && onAcceptGift
+          ? [{ key: 'accept' as const, title: `Accept ${first}’s offer`, hint: `The group keeps ${formatCurrency(offered)}` }]
+          : []),
         { key: 'someone', title: 'Paying for someone else', hint: 'Like a friend’s game fee' },
         { key: 'unknown', title: 'For someone not in the group yet', hint: 'Or you don’t know who yet' },
         { key: 'keep', title: `Keep it for ${first}’s next game`, hint: 'They paid ahead' },
@@ -141,6 +150,10 @@ export function ExtraSheet({
     ) : choice === 'back' ? (
       <button onClick={onSendBack} className={`${btnPrimary} w-full`}>
         Send {formatCurrency(amount)} back to {first}
+      </button>
+    ) : choice === 'accept' && onAcceptGift ? (
+      <button disabled={busy} onClick={onAcceptGift} className={`${btnPrimary} w-full`}>
+        {busy ? 'Saving…' : `Accept ${formatCurrency(offered)} for the group`}
       </button>
     ) : choice === 'group' && onKeepForGroup ? (
       <button
@@ -210,6 +223,11 @@ export function ExtraSheet({
           </label>
         )}
       </>
+    ) : key === 'accept' ? (
+      <p className="text-[13px] leading-snug text-gray-600">
+        {first} won’t be owed it any more. The money stays in the account. {first} sees “You gave it to the group” in their history.
+        {amount - offered > 0.001 && ` The other ${formatCurrency(amount - offered)} came in after they offered and stays to sort.`}
+      </p>
     ) : key === 'release' ? (
       <p className="text-[13px] leading-snug text-gray-600">Back to {first}’s extra, to keep for them or send back.</p>
     ) : null;
@@ -235,7 +253,18 @@ export function ExtraSheet({
         </div>
         <p className="shrink-0 font-display text-[22px] font-extrabold tabular-nums text-ink">{formatCurrency(amount)}</p>
       </div>
-      <p className="mt-2 px-1 text-[12px] text-gray-500">{waiting ? 'It pays nothing until you choose.' : `More than ${first} owed. Nothing happens with it until you choose.`}</p>
+      {ask ? (
+        <Callout
+          tone="info"
+          className="mt-2"
+          title={ask.kind === 'give' ? `${first} offered ${formatCurrency(offered)} to the group` : `${first} asked for ${formatCurrency(offered)} back`}
+        >
+          {ask.at && new Date(ask.at).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '')}
+          {ask.kind === 'give' && !onAcceptGift && ' · Only an organiser can accept it.'}
+        </Callout>
+      ) : (
+        <p className="mt-2 px-1 text-[12px] text-gray-500">{waiting ? 'It pays nothing until you choose.' : `More than ${first} owed. Nothing happens with it until you choose.`}</p>
+      )}
 
       <div role="radiogroup" aria-label={waiting ? 'Who was it for?' : 'What was it for?'} className="mt-4 rounded-3xl bg-white border border-gray-200 divide-y divide-gray-100 overflow-hidden">
         {options.map((o) => {
