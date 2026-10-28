@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
+import { LEVELS, levelOf } from '@/lib/rating-level';
 import type { ClassicBreakdown, MatchRatingParts, RatingBreakdown, SteadyBreakdown } from '@/lib/api';
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
@@ -86,6 +87,7 @@ export function RatingBreakdownSheet({ name, load, onClose }: { name: string; lo
         sub={steady ? 'It follows their form, a few points at most each match day.' : '40% stats, 40% votes, 20% results, each against the rest of the club. 70 is the middle.'}
         onClose={onClose}
       />
+      {data && <LevelStrip rating={data.rating} first={first} />}
       {failed !== null ? (
         <p className="mt-6 text-center text-sm text-gray-600" role="alert">
           This didn’t load.{failed ? ` The server said: “${failed}”` : ''}
@@ -238,5 +240,26 @@ function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** Where the number puts them: the level by name, the five steps with theirs lit, and how far the next one is. */
+function LevelStrip({ rating, first }: { rating: number; first: string }) {
+  const l = levelOf(rating);
+  return (
+    <section aria-label={`${first} is a ${l.name}${l.next ? `, ${l.next.gap} from ${l.next.name}` : ''}`} className="mt-4 rounded-3xl bg-ink text-white px-4 py-3.5">
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="font-display text-[22px] leading-none font-extrabold text-volt-300 truncate">{l.name}</p>
+        <p className="shrink-0 text-[12px] font-bold text-white/70 tabular-nums">{l.next ? `${l.next.gap} to ${l.next.name}` : 'The top level'}</p>
+      </div>
+      <ol className="mt-3 grid grid-cols-5 gap-1" aria-hidden>
+        {LEVELS.map((x, i) => (
+          <li key={x.name} className="min-w-0">
+            <span className={`block h-1.5 rounded-full ${i < l.index ? 'bg-volt-300/50' : i === l.index ? 'bg-volt-300' : 'bg-white/15'}`} />
+            <span className={`mt-1 block truncate text-[10px] font-bold ${i === l.index ? 'text-volt-300' : 'text-white/50'}`}>{x.from ? `${x.from}+` : 'Up to 54'}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }

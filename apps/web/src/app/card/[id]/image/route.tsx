@@ -1,4 +1,5 @@
 import { ImageResponse } from 'next/og';
+import { levelOf } from '@/lib/rating-level';
 import { loadFonts } from '@/lib/og';
 import { Brand, C, DISPLAY, Face, Star, loadPhotos, oneLine } from '@/lib/og-card';
 import { getPlayerCard, type Ability, type PlayerCardData } from '../player-card';
@@ -55,6 +56,9 @@ function PlayerCard({ c }: { c: PlayerCardData }) {
       <div style={{ display: 'flex', flexDirection: 'column', position: 'absolute', top: 34, left: 44 }}>
         <div style={{ display: 'flex', fontFamily: DISPLAY, fontWeight: 800, fontSize: 132, lineHeight: 1 }}>{c.ovr ?? '–'}</div>
         <div style={{ display: 'flex', fontSize: 30, fontWeight: 700, letterSpacing: 4, marginTop: 4 }}>OVR</div>
+        {c.ovr != null && (
+          <div style={{ display: 'flex', marginTop: 10, fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>{levelOf(c.ovr).name.toUpperCase()}</div>
+        )}
         {c.provisional && (
           <div style={{ display: 'flex', marginTop: 10, padding: '4px 12px', borderRadius: 999, background: C.ink, color: C.volt300, fontSize: 18, fontWeight: 700, letterSpacing: 2 }}>
             SETTLING
