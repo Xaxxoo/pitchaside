@@ -16,7 +16,7 @@ export function QuickAddPlayers({ groupId, onAdded }: { groupId: string; onAdded
   const phoneSeen = useTouched();
   const [saving, setSaving] = useState(false);
   const [added, setAdded] = useState<string[]>([]);
-  const ready = form.firstName.trim().length >= 2 && form.lastName.trim().length >= 2;
+  const ready = form.firstName.trim().length >= 2 && form.lastName.trim().length >= 1;
 
   async function add(e: React.FormEvent) {
     e.preventDefault();

@@ -121,3 +121,22 @@ describe('Notifications on by default', () => {
     expect(mail.sendNotice).not.toHaveBeenCalled();
   });
 });
+
+describe('NotificationsService WhatsApp fallback', () => {
+  it('sends a player with no email (who cannot sign in) the club link to join, and others the page', async () => {
+    const { service, saved } = setup('whatsapp');
+    (withoutEmail as any).organization = { name: 'Lekki Ballers', inviteCode: 'club123' };
+    try {
+      await service.notifyPlayers(['p1', 'p2'], notice);
+    } finally {
+      (withoutEmail as any).organization = { name: 'Lekki Ballers' };
+    }
+    const sent = saved.filter((m) => m.channel !== 'push' && m.channel !== 'email');
+    const bisi = sent.find((m) => m.to?.includes('9876543'));
+    const emeka = sent.find((m) => m.to?.includes('1234567'));
+    expect(bisi?.body).toContain('Join to see it: ');
+    expect(bisi?.body).toContain('/join/club123');
+    expect(emeka?.body).toContain('/me/pay');
+    expect(emeka?.body).not.toContain('/join/');
+  });
+});

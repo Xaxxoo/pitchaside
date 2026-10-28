@@ -10,6 +10,8 @@ import { http, storeRefreshToken } from '@/lib/http';
 import { btnSecondary } from '@/components/buttons';
 import { KnownAccountPicker } from '@/components/known-account-picker';
 import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
+import { getPublicGroup } from '@/lib/api';
+import { getClub } from '@/lib/player';
 
 export default function PlayerLoginPage() {
   const router = useRouter();
@@ -87,15 +89,18 @@ function JoinWithLink() {
   const [link, setLink] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
 
-  function join(e: React.FormEvent) {
+  async function join(e: React.FormEvent) {
     e.preventDefault();
     const text = link.trim();
     // A full link (pitchaside.com/g/AbC12 or /join/AbC12), or just the code at the end of it.
     const path = text.match(/\/(g|join)\/([A-Za-z0-9_-]{4,})/);
     const code = path ? null : text.match(/^[A-Za-z0-9_-]{4,}$/)?.[0];
-    if (path) router.push(`/${path[1]}/${path[2]}`);
-    else if (code) router.push(`/g/${code}`);
-    else setProblem('That doesn’t look like a group link. It looks like pitchaside.com/g/… — ask your organiser to send it again.');
+    if (path) return router.push(`/${path[1]}/${path[2]}`);
+    if (!code) return setProblem('That doesn’t look like a group link. It looks like pitchaside.com/g/…. Ask your organiser to send it again.');
+    // Just a code: a group's, or the club's
+    if (await getPublicGroup(code).then(() => true, () => false)) return router.push(`/g/${code}`);
+    if (await getClub(code).then(() => true, () => false)) return router.push(`/join/${code}`);
+    setProblem('No group or club has that code. Ask your organiser to send the link again.');
   }
 
   return (

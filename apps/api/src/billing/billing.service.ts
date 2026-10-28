@@ -547,7 +547,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * Joined from a game's QR code: in a group without replies (where everyone is on every game,
    * but only games made after they joined), they're put on that game too. In groups that take
    * replies they say "I'm in" on the game like everyone else. Only this group's games that
-   * haven't finished. Returns whether they're on it.
+   * haven't finished, and not once the game has as many as the group plays with. Returns
+   * whether they're on it.
    */
   private async putOnGame(group: Group, playerId: string, gameId: string) {
     const game = await this.sessionsRepo.findOne({ where: { id: gameId, groupId: group.id, kind: SessionKind.GAME, status: SessionStatus.UPCOMING } });
@@ -555,6 +556,9 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     const on = await this.paymentsRepo.findOne({ where: { sessionId: game.id, playerId } });
     if (on) return true;
     if (group.requireRsvp) return false;
+    // A QR code on the pitch can't keep adding (and billing) people once the game has its numbers:
+    // they're in the group, and on the next game.
+    if (group.targetPlayers > 0 && (await this.paymentsRepo.count({ where: { sessionId: game.id } })) >= group.targetPlayers) return false;
     await this.paymentsRepo.save(this.paymentsRepo.create(squadEntry(group, game.id, playerId)));
     await this.applyCredits(group.id, [playerId]);
     await this.paymentsService.recalculateSessionTotal(game.id);

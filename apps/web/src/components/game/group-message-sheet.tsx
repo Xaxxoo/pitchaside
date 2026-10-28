@@ -11,7 +11,7 @@ import { buzz } from '@/components/motion';
 import { useToast } from '@/components/toast';
 import { getSessionVoting, type ISessionWithDetails, type SessionVoting } from '@/lib/api';
 import { closeWords } from '@/components/ratings';
-import { groupInviteMessage, groupVoteMessage, openWhatsApp } from '@/lib/whatsapp';
+import { gameLink, groupInviteMessage, groupVoteMessage, openWhatsApp } from '@/lib/whatsapp';
 
 /** What's being sent to the group: the link to say you're in (first call or last), or the vote (at full time or before it closes). */
 export type SendKind = 'invite' | 'lastcall' | 'vote' | 'voteclosing';
@@ -106,7 +106,7 @@ export function GroupMessageSheet({
       const full = !!places && inCount >= places;
       const placesLeft = places ? Math.max(0, places - inCount) : null;
       ready = {
-        text: groupInviteMessage({ groupName: group, when, where: session.group?.location, inCount, places, link, last: kind === 'lastcall' }),
+        text: groupInviteMessage({ groupName: group, when, where: session.group?.location, inCount, places, link: gameLink(link, session.id), last: kind === 'lastcall' }),
         title: kind === 'lastcall' ? `Last call for ${day === 'today' || day === 'tomorrow' ? `${day}’s game` : day}` : `Send ${day}’s link to the group`,
         sub: full
           ? `It’s full (${places} of ${places}), so it asks anyone else to go on the waiting list.`

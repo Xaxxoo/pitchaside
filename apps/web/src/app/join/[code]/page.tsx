@@ -8,11 +8,16 @@ import { BallLoader, BallSpinner } from '@/components/skeleton';
 import { PasswordSignIn } from '@/components/password-sign-in';
 import { PlayerSignupForm, type SignupData } from '@/components/player-signup-form';
 import { useToast } from '@/components/toast';
+import { btnPrimary, btnSecondary } from '@/components/buttons';
+import { AccountRow, KnownAccountPicker } from '@/components/known-account-picker';
+import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
+import { PaymentType } from '@pitchaside/shared';
 import { formatCurrency } from '@/lib/api';
 import { frequencyShort } from '@/lib/billing';
 import {
   checkSignupPhone,
   getClub,
+  getPlayerHome,
   getPlayerProfile,
   isPlayerSignedIn,
   joinAsPlayer,
@@ -39,6 +44,9 @@ export default function JoinPage() {
   const [firstName, setFirstName] = useState('');
   const [lastEmail, setLastEmail] = useState('');
   const [startCode, setStartCode] = useState(false);
+  // Who is signed in here, and the accounts this phone has used: offered by name, as on group links
+  const [me, setMe] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+  const [accounts, setAccounts] = useState<KnownAccount[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -47,7 +55,18 @@ export default function JoinPage() {
   const [picked, setPicked] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    isPlayerSignedIn().then(setSignedIn);
+    const known = knownAccounts();
+    setAccounts(known);
+    if (known.length) {
+      setStage('signin');
+      setLastEmail(known[0].email);
+    }
+    getPlayerHome()
+      .then((home) => {
+        setSignedIn(true);
+        setMe({ firstName: home.player.firstName, lastName: home.player.lastName, email: home.player.email });
+      })
+      .catch(() => setSignedIn(false));
     getClub(code)
       .then(setClub)
       .catch(() => setInvalid(true));
@@ -117,14 +136,25 @@ export default function JoinPage() {
       toast.success(
         chosen.length === 1 ? `You're in ${chosen[0].name}, ${firstName}!` : `You're in ${chosen.length} groups, ${firstName}!`,
       );
-      // Pay tab has their reference and the account to pay into.
-      router.replace('/me/pay?welcome=1');
+      // Dues to pay now: the Pay tab, with their code and the account. Pay per game: nothing is
+      // owed until they're in a game, so their games.
+      router.replace(chosen.every((g) => g.paymentType === PaymentType.PER_SESSION) ? '/me/games?welcome=1' : '/me/pay?welcome=1');
     } catch (err: any) {
       setError(err.message);
     } finally {
       setBusy(false);
     }
   }
+
+  /** Someone else on this phone: the email-first sign-up (a known email still goes to sign in). */
+  function startNew() {
+    setError(null);
+    setSignedIn(false);
+    setStartCode(false);
+    setLastEmail('');
+    setStage('signup');
+  }
+  const chosenAccount = accounts.find((a) => a.email === lastEmail);
 
   function toggle(id: string) {
     setPicked((prev) => {
@@ -252,41 +282,60 @@ export default function JoinPage() {
           </div>
         ) : signedIn ? (
           <div className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-3">
-            <h2 className="text-xl font-extrabold text-ink">Join the group</h2>
-            <p className="text-sm text-gray-500">You&apos;re already signed in to PitchAside.</p>
+            <h2 className="text-xl font-extrabold text-ink">Who’s joining?</h2>
+            {me && <AccountRow name={`${me.firstName} ${me.lastName}`} email={me.email} current />}
+            {/* A shared phone: the friend who scanned it picks "someone new", never joins as the owner by mistake */}
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={joinSignedIn} disabled={busy} className={`${btnPrimary} min-w-0`}>
+                {busy && <BallSpinner />}
+                <span className="truncate">{me ? `I’m ${me.firstName}` : 'Join'}</span>
+              </button>
+              <button onClick={startNew} disabled={busy} className={btnSecondary}>
+                I’m new
+              </button>
+            </div>
             <button
-              onClick={joinSignedIn}
-              disabled={busy}
-              className="w-full py-3.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              onClick={() => {
+                setError(null);
+                setSignedIn(false);
+                setStartCode(false);
+                setLastEmail('');
+                setStage('signin');
+              }}
+              className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink"
             >
-              {busy && <BallSpinner />}
-              Join {club.clubName}
-            </button>
-            <button onClick={() => setSignedIn(false)} className="w-full text-xs font-semibold text-gray-500 hover:text-ink">
-              Not you? Use another account
+              I have another account
             </button>
           </div>
         ) : stage === 'signin' ? (
+          <>
+          <KnownAccountPicker
+            accounts={accounts}
+            chosen={lastEmail}
+            onPick={(email) => {
+              setError(null);
+              setStartCode(false);
+              setLastEmail(email);
+            }}
+            onNew={startNew}
+          />
           <PasswordSignIn
-            title="Welcome back"
+            key={chosenAccount?.email ?? 'other'}
+            title={chosenAccount ? `Welcome back, ${chosenAccount.firstName}` : 'Welcome back'}
             subtitle={`Sign in and we'll add you to ${club.clubName}.`}
             cta="Sign in & join"
             initialEmail={lastEmail}
             startWithCode={startCode}
             onSignedIn={onSignedIn}
             footer={
-              <button
-                onClick={() => {
-                  setError(null);
-                  setStartCode(false);
-                  setStage('signup');
-                }}
-                className="w-full text-xs font-semibold text-gray-500 hover:text-ink"
-              >
-                New to PitchAside? Create an account
-              </button>
+              accounts.length ? undefined : (
+                <button onClick={startNew} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
+                  New to PitchAside? Create an account
+                </button>
+              )
             }
           />
+          </>
         ) : (
           <PlayerSignupForm
             title="Join the club"
