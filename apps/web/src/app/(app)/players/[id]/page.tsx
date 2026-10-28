@@ -421,6 +421,8 @@ function PlayerMoney({
   const rows = [...(payments as PaymentRow[])].sort((a, b) => (b.session?.date ?? '').localeCompare(a.session?.date ?? ''));
   const due = rows.filter((p) => p.status !== 'waived' && Number(p.amount) > 0 && p.attendance !== 'no_show' && p.session?.status !== 'cancelled');
   const paid = due.filter((p) => p.status === 'paid').length;
+  // Fees are charged when a game is set up, so games not played yet count here but not in Stats' match days.
+  const ahead = due.filter((p) => p.session?.status === 'upcoming').length;
   const owed = Number(stats?.totalOwed ?? 0);
 
   const Row = ({ p }: { p: PaymentRow }) => {
@@ -460,7 +462,12 @@ function PlayerMoney({
           <p className="mt-1 text-[13px] text-gray-600">
             {due.length > 0 ? (
               <>
-                Paid for <b className="text-ink tabular-nums">{paid}</b> of {due.length} game{due.length === 1 ? '' : 's'} · <b className="text-ink tabular-nums">{formatCurrency(stats.totalPaid)}</b> in all
+                Paid <b className="text-ink tabular-nums">{paid}</b> of {due.length} game fee{due.length === 1 ? '' : 's'} · <b className="text-ink tabular-nums">{formatCurrency(stats.totalPaid)}</b> in all
+                {ahead > 0 && (
+                  <span className="block text-[12px] text-gray-500">
+                    {ahead} {ahead === 1 ? 'is for a game' : 'are for games'} still to come
+                  </span>
+                )}
               </>
             ) : (
               'Nothing to pay for yet.'
