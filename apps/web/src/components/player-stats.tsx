@@ -55,6 +55,9 @@ const TRACKED: { key: ComparedStat; label: string }[] = [
 /** Numbers where more is worse: ranked "most", never shown in green. */
 const WORSE = new Set<ComparedStat>(['yellowCards', 'redCards', 'ownGoals', 'penMisses']);
 
+/** People who must name a player before an award counts (the server's rule). */
+const NEEDED = 3;
+
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 const valueOf = (r: PlayerRatings, k: ComparedStat) => (k === 'wins' ? r.record.w : (r[k] ?? 0));
 
@@ -85,23 +88,37 @@ function Tracker({ r, compare, you }: { r: PlayerRatings; compare: StatCompare; 
   return (
     <section aria-labelledby="vs-club" className="mt-3 rounded-3xl bg-white border border-gray-100 shadow-card">
       <div className="px-4 pt-4">
-        <h3 id="vs-club" className="text-[15px] font-bold text-ink">
-          Against the club
-        </h3>
-        <p className="text-[12px] text-gray-500">Each bar is {you ? 'you' : 'them'}; the dark tick is the club average.</p>
-        <div className="mt-3 flex items-center gap-2">
-          <div className="flex-1">
-            <Segmented label="Show" value={per} onChange={setPer} options={[['total', 'Totals'], ['game', 'Per game']]} />
-          </div>
+        {/* One row, one job: the title, and the one way to reorder */}
+        <div className="flex items-center justify-between gap-3">
+          <h3 id="vs-club" className="text-[15px] font-bold text-ink">
+            Against the club
+          </h3>
           <button
             onClick={() => setSort(sort === 'rank' ? 'usual' : 'rank')}
             aria-pressed={sort === 'rank'}
-            className={`press shrink-0 min-h-12 px-3.5 rounded-2xl border text-[13px] font-bold transition-colors ${
+            className={`press shrink-0 inline-flex items-center gap-1.5 min-h-11 -my-1 px-3 rounded-full border text-[12px] font-bold transition-colors ${
               sort === 'rank' ? 'bg-ink border-ink text-volt-300' : 'bg-white border-gray-200 text-gray-700 hover:border-ink'
             }`}
           >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={2.4} stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 7.5 7.5 3m0 0L12 7.5M7.5 3v13.5m13.5 0L16.5 21m0 0L12 16.5m4.5 4.5V7.5" />
+            </svg>
             Best first
           </button>
+        </div>
+        {/* A key, not a sentence: what the bar and the tick are */}
+        <p className="mt-1 flex items-center gap-3 text-[12px] text-gray-500">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-4 h-2 rounded-full bg-pitch-500" aria-hidden />
+            {you ? 'You' : 'Them'}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="w-1 h-3 rounded-full bg-ink" aria-hidden />
+            Club average
+          </span>
+        </p>
+        <div className="mt-3">
+          <Segmented label="Show" value={per} onChange={setPer} options={[['total', 'Totals'], ['game', 'Per game']]} />
         </div>
       </div>
       {shown.length > 0 ? (
@@ -117,7 +134,7 @@ function Tracker({ r, compare, you }: { r: PlayerRatings; compare: StatCompare; 
                 <span className="absolute -top-1 w-1 h-[18px] bg-ink rounded-full ring-2 ring-white" style={{ left: `calc(${Math.min(99, x.a)}% - 2px)` }} />
               </div>
               <div className="mt-1.5 flex items-baseline justify-between gap-3 text-[12px]">
-                <span className={`font-bold ${placed(x) <= 3 && !WORSE.has(x.key) ? 'text-pitch-700' : 'text-gray-500'}`}>
+                <span className={`font-bold ${placed(x) <= 3 && !WORSE.has(x.key) ? 'inline-flex items-center px-2 py-0.5 rounded-full bg-volt-300 text-ink' : 'text-gray-500'}`}>
                   {x.c.rank === 0
                     ? 'Not played yet'
                     : valueOf(r, x.key) === 0
@@ -133,9 +150,17 @@ function Tracker({ r, compare, you }: { r: PlayerRatings; compare: StatCompare; 
         <p className="px-4 py-4 text-[13px] text-gray-600">Nothing to compare yet.</p>
       )}
       {nobody.length > 0 && (
-        <p className="mx-4 mb-4 mt-1 rounded-2xl bg-chalk px-3.5 py-2.5 text-[12px] leading-snug text-gray-600">
-          <b className="text-ink">No one has yet:</b> {nobody.map((x) => x.label).join(' · ')}
-        </p>
+        <div className="mx-4 mb-4 mt-1 rounded-2xl bg-chalk px-3.5 py-3">
+          <p className="text-[12px] font-bold text-ink">No one in the club has yet</p>
+          {/* Chips, so a separator never starts a line */}
+          <ul className="mt-1.5 flex flex-wrap gap-1.5">
+            {nobody.map((x) => (
+              <li key={x.key} className="px-2.5 py-1 rounded-full bg-white text-[12px] font-semibold text-gray-600">
+                {x.label}
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
@@ -152,6 +177,9 @@ export function PlayerStats({ ratings, you = false }: { ratings: PlayerRatings; 
   const [range, setRange] = useState<'season' | 'all'>(hasSeason && ratings.season!.games > 0 ? 'season' : 'all');
   const r = range === 'season' && ratings.season ? ratings.season : ratings;
   const awards = AWARDS.map((a) => ({ ...a, e: r.evidence?.[a.key] })).filter((a) => a.e && a.e.nominations > 0);
+  // Counting ones by share, biggest first; the rest by how close they are to counting
+  const counting = awards.filter((a) => a.e!.enough).sort((x, y) => (y.e!.share || 0) - (x.e!.share || 0));
+  const waiting = awards.filter((a) => !a.e!.enough).sort((x, y) => y.e!.voters - x.e!.voters);
 
   const played = r.record.w + r.record.d + r.record.l;
   return (
@@ -224,43 +252,72 @@ export function PlayerStats({ ratings, you = false }: { ratings: PlayerRatings; 
         </>
       )}
 
-      {/* What teammates say: its own card */}
+      {/* What teammates say: counting awards first, then the ones on their way to counting */}
       <section aria-labelledby="awards-title" className="mt-3 rounded-3xl bg-white border border-gray-100 shadow-card overflow-hidden">
         <div className="px-4 pt-4 pb-3">
           <h3 id="awards-title" className="text-[15px] font-bold text-ink">
             What teammates say
           </h3>
-          <p className="text-[12px] leading-snug text-gray-500">
-            Awards from the vote after each game. One counts once 3 different people have named {you ? 'you' : 'them'}, and only ever lifts the card.
-          </p>
+          <p className="text-[12px] leading-snug text-gray-500">From the vote after each game. An award counts once 3 people name {you ? 'you' : 'them'}.</p>
         </div>
         {awards.length === 0 ? (
           <p className="border-t border-gray-100 px-4 py-4 text-[13px] text-gray-600">No award nominations yet.</p>
         ) : (
-          <ul className="border-t border-gray-100 divide-y divide-gray-100">
-            {awards.map(({ key, title, e }) => {
-              const pct = Math.round((e!.share || 0) * 100);
-              return (
-                <li key={key} className="px-4 py-3">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <span className="text-[14px] font-bold text-ink">{title}</span>
-                    <span className={`shrink-0 text-[13px] font-bold tabular-nums ${e!.enough ? 'text-ink' : 'text-gray-500'}`}>
-                      {e!.enough ? `${pct}% of votes` : 'Not enough yet'}
-                    </span>
-                  </div>
-                  {e!.enough && (
-                    <div className="mt-1.5 h-2 w-full rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${title}: ${pct}% of votes`}>
-                      <div className="h-full rounded-full bg-pitch-500 animate-fill-grow" style={{ width: `${Math.max(4, Math.min(100, pct))}%` }} />
-                    </div>
-                  )}
-                  <p className="mt-1 text-[12px] text-gray-500 tabular-nums">
-                    {e!.nominations} nomination{e!.nominations === 1 ? '' : 's'} from {e!.voters} {e!.voters === 1 ? 'person' : 'people'}, over {e!.games} game
-                    {e!.games === 1 ? '' : 's'}
-                  </p>
-                </li>
-              );
-            })}
-          </ul>
+          <>
+            {counting.length > 0 && (
+              <>
+                <p className="border-t border-gray-100 px-4 pt-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-pitch-700">Counting</p>
+                <ul className="divide-y divide-gray-100">
+                  {counting.map(({ key, title, e }) => {
+                    const pct = Math.round((e!.share || 0) * 100);
+                    return (
+                      <li key={key} className="px-4 py-3">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="text-[14px] font-bold text-ink">{title}</span>
+                          <span className="shrink-0 font-display text-[18px] leading-none font-extrabold text-ink tabular-nums">
+                            {pct}%<span className="ml-1 font-sans text-[11px] font-bold text-gray-500">of votes</span>
+                          </span>
+                        </div>
+                        <div className="mt-2 h-2 w-full rounded-full bg-gray-100 overflow-hidden" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label={`${title}: ${pct}% of votes`}>
+                          <div className="h-full rounded-full bg-pitch-500 animate-fill-grow" style={{ width: `${Math.max(4, Math.min(100, pct))}%` }} />
+                        </div>
+                        <p className="mt-1 text-[12px] text-gray-500 tabular-nums">
+                          {e!.voters} {e!.voters === 1 ? 'person' : 'people'} · {e!.games} game{e!.games === 1 ? '' : 's'}
+                        </p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+            {waiting.length > 0 && (
+              <>
+                <p className="border-t border-gray-100 px-4 pt-3 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500">Not counting yet</p>
+                <ul className="divide-y divide-gray-100">
+                  {waiting.map(({ key, title, e }) => {
+                    const have = Math.min(NEEDED, e!.voters);
+                    const more = Math.max(1, NEEDED - e!.voters);
+                    return (
+                      <li key={key} className="flex items-center gap-3 px-4 py-3">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[14px] font-bold text-ink">{title}</span>
+                          <span className="block text-[12px] text-gray-500">
+                            {more} more {more === 1 ? 'person' : 'people'} to count
+                          </span>
+                        </span>
+                        {/* Three dots, one per person needed: filled for each who has named them */}
+                        <span className="shrink-0 flex items-center gap-1" role="img" aria-label={`${have} of ${NEEDED} people`}>
+                          {Array.from({ length: NEEDED }, (_, i) => (
+                            <span key={i} className={`w-2.5 h-2.5 rounded-full ${i < have ? 'bg-pitch-500' : 'border-2 border-gray-200'}`} />
+                          ))}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </>
+            )}
+          </>
         )}
       </section>
     </section>
