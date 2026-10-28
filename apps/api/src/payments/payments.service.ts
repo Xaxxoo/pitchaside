@@ -20,7 +20,11 @@ export class PaymentsService {
     private notifications: NotificationsService,
   ) {}
 
-  /** "We got your ₦5,000 ✅" to each player, and a heads-up to organisers for transfers. */
+  /**
+   * To each player: "We got your ₦5,000 ✅" when the bank reported the money; "Marked as paid ✅"
+   * when the organiser marked it or typed the transfer in (nothing from the bank yet). Organisers
+   * get a heads-up for bank transfers.
+   */
   async sendReceipts(paymentIds: string[], source: 'manual' | 'transfer') {
     if (!paymentIds.length) return;
     const payments = await this.paymentsRepo.find({
@@ -31,8 +35,8 @@ export class PaymentsService {
       const what = p.session.label ? `${p.session.label} dues` : `the ${shortDate(p.session.date)} game`;
       await this.notifications.notifyPlayers([p.playerId], {
         kind: 'receipt',
-        title: `We got your ${naira(p.amount)} ✅`,
-        body: `${p.session.group.name} — ${what} is paid. Thanks!`,
+        title: source === 'transfer' ? `We got your ${naira(p.amount)} ✅` : `Marked as paid: ${naira(p.amount)} ✅`,
+        body: source === 'transfer' ? `${p.session.group.name} — ${what} is paid. Thanks!` : `${p.session.group.name} — your organiser marked ${what} as paid.`,
         url: '/me',
         critical: true,
       });
@@ -61,10 +65,10 @@ export class PaymentsService {
     const inClub = await this.paymentsRepo.manager.getRepository(Player).exists({ where: { id: dto.playerId, organizationId } });
     if (!inClub) throw new NotFoundException('Player not found');
 
-    const payment = this.paymentsRepo.create(dto);
-    if (dto.status === PaymentStatus.PAID) {
-      payment.paidAt = new Date();
-    }
+    // A new entry is always owed: paying it goes through Mark paid (checked, audited, tells the player)
+    const inGroup = await this.paymentsRepo.manager.getRepository(GroupMembership).exists({ where: { groupId: session.groupId, playerId: dto.playerId } });
+    if (!inGroup) throw new BadRequestException('That player isn’t in this group');
+    const payment = this.paymentsRepo.create({ sessionId: dto.sessionId, playerId: dto.playerId, amount: dto.amount, status: PaymentStatus.PENDING });
     const saved = await this.paymentsRepo.save(payment);
 
     await this.recalculateSessionTotal(dto.sessionId);

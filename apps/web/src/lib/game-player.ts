@@ -49,6 +49,8 @@ function stateNow(p: IPayment, coveredByDues: boolean, before: boolean): PlayerS
     // Paid from money they'd sent before (more than a game, or a game called off): paid ahead,
     // not a transfer for this game.
     if (p.source === 'transfer' && p.markedBy === 'credit') return { key: 'paid', label: 'Paid from earlier money', owes: false };
+    // Typed in by the organiser: paid, but the bank hasn't reported it yet
+    if (p.source === 'transfer' && p.markedBy === 'hand') return { key: 'paid', label: 'Paid · transfer added by hand', owes: false };
     if (p.source === 'transfer') {
       const label = p.transferAmount && p.transferAmount !== Number(p.amount)
         ? `Paid ${formatCurrency(p.transferAmount)} by transfer`

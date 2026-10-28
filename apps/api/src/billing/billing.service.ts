@@ -26,7 +26,7 @@ import { BankTransfer, TransferStatus, type MoneyInCategory } from './entities/b
 import { OutgoingTransfer, PayoutStatus, type PayoutCategory } from './entities/outgoing-transfer.entity';
 import { ClaimStatus, PaymentClaim } from './entities/payment-claim.entity';
 import { GroupKeptMoney, KEPT_REASONS, type KeptReason } from './entities/group-kept-money.entity';
-import { CLAIM_WINDOW_MS, AMOUNT_TOLERANCE, claimSettledBy, couldPair } from './claims';
+import { CLAIM_EXPIRES_MS, CLAIM_WINDOW_MS, CONFIRM_WINDOW_MS, AMOUNT_TOLERANCE, TWIN_WINDOW_MS, claimSettledBy, couldPair } from './claims';
 import { normaliseAccount, payerNameFrom, whoSent } from './payer-name';
 import { IncomingTransfer, PULSE_CLIENT, PulseClient } from './pulse/pulse.client';
 import { HttpPulseClient } from './pulse/http-pulse.client';
@@ -723,6 +723,12 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     const group = await this.groupsRepo.createQueryBuilder('g')
       .where('RIGHT(g.account_number, 10) = :acct', { acct: incoming.accountNumber })
       .getOne();
+    // The bank's own report of a transfer the organiser already added by hand: it confirms that
+    // one instead of being counted again.
+    if (group) {
+      const twin = await this.handTypedTwin(group.id, incoming);
+      if (twin) return { received: true, status: twin.status, confirmed: twin.id };
+    }
     const transfer = await this.transfersRepo.save(
       this.transfersRepo.create({
         providerTransactionId: incoming.providerTransactionId,
@@ -780,28 +786,35 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     status: TransferStatus,
     opts: { claimId?: string; pay?: Payment } = {},
   ): Promise<boolean> {
-    const paid = await this.transfersRepo.manager.transaction(async (tx) => {
+    // Typed in by the organiser, not reported by the bank: what it pays says so until the bank confirms it
+    const byHand = transfer.providerTransactionId?.startsWith(MANUAL_PREFIX) ?? false;
+    const paidBy = byHand ? 'hand' : 'pulse';
+    const result = await this.transfersRepo.manager.transaction(async (tx) => {
       const { affected } = await tx.update(BankTransfer, { id: transfer.id, status: TransferStatus.UNMATCHED }, { status, playerId });
       if (!affected) return null;
       let amount = Number(transfer.amount);
       const settled: Payment[] = [];
+      // Games marked paid by hand because they said they'd transfer: this money is that transfer,
+      // so it confirms them rather than paying another game (unless the organiser picked a due).
+      const confirmed = opts.pay ? [] : await this.confirmHandMarked(tx, transfer.groupId, playerId, amount, paidBy);
+      amount -= confirmed.reduce((sum, p) => sum + Number(p.amount), 0);
       if (opts.pay && amount + 0.001 >= Number(opts.pay.amount)) {
         const now = new Date();
         const done = await tx.update(
           Payment,
           { id: opts.pay.id, status: PaymentStatus.PENDING },
-          { status: PaymentStatus.PAID, paidAt: now, source: 'transfer', markedBy: 'pulse' },
+          { status: PaymentStatus.PAID, paidAt: now, source: 'transfer', markedBy: paidBy },
         );
         if (done.affected) {
-          settled.push(Object.assign(opts.pay, { status: PaymentStatus.PAID, paidAt: now, source: 'transfer', markedBy: 'pulse' }));
+          settled.push(Object.assign(opts.pay, { status: PaymentStatus.PAID, paidAt: now, source: 'transfer', markedBy: paidBy }));
           amount -= Number(opts.pay.amount);
         }
       }
-      settled.push(...(await this.creditIn(tx, transfer.groupId, playerId, amount)).settled);
+      settled.push(...(await this.creditIn(tx, transfer.groupId, playerId, amount, paidBy)).settled);
 
       transfer.status = status;
       transfer.playerId = playerId;
-      transfer.paymentId = settled[0]?.id ?? (null as unknown as string);
+      transfer.paymentId = confirmed[0]?.id ?? settled[0]?.id ?? (null as unknown as string);
       // Prepend the player's PA reference so admins always see it in the narration.
       const ref = (await tx.findOne(GroupMembership, { where: { groupId: transfer.groupId, playerId } }))?.paymentRef;
       if (ref && !transfer.narration?.includes(ref)) {
@@ -809,11 +822,94 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       }
       await tx.save(transfer);
       await this.closeClaimIn(tx, transfer, playerId, opts.claimId);
-      return settled;
+      return { settled, confirmed };
     });
-    if (!paid) return false;
-    await this.afterPaid(paid);
+    if (!result) return false;
+    // Games it paid get a receipt. Ones it confirmed were told "marked as paid" before: the bank's
+    // money arriving is news ("We got your ₦1,500"); another hand-typed entry isn't.
+    await this.afterPaid(byHand ? result.settled : [...result.confirmed, ...result.settled], byHand ? 'manual' : 'transfer');
+    if (byHand) for (const sessionId of new Set(result.confirmed.map((p) => p.sessionId))) await this.paymentsService.recalculateSessionTotal(sessionId);
     return true;
+  }
+
+  /**
+   * A player's games marked paid by hand (source 'manual': they said they'd paid, not cash) in the
+   * last CONFIRM_WINDOW_MS, oldest first, while this money covers each whole one: they become paid
+   * by this transfer. What's left of the money goes on as usual.
+   */
+  private async confirmHandMarked(tx: EntityManager, groupId: string, playerId: string, amount: number, paidBy: string): Promise<Payment[]> {
+    const marked = await tx
+      .getRepository(Payment)
+      .createQueryBuilder('payment')
+      .innerJoinAndSelect('payment.session', 'session')
+      .where('session.groupId = :groupId', { groupId })
+      .andWhere('payment.playerId = :playerId', { playerId })
+      .andWhere('payment.status = :paid', { paid: PaymentStatus.PAID })
+      .andWhere("payment.source = 'manual'")
+      .andWhere('payment.paidAt >= :since', { since: new Date(Date.now() - CONFIRM_WINDOW_MS) })
+      .orderBy('session.date', 'ASC')
+      .getMany();
+    const confirmed: Payment[] = [];
+    let left = amount;
+    for (const p of marked) {
+      if (left + 0.001 < Number(p.amount)) break;
+      // Only while it's still waiting: two transfers arriving together can't both confirm it
+      const { affected } = await tx.update(Payment, { id: p.id, status: PaymentStatus.PAID, source: 'manual' }, { source: 'transfer', markedBy: paidBy });
+      if (!affected) continue;
+      left -= Number(p.amount);
+      confirmed.push(Object.assign(p, { source: 'transfer', markedBy: paidBy }));
+    }
+    return confirmed;
+  }
+
+  /**
+   * A transfer the organiser typed in ("Transfer missing? Add it") that this bank report is: same
+   * group, same amount, within TWIN_WINDOW_MS, and the bank report names the same player (their
+   * code or name). It takes the bank's details and stops being "by hand"; what it paid is now
+   * paid by the bank. A bank report that names nobody is never assumed to be the same money:
+   * two people send ₦5,000 all the time, so it waits for the organiser like any other.
+   */
+  private async handTypedTwin(groupId: string, incoming: IncomingTransfer): Promise<BankTransfer | null> {
+    const payer = await this.identifyPayer(groupId, incoming);
+    if (!payer) return null;
+    const twins = await this.transfersRepo
+      .createQueryBuilder('t')
+      .where('t.groupId = :groupId', { groupId })
+      .andWhere('LEFT(t.providerTransactionId, :n) = :manual', { n: MANUAL_PREFIX.length, manual: MANUAL_PREFIX })
+      .andWhere('t.playerId = :payer', { payer })
+      .andWhere('ABS(t.amount - :amount) < 0.01', { amount: incoming.amount })
+      .andWhere('t.receivedAt >= :since', { since: new Date(new Date(incoming.receivedAt).getTime() - TWIN_WINDOW_MS) })
+      .andWhere('t.status IN (:...placed)', { placed: [TransferStatus.MATCHED, TransferStatus.ASSIGNED] })
+      .orderBy('t.receivedAt', 'ASC')
+      .getMany();
+    const twin = twins[0];
+    if (!twin) return null;
+    await this.transfersRepo.manager.transaction(async (tx) => {
+      await tx.update(BankTransfer, { id: twin.id }, {
+        providerTransactionId: incoming.providerTransactionId,
+        senderName: incoming.senderName ?? twin.senderName,
+        senderAccount: normaliseAccount(incoming.senderAccount) ?? twin.senderAccount,
+        raw: { ...(incoming.raw as object), confirmedHandTyped: twin.providerTransactionId } as object,
+      });
+      // What it paid was "added by hand": now the bank has confirmed it
+      const byHand = await tx
+        .getRepository(Payment)
+        .createQueryBuilder('payment')
+        .innerJoin('payment.session', 'session')
+        .where('session.groupId = :groupId', { groupId })
+        .andWhere('payment.playerId = :payer', { payer })
+        .andWhere("payment.markedBy = 'hand'")
+        .andWhere("payment.source = 'transfer'")
+        // Only what this hand-typed transfer paid: saved when it was typed in
+        .andWhere('payment.paidAt BETWEEN :from AND :to', {
+          from: new Date(new Date(twin.receivedAt).getTime() - 10 * 60_000),
+          to: new Date(new Date(twin.receivedAt).getTime() + 10 * 60_000),
+        })
+        .getMany();
+      if (byHand.length) await tx.save(byHand.map((x) => Object.assign(x, { markedBy: 'pulse' })));
+    });
+    this.logger.log(`Transfer ${incoming.providerTransactionId} confirmed hand-typed ${twin.providerTransactionId}`);
+    return twin;
   }
 
   /**
@@ -837,11 +933,11 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * name will match it when it lands, or the organiser sees "said they've paid" on the transfer and
    * confirms. A claim alone never takes an unmatched transfer, since anyone could tap it first.
    */
-  async claimPayment(groupId: string, playerId: string, amount: number): Promise<{ status: 'matched' | 'waiting' }> {
+  async claimPayment(groupId: string, playerId: string, amount: number): Promise<{ status: 'matched' | 'waiting'; owes: number }> {
     if (!(amount > 0)) throw new BadRequestException('Enter the amount you sent');
     // A second tap for the same payment reuses the first rather than looking like two.
     const recent = await this.claimsRepo.findOne({
-      where: { groupId, playerId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(new Date(Date.now() - 10 * 60 * 1000)) },
+      where: { groupId, playerId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(new Date(Date.now() - CLAIM_WINDOW_MS)) },
       order: { createdAt: 'DESC' },
     });
     const claim =
@@ -865,9 +961,17 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
         { id: claim.id, status: ClaimStatus.PENDING },
         { status: ClaimStatus.MATCHED, transferId: transfer.id },
       );
-      if (affected) return { status: 'matched' };
+      // Matched isn't "all paid": a part payment still leaves something to pay, and the player is told so
+      if (affected) return { status: 'matched', owes: await this.owesNow(groupId, playerId) };
     }
-    return { status: 'waiting' };
+    return { status: 'waiting', owes: await this.owesNow(groupId, playerId) };
+  }
+
+  /** What a member still has to pay now (played games and their next one), less what they've already sent towards it. */
+  private async owesNow(groupId: string, playerId: string) {
+    const dues = await this.payableDues(this.paymentsRepo.manager, groupId, playerId);
+    const credit = Number((await this.membershipsRepo.findOne({ where: { groupId, playerId } }))?.credit ?? 0);
+    return Math.max(0, Math.round((dues.reduce((sum, p) => sum + Number(p.amount), 0) - credit) * 100) / 100);
   }
 
   /**
@@ -990,7 +1094,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** applyCredit's work inside a caller's transaction; the caller runs afterPaid once it commits. */
-  private async creditIn(tx: EntityManager, groupId: string, playerId: string, amount: number): Promise<{ settled: Payment[]; credit: number; extra: number }> {
+  private async creditIn(tx: EntityManager, groupId: string, playerId: string, amount: number, paidBy = 'pulse'): Promise<{ settled: Payment[]; credit: number; extra: number }> {
     const membership = await tx.findOne(GroupMembership, {
       where: { groupId, playerId },
       lock: { mode: 'pessimistic_write' },
@@ -1019,7 +1123,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       p.status = PaymentStatus.PAID;
       p.paidAt = now;
       p.source = 'transfer';
-      p.markedBy = ahead.has(p) ? 'credit' : 'pulse';
+      p.markedBy = ahead.has(p) ? 'credit' : paidBy;
     }
     if (settled.length) await tx.save(settled);
     // Nothing left that this money can pay now: the new money left over is extra, to sort.
@@ -1116,12 +1220,12 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** Session totals and receipts for dues just paid from a transfer. */
-  private async afterPaid(payments: Payment[]) {
+  private async afterPaid(payments: Payment[], source: 'manual' | 'transfer' = 'transfer') {
     if (!payments.length) return;
     for (const sessionId of new Set(payments.map((p) => p.sessionId))) {
       await this.paymentsService.recalculateSessionTotal(sessionId);
     }
-    this.notifications.later(() => this.paymentsService.sendReceipts(payments.map((p) => p.id), 'transfer'));
+    this.notifications.later(() => this.paymentsService.sendReceipts(payments.map((p) => p.id), source));
   }
 
   async listTransfers(groupId: string, organizationId: string) {
@@ -1137,8 +1241,9 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     if (!transfers.some((t) => t.status === TransferStatus.UNMATCHED)) return transfers;
 
     // Players who said "I've paid" around the time of an unmatched transfer, for the organiser to pick from.
+    // Claims nobody could pair run out after a week (CLAIM_EXPIRES_MS)
     const claims = await this.claimsRepo.find({
-      where: { groupId, status: ClaimStatus.PENDING },
+      where: { groupId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(new Date(Date.now() - CLAIM_EXPIRES_MS)) },
       relations: ['player'],
       order: { createdAt: 'DESC' },
       take: 200,
