@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
-import { Steps } from '@/components/steps';
+import { Stepper } from '@/components/steps';
 import { PasswordField } from '@/components/password-sign-in';
 import { btnPrimary } from '@/components/buttons';
 import { BallSpinner } from '@/components/skeleton';
@@ -67,9 +67,7 @@ export default function SignUpPage() {
       </div>
 
       {/* What it takes, before anything is asked: three steps, this is the first */}
-      <div className="mb-5 rounded-3xl bg-white border border-gray-100 shadow-card p-4">
-        <Steps heading="Ready in about a minute" note="Step 1 of 3" steps={SETUP_STEPS} />
-      </div>
+      <Stepper className="mb-6" labels={SETUP_STEPS} at={0} note="About a minute" />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>

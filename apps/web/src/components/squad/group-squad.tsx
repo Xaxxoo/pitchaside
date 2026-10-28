@@ -2,6 +2,8 @@
 
 import { leftToPay } from '@/lib/game-player';
 import { Callout, CalloutIcon } from '@/components/callout';
+import { Stepper } from '@/components/steps';
+import { SETUP_STEPS } from '@/lib/setup-steps';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/empty-state';
@@ -362,9 +364,12 @@ export function GroupSquad({
         <div className="mt-2 bg-white rounded-3xl border border-gray-100 shadow-card p-4 animate-fade-in-up space-y-4">
           {/* Straight from making the group: the last step of setting up */}
           {startAdding && memberCount === 0 && (
-            <Callout tone="good" title={`${group.name} is ready`}>
-              Last step: add your players here, or send the group link with Invite.
-            </Callout>
+            <>
+              <Stepper labels={SETUP_STEPS} at={2} note="Last step" />
+              <Callout tone="good" title={`${group.name} is ready`}>
+                Last step: add your players here, or send the group link with Invite.
+              </Callout>
+            </>
           )}
           <QuickAddPlayers groupId={id} groupName={group.name} onAdded={reloadGroup} />
           {availablePlayers.length > 0 && (

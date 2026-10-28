@@ -90,3 +90,52 @@ export function Steps({
     </div>
   );
 }
+
+/**
+ * Where they are in a short flow, across the top, in the app's dark pitch style: "Step 1 of 3"
+ * with how long it takes, then a segment per step that fills lime as they go, each with its name
+ * on one line under it (done ones ticked, the current one bright, later ones quiet). Keep labels
+ * to a word or two.
+ */
+export function Stepper({ labels, at, note, className = '' }: { labels: string[]; at: number; note?: ReactNode; className?: string }) {
+  return (
+    <div className={`relative overflow-hidden rounded-3xl bg-ink text-white px-4 pt-3.5 pb-4 shadow-lift ${className}`}>
+      <div className="absolute inset-0 turf-stripes" aria-hidden />
+      <div className="relative">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-volt-300">
+            Step {at + 1} of {labels.length}
+          </p>
+          {note && <p className="shrink-0 text-[12px] font-semibold text-white/70">{note}</p>}
+        </div>
+        <ol className="mt-3 grid gap-2" style={{ gridTemplateColumns: `repeat(${labels.length}, minmax(0, 1fr))` }} aria-label="Steps">
+          {labels.map((label, i) => {
+            const done = i < at;
+            const now = i === at;
+            return (
+              <li key={label} aria-current={now ? 'step' : undefined} className="min-w-0">
+                {/* The segment: full lime once done, lime and glowing for the step they're on */}
+                <span
+                  aria-hidden
+                  className={`block h-1.5 rounded-full transition-colors ${done ? 'bg-volt-400' : now ? 'bg-volt-300 shadow-[0_0_12px_rgba(227,251,108,0.55)]' : 'bg-white/15'}`}
+                />
+                <span className={`mt-2 flex items-center gap-1 min-w-0 text-[12px] font-bold ${now ? 'text-white' : done ? 'text-volt-300' : 'text-white/45'}`}>
+                  <span
+                    aria-hidden
+                    className={`w-4 h-4 shrink-0 rounded-full flex items-center justify-center text-[10px] font-extrabold tabular-nums ${
+                      done ? 'bg-volt-400 text-ink' : now ? 'bg-white text-ink' : 'border border-white/25 text-white/60'
+                    }`}
+                  >
+                    {done ? '✓' : i + 1}
+                  </span>
+                  <span className="truncate">{label}</span>
+                  {done && <span className="sr-only"> (done)</span>}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+    </div>
+  );
+}
