@@ -456,31 +456,35 @@ export function MoneyCard({
           </div>
         )}
 
-        {/* Where players pay: the number first, then copy and share */}
+        {/* Where players pay: the number is the one thing to read, copy sits right on it; sharing is a quieter row below */}
         {account && (
-          <div className="mt-3 rounded-2xl border border-white/10 pl-3.5 pr-1.5 py-1.5">
-            <div className="flex items-center gap-1.5">
-              <span className="flex-1 min-w-0 font-display text-[17px] font-extrabold tracking-[0.04em] tabular-nums text-white select-all">
-                {formatAccountNumber(account.accountNumber)}
-              </span>
-              <button
-                onClick={() => copyNumber(account.accountNumber)}
-                aria-label="Copy account number"
-                className="press w-11 h-11 shrink-0 rounded-xl border border-white/15 text-white flex items-center justify-center hover:bg-white/10 transition-colors"
-              >
-                {copiedNumber ? <TickSmall /> : <CopySmall />}
-              </button>
-              <button
-                onClick={onOpenAccount}
-                className="press h-11 shrink-0 px-3 rounded-xl border border-white/15 text-[13px] font-bold text-white hover:bg-white/10 transition-colors"
-              >
-                Share
-              </button>
+          <div className="mt-3 rounded-2xl border border-white/10 overflow-hidden">
+            <div className="px-3.5 pt-2.5 pb-3">
+              <p className="text-[11px] font-bold text-white/60">Players pay into</p>
+              <div className="mt-0.5 flex items-center gap-1">
+                <span className="font-display text-[22px] leading-tight font-extrabold tracking-[0.04em] tabular-nums text-white select-all">
+                  {formatAccountNumber(account.accountNumber)}
+                </span>
+                <button
+                  onClick={() => copyNumber(account.accountNumber)}
+                  aria-label={copiedNumber ? 'Account number copied' : 'Copy account number'}
+                  className="press -my-1.5 w-11 h-11 shrink-0 rounded-xl text-white/80 flex items-center justify-center hover:bg-white/10 hover:text-white transition-colors"
+                >
+                  {copiedNumber ? <TickSmall /> : <CopySmall />}
+                </button>
+              </div>
+              <p className="text-[13px] font-semibold text-white/80 truncate">{account.bankName}</p>
+              <p className="text-[12px] text-white/60 truncate">{account.accountName}</p>
             </div>
-            {/* Under the number at full width, so the account name isn't cut off by the buttons */}
-            <span className="block pr-2 pb-1 text-[12px] font-semibold leading-snug text-white/65">
-              {account.bankName} · {account.accountName}
-            </span>
+            <button
+              onClick={onOpenAccount}
+              className="press w-full min-h-11 flex items-center justify-between gap-2 px-3.5 border-t border-white/10 text-[13px] font-bold text-volt-300 hover:bg-white/5 transition-colors"
+            >
+              Share account details
+              <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
           </div>
         )}
 
