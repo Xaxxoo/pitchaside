@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BallSpinner } from '@/components/skeleton';
 import { Collapse } from '@/components/collapse';
 import { loginWithPassword, requestCode, resetPassword } from '@/lib/player';
@@ -75,7 +75,10 @@ export function PasswordSignIn({
   footer,
   initialEmail = '',
   otherAccount,
+  startWithCode = false,
 }: {
+  /** Sign-up found this email was added by their organiser (no password yet): email the code straight away. */
+  startWithCode?: boolean;
   /**
    * When these details aren't a player's: try them as the other kind of account (an organiser)
    * and say whether that worked, so the right email and password never fail on the wrong page.
@@ -94,8 +97,8 @@ export function PasswordSignIn({
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
   const [devCode, setDevCode] = useState<string | undefined>();
-  /** Set when the account has no password yet: the reset step then reads as a welcome. */
-  const [newcomer, setNewcomer] = useState('');
+  /** Set when the account has no password yet: the reset step then reads as a welcome ('' = name not known). */
+  const [newcomer, setNewcomer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,6 +151,16 @@ export function PasswordSignIn({
     run(emailCode);
   };
 
+  // Once, on arrival from sign-up with an organiser-added email
+  const started = useRef(false);
+  useEffect(() => {
+    if (!startWithCode || started.current || !validEmail) return;
+    started.current = true;
+    setNewcomer('');
+    run(emailCode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startWithCode]);
+
   const reset = (e: React.FormEvent) => {
     e.preventDefault();
     run(async () => {
@@ -157,12 +170,12 @@ export function PasswordSignIn({
   };
 
   const heading =
-    step === 'login' ? title : newcomer && step === 'reset' ? `Welcome, ${newcomer}!` : 'Reset your password';
+    step === 'login' ? title : newcomer !== null && step === 'reset' ? (newcomer ? `Welcome, ${newcomer}!` : 'Welcome!') : 'Reset your password';
   const sub =
     step === 'forgot'
       ? 'We’ll email you a 6-digit code.'
       : step === 'reset'
-        ? newcomer
+        ? newcomer !== null
           ? 'Your organiser already added you. Two quick steps to sign in.'
           : 'Two quick steps.'
         : subtitle;
@@ -222,7 +235,7 @@ export function PasswordSignIn({
             type="button"
             onClick={() => {
               setError(null);
-              setNewcomer('');
+              setNewcomer(null);
               setStep('forgot');
             }}
             className="w-full text-xs font-semibold text-gray-500 hover:text-ink"
@@ -285,12 +298,12 @@ export function PasswordSignIn({
             <div className="pt-1">
               <p className="flex items-center gap-2 mb-1.5 text-[13px] font-bold text-ink">
                 <StepDot n={2} done={password.length >= 8} />
-                {newcomer ? 'Choose a password' : 'Choose a new password'}
+                {newcomer !== null ? 'Choose a password' : 'Choose a new password'}
               </p>
               <PasswordField id="rp-new" label="8 characters or more" value={password} onChange={setPassword} autoComplete="new-password" />
             </div>
           </Collapse>
-          {button(code.length !== 6 ? 'Enter the code first' : newcomer ? 'Create password & sign in' : 'Save password & sign in', code.length !== 6 || password.length < 8)}
+          {button(code.length !== 6 ? 'Enter the code first' : newcomer !== null ? 'Create password & sign in' : 'Save password & sign in', code.length !== 6 || password.length < 8)}
           <button type="button" onClick={() => sendCode()} disabled={busy} className="w-full text-xs font-semibold text-pitch-600">
             No email? Check spam, or send it again
           </button>

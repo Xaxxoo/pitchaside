@@ -119,7 +119,22 @@ export function resetPassword(email: string, code: string, password: string) {
   return request<{ token: string; firstName: string }>('POST', '/player-auth/reset-password', { email, code, password }, false);
 }
 
-export type SignupInput = { email: string; firstName: string; lastName: string; phone?: string; password: string };
+export type SignupInput = { email: string; firstName: string; lastName: string; phone?: string; password: string; phoneMatch?: 'yes' | 'no' };
+
+/** Sign-up step 1: a new email, one with a password (sign in), or one an organiser added (email a code). */
+export function checkSignupEmail(email: string) {
+  return request<{ status: 'new' | 'password' | 'code' }>('POST', '/public/sign-up/email', { email }, false);
+}
+
+/**
+ * Whether a WhatsApp number is already on a record in the club behind this link: `free` when the
+ * organiser added them by number (one tap makes it theirs), otherwise under the masked `email`.
+ */
+export type PhoneMatch = { name: string; free: boolean; email?: string } | null;
+export function checkSignupPhone(link: { group: string } | { club: string }, phone: string) {
+  const path = 'group' in link ? `/public/groups/${link.group}/phone` : `/public/clubs/${link.club}/phone`;
+  return request<{ match: PhoneMatch }>('POST', path, { phone }, false).then((r) => r.match);
+}
 
 /** `game`: they came from that game's QR code, so they're put on it where the group doesn't take replies. */
 const fromGame = (game?: string | null) => (game ? `?game=${encodeURIComponent(game)}` : '');

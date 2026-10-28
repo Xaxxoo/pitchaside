@@ -19,9 +19,9 @@ import { createHash, randomInt } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Player } from '../players/entities/player.entity';
 import { User } from '../users/entities/user.entity';
-import { emailKey } from '../common/format.util';
+import { emailKey, maskEmail } from '../common/format.util';
 import { MailService } from '../mail/mail.service';
-import { clubPlayerFor } from '../players/club-player';
+import { clubPlayerFor, clubPlayerMatch, playerByPhone } from '../players/club-player';
 import { cleanNickname } from '../players/player-name';
 import { PhoneOtp } from './entities/phone-otp.entity';
 import { PlayerAccount } from './entities/player-account.entity';
@@ -167,6 +167,34 @@ export class PlayerAuthService {
     );
   }
 
+  /**
+   * Sign-up asks for the email first: a new address gets the short form, one with a password
+   * goes to sign in, and one their organiser added (no password yet) gets a code to set one.
+   * Says no more than sign-in already does.
+   */
+  async emailStatus(email: string): Promise<{ status: 'new' | 'password' | 'code' }> {
+    const account = await this.accountFor(emailKey(email));
+    return { status: !account ? 'new' : account.passwordHash ? 'password' : 'code' };
+  }
+
+  /**
+   * Before a new sign-up joins a club: is their WhatsApp number already on a record there?
+   * `free`: the organiser added them by number and no one has claimed it (no email), so it can
+   * be theirs with one tap. Otherwise it's under another email, shown masked, so they can sign
+   * in with that one instead. Only a short name ("Tunde B.") is shown, never the full record.
+   */
+  async phoneOwner(organizationId: string, phone: string) {
+    const p = await playerByPhone(this.playersRepo, organizationId, phone);
+    if (!p) return { match: null };
+    return {
+      match: {
+        name: `${p.firstName} ${p.lastName.trim().charAt(0).toUpperCase()}.`.trim(),
+        free: !p.email,
+        email: p.email ? maskEmail(p.email) : undefined,
+      },
+    };
+  }
+
   /** Club invite link (/join/:code): the club behind it, or a 404. */
   async clubByInviteCode(code: string) {
     const org = await this.orgsRepo.findOne({ where: { inviteCode: code } });
@@ -175,15 +203,15 @@ export class PlayerAuthService {
   }
 
   /** This person's player record in a club, created from their account if they're new there. */
-  async ensurePlayerInClub(organizationId: string, key: string) {
+  async ensurePlayerInClub(organizationId: string, key: string, opts: { claimByPhone?: boolean } = {}) {
     const account = await this.accountFor(key);
     if (!account) throw new NotFoundException('Account not found');
-    return clubPlayerFor(this.playersRepo, organizationId, {
-      email: key,
-      phone: account.phone,
-      firstName: account.firstName,
-      lastName: account.lastName,
-    });
+    return clubPlayerMatch(
+      this.playersRepo,
+      organizationId,
+      { email: key, phone: account.phone, firstName: account.firstName, lastName: account.lastName },
+      opts,
+    );
   }
 
   /**

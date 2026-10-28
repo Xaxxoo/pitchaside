@@ -39,7 +39,7 @@ import { User, UserRole } from '../users/entities/user.entity';
 import { NIGERIAN_BANKS } from './data/nigerian-banks';
 import { naira } from '../common/format.util';
 import { localDate } from '../common/time.util';
-import { ClubPerson, clubPlayerFor } from '../players/club-player';
+import { ClubPerson, clubPlayerFor, clubPlayerMatch } from '../players/club-player';
 import { paidByTransfer, payableNow, releaseToExtra } from '../payments/credit';
 import { PERIODIC_TYPES, periodFor } from './periods';
 import { COVERED_BY_DUES, gameTarget, squadEntry } from '../payments/game-dues';
@@ -430,6 +430,13 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
 
   // ── Public join / pay link ──
 
+  /** The club behind a group link, for sign-up checks. */
+  async clubForGroupCode(code: string) {
+    const group = await this.groupsRepo.findOne({ where: { inviteCode: code }, select: { id: true, organizationId: true } });
+    if (!group) throw new NotFoundException('This group link is not valid. Ask your organiser for the latest link.');
+    return group.organizationId;
+  }
+
   async getPublicGroup(code: string) {
     const group = await this.groupsRepo.findOne({
       where: { inviteCode: code },
@@ -482,11 +489,28 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
   }
 
   /** New player who has just created their account from this group's link. */
-  async joinGroup(code: string, input: ClubPerson, gameId?: string) {
+  async joinGroup(code: string, input: ClubPerson, gameId?: string, opts: { claimByPhone?: boolean } = {}) {
     const group = await this.groupsRepo.findOne({ where: { inviteCode: code } });
     if (!group) throw new NotFoundException('This group link is not valid. Ask your organiser for the latest link.');
-    const player = await clubPlayerFor(this.playersRepo, group.organizationId, input);
+    const { player, clash } = await clubPlayerMatch(this.playersRepo, group.organizationId, input, opts);
+    if (clash) this.warnDuplicate(group.organizationId, player, clash);
     return { playerId: player.id, ...(await this.addToGroup(group, player, gameId)) };
+  }
+
+  /**
+   * Someone signed up with a number that's already on another record in the club (one with a
+   * different email, or one they said isn't them): tell the organisers, who know if it's the same
+   * person.
+   */
+  warnDuplicate(organizationId: string, player: Player, clash: Player) {
+    this.notifications.later(() =>
+      this.notifications.notifyOrganisers(organizationId, {
+        kind: 'possible_duplicate',
+        title: `Same number: ${player.firstName} ${player.lastName} and ${clash.firstName} ${clash.lastName}`,
+        body: `${player.firstName} just signed up with ${clash.firstName}’s WhatsApp number. Check if they’re the same person.`,
+        url: `/players/${clash.id}`,
+      }, { email: true }),
+    );
   }
 
   /**

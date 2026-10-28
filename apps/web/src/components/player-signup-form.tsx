@@ -4,91 +4,220 @@ import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useState } from 'react';
 import { BallSpinner } from '@/components/skeleton';
 import { PasswordField } from '@/components/password-sign-in';
+import { btnPrimary, btnSecondary } from '@/components/buttons';
+import { checkSignupEmail, type PhoneMatch } from '@/lib/player';
 
-export type SignupData = { email: string; firstName: string; lastName: string; phone?: string; password: string };
+export type SignupData = { email: string; firstName: string; lastName: string; phone?: string; password: string; phoneMatch?: 'yes' | 'no' };
 
 const input =
   'w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
 
+type Step = 'email' | 'details' | 'match';
+
 /**
- * The one player sign-up form: email, first name, last name, password and an
- * optional phone number. Used by group links (/g) and club invite links (/join).
+ * The one player sign-up, used by group links (/g) and club invite links (/join). Email first:
+ * someone already on PitchAside goes to sign in (or gets a code if their organiser added them)
+ * without filling in anything else. New people then give their name, WhatsApp number and a
+ * password. If the number is already on a record in the club, they're asked "Are you Tunde B.?"
+ * so the games and payments their organiser logged come with them.
  */
 export function PlayerSignupForm({
   title = 'Join the group',
-  subtitle = 'Create your PitchAside account.',
+  subtitle = 'New or already on PitchAside, start with your email.',
   cta = 'Create my account',
   onSubmit,
   onSwitchToSignIn,
   onEmailChange,
+  checkPhone,
 }: {
   title?: string;
   subtitle?: string;
   cta?: string;
   onSubmit: (data: SignupData) => Promise<void>;
-  onSwitchToSignIn: () => void;
+  /** The email is already on PitchAside: sign in with it (`code`: no password yet, email them a code). */
+  onSwitchToSignIn: (email: string, needsCode?: boolean) => void;
   /** So the sign-in form can be pre-filled if they turn out to have an account. */
   onEmailChange?: (email: string) => void;
+  /** Whether the number is already on a record in this club. */
+  checkPhone: (phone: string) => Promise<PhoneMatch>;
 }) {
+  const [step, setStep] = useState<Step>('email');
   const [form, setForm] = useState({ email: '', firstName: '', lastName: '', phone: '', password: '' });
   const phoneSeen = useTouched();
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [match, setMatch] = useState<NonNullable<PhoneMatch> | null>(null);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  const data = (phoneMatch?: 'yes' | 'no'): SignupData => ({
+    email: form.email.trim(),
+    firstName: form.firstName.trim(),
+    lastName: form.lastName.trim(),
+    phone: form.phone.trim() || undefined,
+    password: form.password,
+    ...(phoneMatch ? { phoneMatch } : {}),
+  });
+
+  async function run(fn: () => Promise<void>) {
     setBusy(true);
+    setError(null);
     try {
-      await onSubmit({
-        email: form.email.trim(),
-        firstName: form.firstName.trim(),
-        lastName: form.lastName.trim(),
-        phone: form.phone.trim() || undefined,
-        password: form.password,
-      });
+      await fn();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Something went wrong. Try again.');
     } finally {
       setBusy(false);
     }
   }
 
+  const checkEmail = (e: React.FormEvent) => {
+    e.preventDefault();
+    run(async () => {
+      const { status } = await checkSignupEmail(form.email.trim());
+      if (status === 'new') setStep('details');
+      else onSwitchToSignIn(form.email.trim(), status === 'code');
+    });
+  };
+
+  const submitDetails = (e: React.FormEvent) => {
+    e.preventDefault();
+    run(async () => {
+      const found = form.phone.trim() ? await checkPhone(form.phone.trim()) : null;
+      if (found) {
+        setMatch(found);
+        setStep('match');
+        return;
+      }
+      await onSubmit(data());
+    });
+  };
+
+  const answer = (phoneMatch: 'yes' | 'no') => run(() => onSubmit(data(phoneMatch)));
+
+  const button = (label: string) => (
+    <button type="submit" disabled={busy} className={`${btnPrimary} w-full`}>
+      {busy && <BallSpinner />}
+      {label}
+    </button>
+  );
+
+  const errorBox = error && (
+    <div role="alert" className="bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">
+      {error}
+    </div>
+  );
+
+  if (step === 'match' && match) {
+    return (
+      <div className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-4 animate-fade-in-up">
+        <div>
+          <h2 className="text-xl font-extrabold text-ink">{match.free ? `Are you ${match.name}?` : 'Number already in use'}</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            {match.free
+              ? 'Your organiser added them with this number. Yes keeps their history.'
+              : `It’s on ${match.name}’s record (${match.email}). Is that you?`}
+          </p>
+        </div>
+        {errorBox}
+        {match.free ? (
+          <div className="space-y-2">
+            <button onClick={() => answer('yes')} disabled={busy} className={`${btnPrimary} w-full`}>
+              {busy && <BallSpinner />}
+              Yes, that’s me
+            </button>
+            <button onClick={() => answer('no')} disabled={busy} className={`${btnSecondary} w-full`}>
+              No, I’m someone else
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <button onClick={() => onSwitchToSignIn('')} disabled={busy} className={`${btnPrimary} w-full`}>
+              Sign in with that email
+            </button>
+            <button onClick={() => answer('no')} disabled={busy} className={`${btnSecondary} w-full`}>
+              {busy && <BallSpinner />}
+              Not me · join as new
+            </button>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setStep('details');
+          }}
+          className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink"
+        >
+          Change my number
+        </button>
+      </div>
+    );
+  }
+
+  if (step === 'email') {
+    return (
+      <form onSubmit={checkEmail} className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-4">
+        <div>
+          <h2 className="text-xl font-extrabold text-ink">{title}</h2>
+          <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+        </div>
+        {errorBox}
+        <div>
+          <label htmlFor="su-email" className="block text-xs font-bold text-gray-700 mb-1.5">Your email</label>
+          <input
+            id="su-email"
+            type="email"
+            required
+            autoComplete="email"
+            value={form.email}
+            onChange={(e) => {
+              setForm({ ...form, email: e.target.value });
+              onEmailChange?.(e.target.value);
+            }}
+            className={input}
+            placeholder="you@example.com"
+          />
+        </div>
+        {button('Continue')}
+      </form>
+    );
+  }
+
   return (
-    <form onSubmit={submit} className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-4">
+    <form onSubmit={submitDetails} className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-4 animate-fade-in-up">
       <div>
         <h2 className="text-xl font-extrabold text-ink">{title}</h2>
-        <p className="text-sm text-gray-500 mt-1">{subtitle}</p>
+        {/* The email they gave, with a way back: the rest is new-player details only */}
+        <p className="mt-1 flex items-center gap-2 text-sm text-gray-500 min-w-0">
+          <span className="truncate font-semibold text-ink">{form.email.trim()}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setStep('email');
+            }}
+            className="shrink-0 min-h-11 -my-3 px-1 text-[13px] font-bold text-pitch-700"
+          >
+            Change
+          </button>
+        </p>
       </div>
-      <div>
-        <label htmlFor="su-email" className="block text-xs font-bold text-gray-700 mb-1.5">Email *</label>
-        <input
-          id="su-email"
-          type="email"
-          required
-          autoComplete="email"
-          value={form.email}
-          onChange={(e) => {
-            setForm({ ...form, email: e.target.value });
-            onEmailChange?.(e.target.value);
-          }}
-          className={input}
-          placeholder="you@example.com"
-        />
-      </div>
+      {errorBox}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="su-first" className="block text-xs font-bold text-gray-700 mb-1.5">First name *</label>
-          <input id="su-first" required minLength={2} autoComplete="given-name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} className={input} />
+          <label htmlFor="su-first" className="block text-xs font-bold text-gray-700 mb-1.5">First name</label>
+          <input id="su-first" required minLength={2} autoFocus autoComplete="given-name" value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} className={input} />
         </div>
         <div>
-          <label htmlFor="su-last" className="block text-xs font-bold text-gray-700 mb-1.5">Last name *</label>
-          <input id="su-last" required minLength={2} autoComplete="family-name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className={input} />
+          <label htmlFor="su-last" className="block text-xs font-bold text-gray-700 mb-1.5">Last name</label>
+          <input id="su-last" required minLength={1} autoComplete="family-name" value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className={input} />
         </div>
       </div>
       <div>
-        <label htmlFor="su-phone" className="block text-xs font-bold text-gray-700 mb-1.5">
-          Phone number <span className="text-gray-500 font-medium">(optional)</span>
-        </label>
+        <label htmlFor="su-phone" className="block text-xs font-bold text-gray-700 mb-1.5">WhatsApp number</label>
         <input
           id="su-phone"
           type="tel"
+          required
           autoComplete="tel"
           value={form.phone}
           onChange={(e) => setForm({ ...form, phone: e.target.value })}
@@ -97,29 +226,19 @@ export function PlayerSignupForm({
           placeholder="0803 123 4567"
         />
         <PhoneHint value={form.phone} touched={phoneSeen.touched}>
-          So your organiser can reach you on WhatsApp. If they added you by number, this links you to your record.
+          Finds you if your organiser already added you.
         </PhoneHint>
       </div>
       <PasswordField
         id="su-password"
-        label="Password *"
+        label="Password"
         value={form.password}
         onChange={(v) => setForm({ ...form, password: v })}
         autoComplete="new-password"
         minLength={8}
-        hint="At least 8 characters. You'll sign in with your email and this password."
+        hint="8 characters or more."
       />
-      <button
-        type="submit"
-        disabled={busy}
-        className="w-full py-3.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-      >
-        {busy && <BallSpinner />}
-        {cta}
-      </button>
-      <button type="button" onClick={onSwitchToSignIn} className="w-full text-xs font-semibold text-gray-500 hover:text-ink">
-        Already on PitchAside? Sign in
-      </button>
+      {button(cta)}
     </form>
   );
 }
