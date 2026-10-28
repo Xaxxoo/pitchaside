@@ -1,3 +1,4 @@
+import type { MatchCard } from '@/app/share/[token]/match-card';
 import type { Bibs, GroupScope, KeeperPref, MatchPlan, Position } from '@pitchaside/shared';
 import type {
   ContributionsVisibility,
@@ -1361,6 +1362,11 @@ export function getBallot(token: string): Promise<Ballot> {
 
 export function getVoteResults(token: string): Promise<VoteResults> {
   return http.get(`/public/votes/${token}/results`);
+}
+
+/** The day in one go (Team of the Day, everyone's goals and assists, the Best VII), as the share card has it. */
+export function getVoteCard(token: string): Promise<MatchCard> {
+  return http.get(`/public/votes/${token}/card`);
 }
 
 // ── Competitions (organiser) ──
