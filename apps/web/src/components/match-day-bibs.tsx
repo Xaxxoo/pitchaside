@@ -14,6 +14,7 @@ import { GameTimer, type TimerApi } from '@/components/game-timer';
 import { Avatar } from '@/components/ratings';
 import { Collapse } from '@/components/collapse';
 import { positionOrder, positionShort } from '@/lib/positions';
+import { TeamPitch } from '@/components/team-pitch';
 
 const WATCH: TimerApi = { load: getGameTimer };
 
@@ -42,6 +43,19 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   const [moving, setMoving] = useState<GameLineup['squad'][number] | null>(null);
   const [moveBusy, setMoveBusy] = useState<string | null>(null);
   const moveTitle = useId();
+  // Lists or pitches: the same choice as the organiser's Teams step, remembered on this phone
+  const [view, setView] = useState<'lists' | 'pitches'>('lists');
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('pa_teams_view') === 'pitches') setView('pitches');
+    } catch {}
+  }, []);
+  const pickView = (v: 'lists' | 'pitches') => {
+    setView(v);
+    try {
+      localStorage.setItem('pa_teams_view', v);
+    } catch {}
+  };
 
   useEffect(() => {
     const load = () => getGameLineup(sessionId).then(setLineup).catch(() => undefined);
@@ -214,7 +228,36 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
           {canMove && lineup.squad.some(movable) && (
             <p className="text-[12px] font-semibold text-volt-300">{locked ? 'Came late? Tap them to put them on a side.' : `You’re ${what}: tap a player to move them.`}</p>
           )}
-          {teams
+          <div className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-white/10" role="radiogroup" aria-label="Show teams as">
+            {(['lists', 'pitches'] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                role="radio"
+                aria-checked={view === v}
+                onClick={() => pickView(v)}
+                className={`press min-h-10 rounded-lg text-[13px] font-bold ${view === v ? 'bg-volt-300 text-ink' : 'text-white/70 hover:text-white'}`}
+              >
+                {v === 'lists' ? 'Lists' : 'Pitches'}
+              </button>
+            ))}
+          </div>
+          {view === 'pitches'
+            ? sidesNow.map((t) => (
+                <TeamPitch
+                  key={t}
+                  dark
+                  title={teamName(t, lineup.captains, lineup.bibs)}
+                  swatch={<span className="w-3 h-3 shrink-0 rounded-sm" style={bibFill(t, lineup.bibs)} aria-hidden />}
+                  tone={{ backgroundColor: 'rgb(255 255 255 / 0.06)' }}
+                  players={byTeam(t).map((p, i) => ({ id: p.id ?? `${p.name}-${i}`, name: p.name, short: p.short ?? p.name, position: p.position ?? null, photoKey: p.photoKey, captain: p.captain, vice: p.vice, me: p.me, tappable: movable(p) }))}
+                  onTap={(id) => {
+                    const p = lineup.squad.find((x) => x.id === id);
+                    if (p && movable(p)) setMoving(p);
+                  }}
+                />
+              ))
+            : teams
             .filter((t) => byTeam(t).length)
             .map((t) => (
               <div key={t}>
