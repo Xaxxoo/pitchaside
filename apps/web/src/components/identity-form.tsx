@@ -6,7 +6,7 @@ import { setIdentity } from '@/lib/api';
 import { BallSpinner } from '@/components/skeleton';
 
 const HOW = {
-  bvn: { label: 'BVN', where: 'Dial *565*0# from the phone number your bank has.' },
+  bvn: { label: 'BVN', where: 'Dial *565*0# from your bank phone number.' },
   nin: { label: 'NIN', where: 'On your NIN slip, or dial *346# from your NIN line.' },
 };
 
