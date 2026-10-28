@@ -1,10 +1,12 @@
 import { BadRequestException, ConflictException, GoneException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Repository } from 'typeorm';
+import { In, IsNull, MoreThan, Repository } from 'typeorm';
 import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Player } from '../players/entities/player.entity';
 import { User } from '../users/entities/user.entity';
+import { Group } from '../groups/entities/group.entity';
+import { GroupMembership } from '../groups/entities/group-membership.entity';
 import { emailKey, maskEmail } from '../common/format.util';
 import { PlayerAccount } from './entities/player-account.entity';
 import { SignInLink } from './entities/sign-in-link.entity';
@@ -32,7 +34,31 @@ export class SignInLinksService {
     @InjectRepository(Player) private playersRepo: Repository<Player>,
     @InjectRepository(PlayerAccount) private accountsRepo: Repository<PlayerAccount>,
     private auth: PlayerAuthService,
+    @InjectRepository(Group) private groupsRepo?: Repository<Group>,
+    @InjectRepository(GroupMembership) private membershipsRepo?: Repository<GroupMembership>,
   ) {}
+
+  /**
+   * Who in a group is using the app, for the organiser's squad list: `in` (they've set a password,
+   * so they can sign in), `invited` (a sign-in link is out and still works), or `none`.
+   */
+  async appStatus(organizationId: string, groupId: string) {
+    const group = await this.groupsRepo!.findOne({ where: { id: groupId, organizationId } });
+    if (!group) throw new NotFoundException('Group not found');
+    const members = await this.membershipsRepo!.find({ where: { groupId }, relations: ['player'] });
+    const keys = [...new Set(members.map((m) => m.player?.email && emailKey(m.player.email)).filter((k): k is string => !!k))];
+    const accounts = keys.length ? await this.accountsRepo.find({ where: { personKey: In(keys) } }) : [];
+    const withPassword = new Set(accounts.filter((a) => a.passwordHash).map((a) => a.personKey));
+    const ids = members.map((m) => m.playerId);
+    const links = ids.length ? await this.linksRepo.find({ where: { playerId: In(ids), usedAt: IsNull(), expiresAt: MoreThan(new Date()) } }) : [];
+    const invited = new Set(links.map((l) => l.playerId));
+    const players: Record<string, 'in' | 'invited' | 'none'> = {};
+    for (const m of members) {
+      const key = m.player?.email ? emailKey(m.player.email) : null;
+      players[m.playerId] = key && withPassword.has(key) ? 'in' : invited.has(m.playerId) ? 'invited' : 'none';
+    }
+    return { players };
+  }
 
   /** Why this player's account is out of an organiser's reach, or null when a link can be sent. */
   private async beyondClub(player: Player): Promise<string | null> {

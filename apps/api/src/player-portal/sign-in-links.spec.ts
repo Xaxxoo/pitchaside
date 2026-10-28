@@ -92,3 +92,24 @@ describe('SignInLinksService', () => {
     expect(players[0].email).toBe('kunle@example.com');
   });
 });
+
+describe('SignInLinksService.appStatus', () => {
+  it('says who is in the app, who has a link out, and who is not in yet', async () => {
+    const members = [
+      { playerId: 'p1', player: { email: 'Ada@Example.com' } },
+      { playerId: 'p2', player: { email: 'kunle@example.com' } },
+      { playerId: 'p3', player: { email: null } },
+      { playerId: 'p4', player: { email: null } },
+    ];
+    const svc = new SignInLinksService(
+      { find: async () => [{ playerId: 'p3' }] } as never,
+      {} as never,
+      { find: async () => [{ personKey: 'ada@example.com', passwordHash: 'x' }, { personKey: 'kunle@example.com', passwordHash: null }] } as never,
+      {} as never,
+      { findOne: async ({ where }: any) => (where.organizationId === 'org1' ? { id: 'g1' } : null) } as never,
+      { find: async () => members } as never,
+    );
+    expect((await svc.appStatus('org1', 'g1')).players).toEqual({ p1: 'in', p2: 'none', p3: 'invited', p4: 'none' });
+    await expect(svc.appStatus('org2', 'g1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+});

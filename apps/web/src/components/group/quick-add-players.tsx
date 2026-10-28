@@ -4,18 +4,20 @@ import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useRef, useState } from 'react';
 import { useToast } from '@/components/toast';
 import { addMember, createPlayer } from '@/lib/api';
+import { SignInLinkButton } from '@/components/sign-in-link-button';
 
 /**
  * Adding players without leaving the group: name and (optionally) a WhatsApp number, Add, and
  * the form is ready for the next one. Players added here get a payment code in this group.
  */
-export function QuickAddPlayers({ groupId, onAdded }: { groupId: string; onAdded: () => Promise<unknown> }) {
+export function QuickAddPlayers({ groupId, groupName, onAdded }: { groupId: string; groupName?: string; onAdded: () => Promise<unknown> }) {
   const toast = useToast();
   const first = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
   const phoneSeen = useTouched();
   const [saving, setSaving] = useState(false);
-  const [added, setAdded] = useState<string[]>([]);
+  // Who was just added, each with a way to send them into the app straight away
+  const [added, setAdded] = useState<{ id: string; firstName: string; lastName: string; phone: string | null }[]>([]);
   const ready = form.firstName.trim().length >= 2 && form.lastName.trim().length >= 1;
 
   async function add(e: React.FormEvent) {
@@ -29,7 +31,7 @@ export function QuickAddPlayers({ groupId, onAdded }: { groupId: string; onAdded
         phone: form.phone.trim() || undefined,
       });
       await addMember(groupId, { playerId: player.id });
-      setAdded((list) => [...list, `${player.firstName} ${player.lastName}`]);
+      setAdded((list) => [...list, { id: player.id, firstName: player.firstName, lastName: player.lastName, phone: player.phone ?? null }]);
       setForm({ firstName: '', lastName: '', phone: '' });
       first.current?.focus();
       await onAdded();
@@ -61,14 +63,19 @@ export function QuickAddPlayers({ groupId, onAdded }: { groupId: string; onAdded
         onBlur={phoneSeen.onBlur}
         className={input}
       />
-      <PhoneHint value={form.phone} touched={phoneSeen.touched}>With a number you can send them their payment details on WhatsApp.</PhoneHint>
+      <PhoneHint value={form.phone} touched={phoneSeen.touched}>With a number, send them their app link.</PhoneHint>
       <button type="submit" disabled={!ready || saving} className="w-full min-h-11 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 disabled:opacity-40 transition-colors">
         {saving ? 'Adding…' : added.length ? 'Add another' : 'Add to the group'}
       </button>
       {added.length > 0 && (
-        <p className="text-[13px] text-pitch-700 font-semibold" aria-live="polite">
-          ✓ Added {added.join(', ')}
-        </p>
+        <ul className="pt-1 space-y-1" aria-live="polite">
+          {added.map((p) => (
+            <li key={p.id} className="flex items-center justify-between gap-2">
+              <span className="min-w-0 truncate text-[13px] font-semibold text-pitch-700">✓ {p.firstName} {p.lastName} added</span>
+              <SignInLinkButton player={p} variant="chip" groupName={groupName} />
+            </li>
+          ))}
+        </ul>
       )}
     </form>
   );

@@ -46,8 +46,11 @@ export function PlayerSheet({
   onSendDetails,
   showProfileLink = true,
   startEditing = false,
+  appStatus,
   onClose,
 }: {
+  /** Whether they're using the app (organisers see it): in, a sign-in link out, or not yet. */
+  appStatus?: 'in' | 'invited' | 'none';
   player: IPlayer;
   membership?: Membership;
   canEdit: boolean;
@@ -149,6 +152,11 @@ export function PlayerSheet({
     },
     { k: 'Phone', v: player.phone || 'Not added', tone: player.phone ? undefined : 'text-gray-500 font-semibold' },
     { k: 'Email', v: player.email || 'Not added', tone: player.email ? undefined : 'text-gray-500 font-semibold' },
+    appStatus && {
+      k: 'App',
+      v: appStatus === 'in' ? 'In the app ✓' : appStatus === 'invited' ? 'Link sent · not in yet' : 'Not in yet',
+      tone: appStatus === 'in' ? 'text-pitch-700' : 'text-gray-500 font-semibold',
+    },
   ].filter(Boolean) as { k: string; v: string; tone?: string; note?: string }[];
 
   return (

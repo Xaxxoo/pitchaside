@@ -221,6 +221,12 @@ export function createSignInLink(playerId: string) {
   return http.post<{ link: string; expiresAt: string; firstName: string; phone: string | null; hasEmail: boolean }>(`/players/${playerId}/sign-in-link`);
 }
 
+/** Who in a group is using the app: in (can sign in), invited (a sign-in link is out), none. */
+export type AppStatus = 'in' | 'invited' | 'none';
+export function getAppStatus(groupId: string) {
+  return http.get<{ players: Record<string, AppStatus> }>(`/groups/${groupId}/app-status`).then((r) => r.players);
+}
+
 export function deletePlayer(id: string): Promise<void> {
   return http.delete<void>(`/players/${id}`);
 }
