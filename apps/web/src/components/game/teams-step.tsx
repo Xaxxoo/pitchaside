@@ -1,7 +1,7 @@
 'use client';
 
 import { DayPlan } from '@/components/plan/day-plan';
-import { useId, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { Avatar } from '@/components/ratings';
@@ -14,6 +14,7 @@ import { BibsSheet } from '@/components/bibs-sheet';
 import type { Bibs } from '@pitchaside/shared';
 import { TEAMS, bibFill, bibOf, bibTint, teamName } from '@/lib/teams';
 import { POSITIONS, positionLabel, positionOrder, positionShort } from '@/lib/positions';
+import { TeamPitch } from '@/components/team-pitch';
 import type { Position } from '@pitchaside/shared';
 
 const KEYS = Object.keys(TEAMS) as TeamKey[];
@@ -54,6 +55,19 @@ export function TeamsStep({
   const [moving, setMoving] = useState<Member | null>(null);
   const [bibsOpen, setBibsOpen] = useState(false);
   const [clearing, setClearing] = useState(false);
+  // Lists or pitches, remembered on this phone
+  const [view, setView] = useState<'lists' | 'pitches'>('lists');
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('pa_teams_view') === 'pitches') setView('pitches');
+    } catch {}
+  }, []);
+  const pickView = (v: 'lists' | 'pitches') => {
+    setView(v);
+    try {
+      localStorage.setItem('pa_teams_view', v);
+    } catch {}
+  };
   const clearId = useId();
   const toast = useToast();
   const teams = KEYS.slice(0, lineup.teamCount);
@@ -260,6 +274,50 @@ export function TeamsStep({
         </div>
       )}
 
+      {lineup.squad.some((m) => m.team) && (
+        <div className="mt-4 grid grid-cols-2 gap-1 p-1 rounded-2xl bg-chalk border border-gray-200" role="radiogroup" aria-label="Show teams as">
+          {(['lists', 'pitches'] as const).map((v) => (
+            <button
+              key={v}
+              role="radio"
+              aria-checked={view === v}
+              onClick={() => pickView(v)}
+              className={`press min-h-10 rounded-xl text-[13px] font-bold ${view === v ? 'bg-ink text-volt-300' : 'text-gray-600 hover:text-ink'}`}
+            >
+              {v === 'lists' ? 'Lists' : 'Pitches'}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {view === 'pitches' && lineup.squad.some((m) => m.team) ? (
+        <div className="mt-3 space-y-2">
+          {teams.map((t) => {
+            const members = lineup.squad.filter((m) => m.team === t);
+            return (
+              <TeamPitch
+                key={t}
+                title={teamName(t, lineup.captains, lineup.bibs)}
+                badge={
+                  lineup.teamOfTheDay === t && (
+                    <span className="shrink-0" title="Team of the Day">
+                      🏆<span className="sr-only">, Team of the Day</span>
+                    </span>
+                  )
+                }
+                empty={unpicked.length ? 'Tap a player above to put them here.' : 'Move someone from another team.'}
+                swatch={<Swatch team={t} bibs={lineup.bibs} className="w-3.5 h-3.5 rounded" />}
+                tone={bibTint(t, lineup.bibs)}
+                players={members.map((m) => ({ id: m.id, name: `${m.firstName} ${m.lastName}`, short: shortName(m), position: m.position ?? null, photoKey: m.photoKey, captain: m.captain, vice: !!m.vice, tappable: !fixed(m) }))}
+                onTap={(id) => {
+                  const m = lineup.squad.find((x) => x.id === id);
+                  if (m && !fixed(m) && !busy) setMoving(m);
+                }}
+              />
+            );
+          })}
+        </div>
+      ) : (
       <div className="mt-4 grid grid-cols-2 gap-2 items-start">
         {teams.map((t) => {
           const members = lineup.squad
@@ -302,6 +360,7 @@ export function TeamsStep({
           );
         })}
       </div>
+      )}
 
       {!locked && clearable().length > 0 && (
         <div className="mt-2 flex items-center justify-between gap-3 px-1">
