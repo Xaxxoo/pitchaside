@@ -305,9 +305,13 @@ export class NotificationsService implements OnModuleInit {
         await this.emailPlayer(player, notice);
       }
       if (this.fallback === 'whatsapp' && needsFallback && player.phone) {
+        // Added by hand with no email, they can't sign in: the club's link lets them sign up, and
+        // their WhatsApp number finds this record ("Are you Kunle A.?").
+        const club = player.organization?.inviteCode;
+        const link = !player.email && club ? `\nJoin to see it: ${this.appUrl(`/join/${club}`)}` : notice.url ? `\n${this.appUrl(notice.url)}` : '';
         await this.sendMessage({
           to: player.phone,
-          body: notice.message ?? `${notice.title}\n${notice.body}${notice.url ? `\n${this.appUrl(notice.url)}` : ''}`,
+          body: notice.message ?? `${notice.title}\n${notice.body}${link}`,
           kind: notice.kind,
           playerId: player.id,
           organizationId: player.organizationId,

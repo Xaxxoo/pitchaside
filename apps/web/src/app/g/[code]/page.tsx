@@ -15,6 +15,7 @@ import { checkSignupPhone, getPlayerGame, getPlayerHome, joinAsPlayer, signupFro
 import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
 import { AccountRow, KnownAccountPicker } from '@/components/known-account-picker';
 import { PaymentType } from '@pitchaside/shared';
+import { btnPrimary, btnSecondary } from '@/components/buttons';
 
 type Stage = 'signup' | 'signin' | 'joined';
 
@@ -40,10 +41,15 @@ export default function GroupLinkPage() {
   // From a game's QR code (/g/<code>?game=<id>): the game they're here for.
   const [game, setGame] = useState<string | null>(null);
   const [goingToGame, setGoingToGame] = useState(false);
+  // From a vote link (/g/<code>?vote=<token>): someone who played but never signed up joins, then votes
+  const [vote, setVote] = useState<string | null>(null);
 
   useEffect(() => {
-    const wanted = new URLSearchParams(window.location.search).get('game');
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get('game');
+    const voting = params.get('vote');
     setGame(wanted);
+    setVote(voting);
     const known = knownAccounts();
     setAccounts(known);
     // Been here before with an account: lead with signing in (by name), not a new sign-up form.
@@ -73,13 +79,19 @@ export default function GroupLinkPage() {
         const g = await groupLoad.catch(() => null);
         if (g?.groupId && home.groups.some((x) => x.id === g.groupId)) {
           setOpeningAs(home.player.firstName);
-          router.replace(`/me?group=${g.groupId}`);
+          router.replace(voting ? `/v/${voting}` : `/me?group=${g.groupId}`);
         }
       })
       .catch(() => setSignedIn(false));
   }, [code]);
 
   function done(res: JoinResult) {
+    // From a vote link: back to the vote, now they can sign in to it
+    if (vote) {
+      setOpeningAs(res.firstName);
+      router.replace(`/v/${vote}`);
+      return;
+    }
     // From a game's QR code: on to that game, where they say they're in and see what to pay.
     if (game) {
       setGoingToGame(true);
@@ -162,6 +174,14 @@ export default function GroupLinkPage() {
   // The accounts to offer by name: the one signed in first, then the others this phone has used
   const others = accounts.filter((a) => a.email !== me?.email?.trim().toLowerCase());
   const chosenAccount = accounts.find((a) => a.email === lastEmail);
+  /** Someone else on this phone: the email-first sign-up (a known email still goes to sign in). */
+  const startNew = () => {
+    setError(null);
+    setSignedIn(false);
+    setStartCode(false);
+    setLastEmail('');
+    setStage('signup');
+  };
   const useAccount = (email: string) => {
     setError(null);
     setSignedIn(false);
@@ -211,7 +231,7 @@ export default function GroupLinkPage() {
                   claim={{ groupId: joined.groupId, amount: joined.feePerPlayer }}
                 />
               </div>
-              <ol className="mt-6 space-y-3">
+              {joined.account && <ol className="mt-6 space-y-3">
                 {[
                   <>Transfer <span className="font-bold text-ink">{formatCurrency(joined.feePerPlayer)}</span> to the account above.</>,
                   <>Put your payment code <span className="font-bold text-ink">{joined.paymentRef}</span> in the transfer description.</>,
@@ -222,12 +242,12 @@ export default function GroupLinkPage() {
                     <span className="pt-0.5">{step}</span>
                   </li>
                 ))}
-              </ol>
+              </ol>}
             </>
           )}
 
           <Link
-            href="/me?welcome=1"
+            href={perGame ? '/me/games?welcome=1' : '/me?welcome=1'}
             className="mt-8 w-full flex items-center justify-center gap-2 py-3.5 bg-ink text-volt-300 text-sm font-bold rounded-2xl hover:bg-pitch-900 transition-colors"
           >
             {perGame ? 'See the next game →' : 'Open my PitchAside →'}
@@ -276,17 +296,19 @@ export default function GroupLinkPage() {
 
           {signedIn ? (
             <div className="bg-white rounded-3xl border-2 border-ink shadow-sticker p-5 space-y-3">
-              <h2 className="text-xl font-extrabold text-ink">Join {group.groupName}</h2>
+              <h2 className="text-xl font-extrabold text-ink">Who’s joining?</h2>
               {/* Which account joins, said by name, so someone with two picks the right one */}
               {me && <AccountRow name={`${me.firstName} ${me.lastName}`} email={me.email} current />}
-              <button
-                onClick={joinSignedIn}
-                disabled={busy}
-                className="w-full py-3.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {busy && <BallSpinner />}
-                {game ? 'Join and see the game' : me ? `Join as ${me.firstName}` : `Join ${group.groupName}`}
-              </button>
+              {/* A shared phone: the friend who scanned it picks "someone new", never joins as the owner by mistake */}
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={joinSignedIn} disabled={busy} className={`${btnPrimary} min-w-0`}>
+                  {busy && <BallSpinner />}
+                  <span className="truncate">{me ? `I’m ${me.firstName}` : 'Join'}</span>
+                </button>
+                <button onClick={startNew} disabled={busy} className={btnSecondary}>
+                  I’m new
+                </button>
+              </div>
               {others.length > 0 && (
                 <div className="pt-1">
                   <p className="text-[12px] font-bold text-gray-500">Or use another account on this phone</p>
@@ -300,13 +322,13 @@ export default function GroupLinkPage() {
                 </div>
               )}
               <button onClick={() => useAccount('')} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
-                {others.length ? 'A different account' : 'Not you? Use another account'}
+                I have another account
               </button>
             </div>
           ) : stage === 'signin' ? (
             <>
             {/* Accounts this phone has used: one tap fills the email, so they only type the password */}
-            <KnownAccountPicker accounts={accounts} chosen={lastEmail} onPick={(email) => { setError(null); setStartCode(false); setLastEmail(email); }} />
+            <KnownAccountPicker accounts={accounts} chosen={lastEmail} onPick={(email) => { setError(null); setStartCode(false); setLastEmail(email); }} onNew={startNew} />
             <PasswordSignIn
               key={chosenAccount?.email ?? 'other'}
               title={chosenAccount ? `Welcome back, ${chosenAccount.firstName}` : 'Welcome back'}
@@ -316,9 +338,12 @@ export default function GroupLinkPage() {
               startWithCode={startCode}
               onSignedIn={onSignedIn}
               footer={
-                <button onClick={() => { setError(null); setStartCode(false); setStage('signup'); }} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
-                  New to PitchAside? Create an account
-                </button>
+                // With names to pick from, "I'm someone new" sits with them instead
+                accounts.length ? undefined : (
+                  <button onClick={startNew} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
+                    New to PitchAside? Create an account
+                  </button>
+                )
               }
             />
             </>

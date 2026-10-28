@@ -56,7 +56,7 @@ import { GroupMessageSheet, SEND_KINDS, type SendKind } from '@/components/game/
 import { coveredByDues as coversByDues, gamePhase, gameTally, leftToPay } from '@/lib/game-player';
 import { AddToGameSheet } from '@/components/game/add-to-game-sheet';
 import { MovePaymentSheet } from '@/components/game/move-payment-sheet';
-import { gameInviteMessage, openWhatsApp, paymentDetailsMessage, pickWhy } from '@/lib/whatsapp';
+import { gameInviteMessage, gameLink, openWhatsApp, paymentDetailsMessage, pickWhy } from '@/lib/whatsapp';
 import { prettyTime } from '@/components/player-ui';
 
 /** Today as YYYY-MM-DD in the browser's time zone. */
@@ -261,6 +261,7 @@ export default function GamePage() {
           code: member?.paymentRef,
           amount: leftToPay(p),
           forWhat: gameLabel(session),
+          link: billing.link,
         }),
         phone,
       );
@@ -385,7 +386,7 @@ export default function GamePage() {
         where: session.group?.location,
         inCount: tally.playing,
         places: Number(session.group?.targetPlayers ?? 0) || undefined,
-        link: billing.link,
+        link: gameLink(billing.link, session.id),
       }),
     );
   };

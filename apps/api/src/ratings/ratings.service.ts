@@ -616,6 +616,8 @@ export class RatingsService {
     const inv = this.involvement(session, await this.gamesRepo.find({ where: { sessionId: session.id } }));
     return {
       groupName: session.group?.name,
+      // The group link: someone who played but never signed up (added by hand) joins with it, then votes
+      joinCode: session.group?.inviteCode ?? null,
       date: session.date,
       open: w.open,
       notYet: w.notYet,

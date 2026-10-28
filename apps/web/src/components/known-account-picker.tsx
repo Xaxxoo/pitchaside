@@ -36,7 +36,18 @@ export function AccountRow({ name, email, current, selected, onPick }: { name: s
  * "Continue as": the player accounts this phone has used, one tap each to fill the email (they
  * still type the password). Nothing shows on a phone that hasn't signed in before.
  */
-export function KnownAccountPicker({ accounts, chosen, onPick }: { accounts: KnownAccount[]; chosen: string; onPick: (email: string) => void }) {
+export function KnownAccountPicker({
+  accounts,
+  chosen,
+  onPick,
+  onNew,
+}: {
+  accounts: KnownAccount[];
+  chosen: string;
+  onPick: (email: string) => void;
+  /** A shared phone: "I'm someone new" right under the names, not hidden at the bottom of the form. */
+  onNew?: () => void;
+}) {
   if (!accounts.length) return null;
   return (
     <div className="mb-3">
@@ -47,6 +58,23 @@ export function KnownAccountPicker({ accounts, chosen, onPick }: { accounts: Kno
             <AccountRow name={[a.firstName, a.lastName].filter(Boolean).join(' ')} email={a.email} selected={chosen === a.email} onPick={() => onPick(a.email)} />
           </li>
         ))}
+        {onNew && (
+          <li>
+            <button
+              type="button"
+              onClick={onNew}
+              className="press w-full min-h-14 flex items-center gap-3 px-3 py-2 rounded-2xl border border-dashed border-gray-300 bg-white text-left hover:border-ink"
+            >
+              <span className="w-10 h-10 shrink-0 rounded-full bg-chalk text-ink flex items-center justify-center text-lg font-extrabold" aria-hidden>
+                +
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[15px] font-bold text-ink">I’m someone new</span>
+                <span className="block text-[12px] text-gray-500 truncate">Join with your own email</span>
+              </span>
+            </button>
+          </li>
+        )}
       </ul>
     </div>
   );

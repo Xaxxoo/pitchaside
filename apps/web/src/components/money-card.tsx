@@ -22,7 +22,7 @@ import {
   type RsvpBoard,
   type SessionVoting,
 } from '@/lib/api';
-import { gameInviteMessage, openWhatsApp } from '@/lib/whatsapp';
+import { gameInviteMessage, gameLink, openWhatsApp } from '@/lib/whatsapp';
 import { WhatsAppGlyph } from '@/components/game/group-message-sheet';
 import { isVotingOpen } from '@/lib/game-status';
 import { formatAccountNumber, frequencyShort, paymentShareText } from '@/lib/billing';
@@ -1023,7 +1023,7 @@ function GameSection({
                   where,
                   inCount: taken,
                   places: capacity || undefined,
-                  link: inviteLink,
+                  link: gameLink(inviteLink, game.id),
                 }),
               )
             }

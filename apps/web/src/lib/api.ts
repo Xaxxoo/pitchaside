@@ -1139,6 +1139,8 @@ export interface SessionVoting extends VoteResults {
 
 export interface Ballot {
   groupName?: string;
+  /** The group's link code, so someone who played but has no account can join, then vote. */
+  joinCode?: string | null;
   date: string;
   open: boolean;
   notYet: boolean;

@@ -306,6 +306,7 @@ export function GroupSquad({
                       code: opened.paymentRef,
                       amount: opened.due?.state === 'owes' ? opened.due.amount : undefined,
                       forWhat: opened.due?.state === 'owes' ? opened.due.label : undefined,
+                      link: billing.link,
                     }),
                     opened.player.phone,
                   );

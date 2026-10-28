@@ -48,6 +48,11 @@ export function paymentDetailsMessage(p: {
   amount?: number;
   /** "Sat 24 Oct": what it's for. */
   forWhat?: string;
+  /**
+   * The group's join link: someone added by hand has no way into the app without it. Members
+   * who already have an account go straight in with it.
+   */
+  link?: string | null;
 }) {
   return [
     `Hi ${p.firstName} 👋 ${p.groupName}${p.forWhat ? ` · ${p.forWhat}` : ''}`,
@@ -56,9 +61,18 @@ export function paymentDetailsMessage(p: {
     `${p.account.accountNumber}`,
     `${p.account.accountName}`,
     p.code ? `Put your payment code ${p.code} in the transfer description, so it's matched to you straight away.` : '',
+    p.link ? `\nYour games, what you owe and your player card: ${p.link}` : '',
   ]
     .filter(Boolean)
     .join('\n');
+}
+
+/**
+ * The group's join link pointing at one game: members open that game, new players sign up and
+ * land on it (the same link as the game's QR code).
+ */
+export function gameLink(link: string, gameId: string) {
+  return `${link}${link.includes('?') ? '&' : '?'}game=${gameId}`;
 }
 
 /** A game to share in the group chat: when, where, how full, and the link to say you're in. */

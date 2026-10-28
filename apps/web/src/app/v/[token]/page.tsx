@@ -249,9 +249,19 @@ export default function VotePage() {
             ) : (
               <PasswordSignIn
                 title="Vote on today’s game"
-                subtitle="Player of the Match, your Best VII of the Day and any awards you want to give. About a minute. Sign in to vote."
+                subtitle="Player of the Match, Best VII and awards. About a minute."
                 cta="Sign in & vote"
                 onSignedIn={onSignedIn}
+                footer={
+                  ballot.joinCode ? (
+                    <Link
+                      href={`/g/${ballot.joinCode}?vote=${token}`}
+                      className="press w-full min-h-11 flex items-center justify-center text-[13px] font-semibold text-gray-500 hover:text-ink"
+                    >
+                      Never signed in? Join, then vote ›
+                    </Link>
+                  ) : undefined
+                }
               />
             )}
           </div>
