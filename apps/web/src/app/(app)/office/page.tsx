@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { http } from '@/lib/http';
 import { formatCurrency } from '@/lib/api';
-import { StatCard } from '@/components/stat-card';
+import { GroupsCompared, MoneyHealth, QuietPlayers, SeasonHero, type OrgOverview } from '@/components/office/overview';
 import { UserRole } from '@pitchaside/shared';
 import { PageHeader } from '@/components/brand';
 import { kitFor } from '@/components/illustrations';
@@ -28,30 +28,58 @@ interface ActivityLog {
   };
 }
 
-/** "Tunde marked Tobi Martins paid · ₦3,000", with the group and game underneath. */
-function describeActivity(log: ActivityLog) {
-  const s = log.summary;
-  const who = s?.actorName ?? 'Someone';
-  const amount = s?.amount != null ? ` · ${formatCurrency(s.amount)}` : '';
-  let title: string;
-  switch (log.action) {
-    case 'payment_marked_paid':
-      title = `${who} marked ${s?.playerName ?? 'a payment'} paid${amount}`;
-      break;
-    case 'payment_bulk_marked_paid':
-      title = `${who} marked ${s?.count ?? 'several'} payment${s?.count === 1 ? '' : 's'} paid`;
-      break;
-    case 'payment_waived':
-      title = `${who} let ${s?.playerName ?? 'a player'} play free${amount}`;
-      break;
-    default:
-      title = log.action.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
+/** One kind of thing someone did to payments: how to say it for one player, and for several. */
+const ACTIONS: Record<string, { one: (player: string) => string; many: (n: number) => string }> = {
+  payment_marked_paid: { one: (p) => `marked ${p} paid`, many: (n) => `marked ${n} payments paid` },
+  payment_bulk_marked_paid: { one: (p) => `marked ${p} paid`, many: (n) => `marked ${n} payments paid` },
+  payment_marked_unpaid: { one: (p) => `marked ${p} not paid`, many: (n) => `marked ${n} payments not paid` },
+  payment_waived: { one: (p) => `let ${p} play free`, many: (n) => `let ${n} players play free` },
+  payment_no_show: { one: (p) => `marked ${p} as didn’t come`, many: (n) => `marked ${n} players as didn’t come` },
+  payment_came: { one: (p) => `marked ${p} as came`, many: (n) => `marked ${n} players as came` },
+  payment_moved: { one: (p) => `moved ${p}’s payment`, many: (n) => `moved ${n} payments` },
+};
+
+/** "Today 2:05 pm", "Yesterday 9:10 am", else "Wed 21 Oct, 2:05 pm": short enough for one line. */
+function when(iso: string) {
+  const d = new Date(iso);
+  const time = d.toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit', hour12: true }).replace(' ', '');
+  const key = (x: Date) => x.toLocaleDateString('en-CA');
+  const today = new Date();
+  const yesterday = new Date(today.getTime() - 86_400_000);
+  if (key(d) === key(today)) return `Today ${time}`;
+  if (key(d) === key(yesterday)) return `Yesterday ${time}`;
+  return `${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}, ${time}`;
+}
+
+/**
+ * The feed with runs folded together: the same person doing the same thing in the same group on
+ * the same day is one line ("Tunde marked 5 payments not paid · Tobi, Ada +3"), not five.
+ */
+function groupActivity(logs: ActivityLog[]) {
+  const runs: { logs: ActivityLog[]; key: string }[] = [];
+  for (const log of logs) {
+    const s = log.summary;
+    const key = [log.action === 'payment_bulk_marked_paid' ? 'payment_marked_paid' : log.action, s?.actorName, s?.groupName, new Date(log.createdAt).toLocaleDateString('en-CA')].join('|');
+    const last = runs[runs.length - 1];
+    if (last && last.key === key) last.logs.push(log);
+    else runs.push({ key, logs: [log] });
   }
-  const game = s?.sessionDate
-    ? new Date(`${s.sessionDate}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
-    : null;
-  const detail = [s?.groupName, game && `game on ${game}`].filter(Boolean).join(' · ');
-  return { title, detail };
+  return runs.map(({ logs }) => {
+    const first = logs[0];
+    const s = first.summary;
+    const who = s?.actorName ?? 'Someone';
+    const count = logs.reduce((n, l) => n + (l.summary?.count ?? 1), 0);
+    const names = [...new Set(logs.map((l) => l.summary?.playerName).filter((x): x is string => !!x))];
+    const say = ACTIONS[first.action];
+    // An amount only where money changed hands (paid, not paid, free), on the line under the title
+    const money = ['payment_marked_paid', 'payment_bulk_marked_paid', 'payment_marked_unpaid', 'payment_waived'].includes(first.action);
+    const amount = money && count === 1 && s?.amount != null ? formatCurrency(s.amount) : null;
+    const title = say
+      ? `${who} ${count === 1 ? say.one(s?.playerName ?? 'a player') : say.many(count)}`
+      : `${who}: ${first.action.replace(/_/g, ' ')}`;
+    const people = count > 1 && names.length ? `${names.slice(0, 2).join(', ')}${names.length > 2 ? ` +${names.length - 2}` : ''}` : null;
+    return { id: first.id, title, people, when: when(first.createdAt), group: s?.groupName ?? null, amount };
+  });
 }
 
 export default function AdminPage() {
@@ -60,7 +88,7 @@ export default function AdminPage() {
   const toast = useToast();
   const isSuperAdmin = user?.role === UserRole.SUPER_ADMIN;
 
-  const [orgStats, setOrgStats] = useState<any>(null);
+  const [overview, setOverview] = useState<OrgOverview | null>(null);
   const [orgMembers, setOrgMembers] = useState<any[]>([]);
   const [removing, setRemoving] = useState<any | null>(null);
   const [auditLogs, setAuditLogs] = useState<ActivityLog[]>([]);
@@ -79,9 +107,9 @@ export default function AdminPage() {
     }
 
     const promises: Promise<void>[] = [
-      http.get<any>('/admin/org/stats').then(setOrgStats),
+      http.get<OrgOverview>('/admin/org/overview').then(setOverview),
       http.get<any[]>('/admin/org/members').then(setOrgMembers),
-      http.get<any>('/admin/org/audit-log?limit=10').then((res) => setAuditLogs(res.data || [])),
+      http.get<any>('/admin/org/audit-log?limit=40').then((res) => setAuditLogs(res.data || [])),
     ];
 
     Promise.all(promises)
@@ -147,9 +175,9 @@ export default function AdminPage() {
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <PageHeader
-        eyebrow="Club office"
-        title="Admin"
-        subtitle={isSuperAdmin ? 'Platform administration' : 'Organization management'}
+        eyebrow={user?.organization?.name || 'Your club'}
+        title="Club office"
+        subtitle="Your season, money, players and team."
         actions={
           <Link
             href="/office/messages"
@@ -174,76 +202,49 @@ export default function AdminPage() {
         </Link>
       )}
 
-      {/* Org Stats */}
-      {orgStats && (
-        <div className="mb-8">
-          <h2 className="text-lg font-bold text-ink mb-3">
-            {user?.organization?.name || 'Organization'}
-          </h2>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <StatCard
-              label="Received"
-              value={formatCurrency(orgStats.totalReceived ?? 0)}
-              sub="Every transfer in, matched or not"
-              tone="ink"
-            />
-            <StatCard
-              label="Dues paid"
-              value={formatCurrency(orgStats.totalCollected)}
-              sub="Marked paid, by transfer or by hand"
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-3">
-            <StatCard label="Groups" value={orgStats.totalGroups} />
-            <StatCard label="Players" value={orgStats.totalPlayers} />
-            <StatCard label="Games" value={orgStats.totalSessions} />
-          </div>
+      {/* Season first, then what needs doing, then who and where */}
+      {overview && (
+        <div className="space-y-6 mb-8">
+          <SeasonHero o={overview} club={user?.organization?.name ?? 'Your club'} groups={overview.groups.length} />
+          <MoneyHealth o={overview} />
+          <GroupsCompared o={overview} />
+          <QuietPlayers o={overview} />
         </div>
       )}
 
-      {/* Recent Activity */}
+      {/* What the team did lately, runs folded into one line */}
       {auditLogs.length > 0 && (
-        <div className="mb-8">
-          <h2 className="text-lg font-bold text-ink mb-3">Recent Activity</h2>
-          <div className="space-y-2">
-            {auditLogs.map((log: ActivityLog) => {
-              const { title, detail } = describeActivity(log);
-              return (
-              <div
-                key={log.id}
-                className="bg-white rounded-2xl shadow-card p-3.5 border border-gray-100 text-sm"
-              >
-                <div className="flex justify-between items-start gap-3">
-                  <p className="text-gray-900 font-medium">{title}</p>
-                  <p className="text-xs text-gray-500">
-                    {new Date(log.createdAt).toLocaleDateString('en-US', {
-                      month: 'short',
-                      day: 'numeric',
-                      hour: 'numeric',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                </div>
-                {detail && <p className="text-xs text-gray-500 mt-0.5">{detail}</p>}
-              </div>
-              );
-            })}
-          </div>
-        </div>
+        <section className="mb-8" aria-labelledby="activity">
+          <h2 id="activity" className="text-base font-bold text-ink">
+            Recent activity
+          </h2>
+          <p className="mb-2 text-xs text-gray-500">What you and your team changed lately.</p>
+          <ul className="bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100">
+            {groupActivity(auditLogs)
+              .slice(0, 8)
+              .map((a) => (
+                <li key={a.id} className="px-4 py-3">
+                  <p className="text-[14px] font-semibold text-ink leading-snug">{a.title}</p>
+                  {a.people && <p className="text-[12px] text-gray-600 truncate">{a.people}</p>}
+                  <p className="mt-0.5 text-[12px] text-gray-500 truncate">{[a.when, a.group, a.amount].filter(Boolean).join(' · ')}</p>
+                </li>
+              ))}
+          </ul>
+        </section>
       )}
 
       {/* Org Members */}
       <div id="co-admins">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h2 className="text-lg font-bold text-ink">Co-admins</h2>
-            <p className="text-xs text-gray-500">People who help you run the group.</p>
+            <h2 className="text-base font-bold text-ink">Team</h2>
+            <p className="text-xs text-gray-500">People who help you run the club.</p>
           </div>
           <button
             onClick={() => setShowInvite(!showInvite)}
-            className="text-sm font-semibold text-pitch-600 hover:text-pitch-700"
+            className="min-h-11 px-2 -mr-2 text-sm font-bold text-pitch-700 hover:text-pitch-800"
           >
-            {showInvite ? 'Cancel' : '+ Add'}
+            {showInvite ? 'Cancel' : 'Add someone'}
           </button>
         </div>
 
@@ -320,40 +321,42 @@ export default function AdminPage() {
           {orgMembers.map((member: any) => (
             <div
               key={member.id}
-              className="bg-white rounded-2xl shadow-card p-3.5 border border-gray-100 flex items-center justify-between"
+              className="bg-white rounded-2xl shadow-card p-3.5 border border-gray-100 flex items-center gap-2"
             >
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 rounded-full ${kitFor(`${member.firstName} ${member.lastName}`).bg} ${kitFor(`${member.firstName} ${member.lastName}`).fg} flex items-center justify-center text-xs font-extrabold font-display`}>
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <div className={`w-10 h-10 shrink-0 rounded-full ${kitFor(`${member.firstName} ${member.lastName}`).bg} ${kitFor(`${member.firstName} ${member.lastName}`).fg} flex items-center justify-center text-xs font-extrabold font-display`}>
                   {member.firstName[0]}{member.lastName[0]}
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-ink">
-                    {member.firstName} {member.lastName}
+                <div className="min-w-0">
+                  <p className="flex items-center gap-1.5 min-w-0">
+                    <span className="text-sm font-bold text-ink truncate">
+                      {member.firstName} {member.lastName}
+                    </span>
+                  <span className={`shrink-0 text-[10px] font-semibold px-2 py-1 rounded-full uppercase tracking-wide ${
+                    member.role === 'super_admin'
+                      ? 'bg-purple-50 text-purple-700'
+                      : member.role === 'org_admin'
+                        ? 'bg-volt-300 text-ink'
+                        : member.role === 'treasurer'
+                          ? 'bg-sun-400/30 text-amber-800'
+                          : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {member.role === 'super_admin'
+                      ? 'Super Admin'
+                      : member.role === 'org_admin'
+                        ? 'Admin'
+                        : member.role === 'treasurer'
+                          ? 'Treasurer'
+                          : 'Co-organiser'}
+                  </span>
                   </p>
-                  <p className="text-xs text-gray-500">{member.email}</p>
+                  <p className="text-xs text-gray-500 truncate">{member.email}</p>
                 </div>
               </div>
-              <span className={`text-[10px] font-semibold px-2 py-1 rounded-full uppercase tracking-wide ${
-                member.role === 'super_admin'
-                  ? 'bg-purple-50 text-purple-700'
-                  : member.role === 'org_admin'
-                    ? 'bg-volt-300 text-ink'
-                    : member.role === 'treasurer'
-                      ? 'bg-sun-400/30 text-amber-800'
-                      : 'bg-gray-100 text-gray-600'
-              }`}>
-                {member.role === 'super_admin'
-                  ? 'Super Admin'
-                  : member.role === 'org_admin'
-                    ? 'Admin'
-                    : member.role === 'treasurer'
-                      ? 'Treasurer'
-                      : 'Co-organiser'}
-              </span>
               {(member.role === 'member' || member.role === 'treasurer') && member.id !== user?.id && (
                 <button
                   onClick={() => setRemoving(member)}
-                  className="ml-2 min-h-11 px-3 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-ink transition-colors"
+                  className="shrink-0 min-h-11 px-3 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:border-ink transition-colors"
                 >
                   Remove
                 </button>
@@ -371,8 +374,11 @@ export default function AdminPage() {
             onCancel={() => setRemoving(null)}
           />
 
-          {orgMembers.length === 0 && (
-            <p className="text-sm text-gray-500 text-center py-8">No team members yet.</p>
+          {orgMembers.length <= 1 && !showInvite && (
+            <div className="rounded-2xl bg-chalk border border-dashed border-gray-300 px-4 py-3.5">
+              <p className="text-[14px] font-bold text-ink">Running it alone?</p>
+              <p className="text-[13px] text-gray-600">Add a co-organiser, or a treasurer who only records payments.</p>
+            </div>
           )}
         </div>
       </div>

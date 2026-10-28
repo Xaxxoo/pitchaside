@@ -60,6 +60,15 @@ export class AdminController {
 
   // ── Org Admin endpoints ──
 
+  /** The Club office: season, money health, players gone quiet, groups side by side. */
+  @Get('org/overview')
+  @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
+  getOrgOverview(@CurrentUser() user: User, @Query('quietDays') quietDays?: string) {
+    // "Gone quiet" after this many days without a game (a week to a year); else four weeks
+    const days = Math.round(Number(quietDays));
+    return this.adminService.getOrgOverview(user.organizationId, days >= 1 && days <= 365 ? days : undefined);
+  }
+
   @Get('org/stats')
   @Roles(UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN)
   getOrgStats(@CurrentUser() user: User) {
