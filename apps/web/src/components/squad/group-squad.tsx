@@ -1,7 +1,7 @@
 'use client';
 
 import { leftToPay } from '@/lib/game-player';
-import { Callout, CalloutIcon } from '@/components/callout';
+import { CalloutIcon } from '@/components/callout';
 import { Stepper } from '@/components/steps';
 import { SETUP_STEPS } from '@/lib/setup-steps';
 import { useEffect, useState } from 'react';
@@ -364,12 +364,14 @@ export function GroupSquad({
         <div className="mt-2 bg-white rounded-3xl border border-gray-100 shadow-card p-4 animate-fade-in-up space-y-4">
           {/* Straight from making the group: the last step of setting up */}
           {startAdding && memberCount === 0 && (
-            <>
+            <div>
               <Stepper labels={SETUP_STEPS} at={2} note="Last step" />
-              <Callout tone="good" title={`${group.name} is ready`}>
-                Last step: add your players here, or send the group link with Invite.
-              </Callout>
-            </>
+              <h3 className="mt-4 font-display text-xl font-extrabold text-ink leading-tight">Add your players</h3>
+              <p className="mt-0.5 flex items-center gap-1 min-w-0 text-[13px] font-semibold text-pitch-700">
+                <CalloutIcon tone="good" className="w-3.5 h-3.5" />
+                <span className="truncate">{group.name} is set up</span>
+              </p>
+            </div>
           )}
           <QuickAddPlayers groupId={id} groupName={group.name} onAdded={reloadGroup} />
           {availablePlayers.length > 0 && (
@@ -404,13 +406,16 @@ export function GroupSquad({
 
       {!group.memberships?.length ? (
         <div className="mt-2">
-          <EmptyState
-            icon="users"
-            title="No one in the group yet"
-            description={canManage ? 'Send the invite link to your group chat, or add players yourself.' : 'Players show up here once the organiser adds them or they join with the link.'}
-            actionLabel={canManage && !showAddMember ? 'Add players' : undefined}
-            onAction={canManage && !showAddMember ? toggleAdd : undefined}
-          />
+          {/* While the add form is open it already says what to do: no second "add players" box */}
+          {!showAddMember && (
+            <EmptyState
+              icon="users"
+              title="No one in the group yet"
+              description={canManage ? 'Send the invite link to your group chat, or add players yourself.' : 'Players show up here once the organiser adds them or they join with the link.'}
+              actionLabel={canManage ? 'Add players' : undefined}
+              onAction={canManage ? toggleAdd : undefined}
+            />
+          )}
           {offerMe && (
             <div className="mt-3 text-center">
               <button onClick={handleAddMe} disabled={addingMe} className="h-11 px-3 text-sm font-bold text-pitch-700 disabled:opacity-50">

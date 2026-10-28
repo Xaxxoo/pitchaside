@@ -103,18 +103,16 @@ export default function NewGroupPage() {
       <FormShell>
       <FormHero
         eyebrow="New squad"
-        title="New group"
-        subtitle="Name, fee and day. Done in 30 seconds."
+        title={setup ? 'Your first group' : 'New group'}
+        subtitle="Name and fee. Change the rest any time."
         art={<KitLine className="w-full h-auto" />}
+        progress={setup ? <Stepper labels={SETUP_STEPS} at={1} note="Then add players" /> : undefined}
       />
 
       <form onSubmit={handleSubmit} className={formCardClass}>
-        {/* Setting up: where they are, at the top of the form */}
-        {setup && <Stepper labels={SETUP_STEPS} at={1} note="Then add players" />}
-
         <div>
           <label htmlFor="name" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Group Name *
+            Group name
           </label>
           <input
             id="name"
@@ -131,7 +129,7 @@ export default function NewGroupPage() {
 
           <div>
             <label htmlFor="feePerPlayer" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Fee per player ({currencySymbol(scope)}) *
+              Fee per player ({currencySymbol(scope)})
             </label>
             <input
               id="feePerPlayer"
@@ -214,7 +212,7 @@ export default function NewGroupPage() {
         </fieldset>
         <div>
             <label htmlFor="targetPlayers" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Players per game *
+              Players per game
             </label>
             <input
               id="targetPlayers"
