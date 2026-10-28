@@ -7,7 +7,7 @@ import { BallSpinner } from '@/components/skeleton';
 
 const HOW = {
   bvn: { label: 'BVN', where: 'Dial *565*0# from the phone number your bank has.' },
-  nin: { label: 'NIN', where: 'It\u2019s on your NIN slip, or dial *346# from your registered number.' },
+  nin: { label: 'NIN', where: 'On your NIN slip, or dial *346# from your NIN line.' },
 };
 
 /**

@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Nav } from '@/components/nav';
 import { useAuth } from '@/lib/auth';
-import { EmailVerifiedModal, VerifyEmailModal } from '@/components/verify-email-modal';
+import { EmailVerifiedModal, VerifyEmailModal, emailReminderSnoozed } from '@/components/verify-email-modal';
 import { VerifyIdentityModal } from '@/components/verify-identity-modal';
 import { UserRole } from '@pitchaside/shared';
 import { BallLoader } from '@/components/skeleton';
@@ -52,8 +52,9 @@ export default function AppLayout({
   return (
     <CurrentGroupProvider>
       {!user.emailVerified && <VerifyEmailModal email={user.email} onCheck={refreshUser} />}
-      {/* After the email one, so they never stack. Only the club admin opens accounts, so only they're asked. */}
-      {user.emailVerified && (!user.bvn || !user.nin) && user.role === UserRole.ORG_ADMIN && <VerifyIdentityModal />}
+      {/* Payments need BVN and NIN; email unlocks nothing, so this doesn't wait for it. It only waits while
+          the email reminder is showing, so the two never stack. Only the club admin opens accounts. */}
+      {(user.emailVerified || emailReminderSnoozed()) && (!user.bvn || !user.nin) && user.role === UserRole.ORG_ADMIN && <VerifyIdentityModal />}
       {celebrate && <EmailVerifiedModal onClose={() => setCelebrate(false)} />}
       <main className="min-h-screen pb-[calc(7rem_+_var(--install-nudge,0px))] md:pb-10 md:pl-60 md:pt-4">
         {children}

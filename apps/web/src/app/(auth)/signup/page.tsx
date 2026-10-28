@@ -32,6 +32,8 @@ export default function SignUpPage() {
         // up: the email is sent now, the reminder waits a day like "I'll do it later".
         sessionStorage.setItem('pa_after_signup', '1');
         localStorage.setItem('pitchaside_verify_email_later', String(Date.now()));
+        // BVN/NIN waits until they next open the app, not in the middle of the three steps
+        sessionStorage.setItem('pitchaside_identity_later', '1');
       } catch {
         // Storage blocked: they land on home and see the reminder; nothing breaks
       }
@@ -47,6 +49,7 @@ export default function SignUpPage() {
     } catch (err: any) {
       try {
         sessionStorage.removeItem('pa_after_signup');
+        sessionStorage.removeItem('pitchaside_identity_later');
         localStorage.removeItem('pitchaside_verify_email_later');
       } catch {
         // nothing to undo

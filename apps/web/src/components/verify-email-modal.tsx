@@ -47,7 +47,7 @@ const SNOOZE_KEY = 'pitchaside_verify_email_later';
 const SNOOZE_MS = 24 * 60 * 60 * 1000;
 
 /** Whether "I'll do it later" was chosen within the last day (storage may be unavailable). */
-function snoozed() {
+export function emailReminderSnoozed() {
   try {
     return Date.now() - Number(localStorage.getItem(SNOOZE_KEY) ?? 0) < SNOOZE_MS;
   } catch {
@@ -78,7 +78,7 @@ export function VerifyEmailModal({ email, onCheck }: { email: string; onCheck: (
 
   // Open after mount for an account whose email is still unverified — unless they chose
   // "I'll do it later" in the last day (opening the app shouldn't nag every time).
-  useEffect(() => setOpen(!snoozed()), []);
+  useEffect(() => setOpen(!emailReminderSnoozed()), []);
 
   /** Closed until the next page load. */
   const close = () => setOpen(false);
