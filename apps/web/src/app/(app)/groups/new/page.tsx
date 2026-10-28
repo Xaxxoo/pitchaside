@@ -214,8 +214,18 @@ export default function NewGroupPage() {
                     </label>
                   ))}
                 </div>
-                {/* What really happens: the account isn't opened here, it's opened from home with BVN and NIN */}
-                {scope === 'local' && <p className="mt-1.5 text-xs text-gray-500">You’ll open its bank account from home.</p>}
+                {/* Where the money goes, said as it really happens: a Nigerian group's bank account is opened
+                    from home with BVN and NIN (not here); international payments go to the organiser's own
+                    wallet and each one is matched by hand. */}
+                <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white border border-gray-200 px-3 py-2.5">
+                  <span className="w-8 h-8 shrink-0 rounded-lg bg-ink text-volt-300 flex items-center justify-center font-display font-extrabold text-sm" aria-hidden>
+                    {currencySymbol(scope)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-bold text-ink">{scope === 'local' ? 'Its own Payrep bank account' : 'Your USDT/USDC wallet'}</span>
+                    <span className="block text-xs text-gray-500">{scope === 'local' ? 'Open it from home with BVN and NIN.' : 'You match each payment yourself.'}</span>
+                  </span>
+                </div>
               </fieldset>
               {/* Five choices as one row of chips; what the picked one means sits on one line under them */}
               <fieldset>
