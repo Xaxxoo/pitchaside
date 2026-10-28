@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
 import helmet from 'helmet';
@@ -28,7 +29,9 @@ async function bootstrap() {
   if (process.env.NODE_ENV === 'production') await prepareProduction();
 
   // rawBody lets the PulseMFB webhook verify its signature over the exact bytes sent.
-  const app = await NestFactory.create(AppModule, { rawBody: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true });
+  // Room for a receipt screenshot (~300 KB as base64); everything else is far smaller
+  app.useBodyParser('json', { limit: '1mb' });
   app.setGlobalPrefix('api');
   app.use(cookieParser());
   app.use(helmet());

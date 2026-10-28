@@ -208,7 +208,20 @@ export type PlayerGroup = {
   /** Their money the organiser has to sort: more than was owed, or a game they paid for called off. */
   extra: number;
   account: GroupAccount | null;
+  /** Their latest "I've paid" while it's news: waiting for the organiser, or answered lately (newer servers). */
+  claim?: MyClaim | null;
 };
+
+export interface MyClaim {
+  id: string;
+  amount: number;
+  status: 'pending' | 'confirmed' | 'rejected';
+  createdAt: string;
+  hasReceipt: boolean;
+  /** What the organiser said when it wasn't found. */
+  note: string | null;
+  decidedBy: string | null;
+}
 
 export type Organiser = { clubName: string; email: string } | null;
 
@@ -339,9 +352,9 @@ export function getPlayerPayments() {
 }
 
 /** "Yes, I've paid": matched now if the transfer is already in, otherwise when it lands. */
-export function claimPayment(groupId: string, amount: number) {
+export function claimPayment(groupId: string, amount: number, receipt?: string) {
   // `owes`: what's still to pay after it (a part payment leaves some); older servers leave it out
-  return request<{ status: 'matched' | 'waiting'; owes?: number }>('POST', `/me/groups/${groupId}/paid`, { amount });
+  return request<{ status: 'matched' | 'waiting'; owes?: number }>('POST', `/me/groups/${groupId}/paid`, { amount, ...(receipt ? { receipt } : {}) });
 }
 
 export interface PlayerProfile {

@@ -2,6 +2,11 @@
 // In development, NEXT_PUBLIC_API_URL can point directly at the backend
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
+/** A receipt picture: the organiser's view of it, or (mine) the player's own. Private, sent with the login cookie. */
+export function receiptUrl(claimId: string, mine = false) {
+  return `${BASE_URL}${mine ? '/me' : ''}/claims/${claimId}/receipt`;
+}
+
 /** Where a player's photo is served; null when they haven't one. */
 export function photoUrl(key?: string | null) {
   return key ? `${BASE_URL}/photos/${key}` : null;

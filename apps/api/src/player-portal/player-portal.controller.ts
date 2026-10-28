@@ -41,6 +41,12 @@ export class ClaimPaymentDto {
   @Min(1, { message: 'Enter the amount you sent' })
   @Max(10_000_000)
   amount: number;
+
+  /** A screenshot of the transfer ("data:image/jpeg;base64,…"), optional. Checked by the server. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1_000_000)
+  receipt?: string;
 }
 
 export class PickTeamDto {
@@ -437,7 +443,17 @@ export class PlayerPortalController {
   /** "Yes, I've paid": the player says they've transferred into this group's account. */
   @Post('groups/:id/paid')
   claimPayment(@Param('id') id: string, @Body() dto: ClaimPaymentDto, @CurrentPerson() person: Person) {
-    return this.portal.claimPayment(person, id, dto.amount);
+    return this.portal.claimPayment(person, id, dto.amount, dto.receipt);
+  }
+
+  /** Their own receipt, to see what they sent. Private, never cached. */
+  @Get('claims/:id/receipt')
+  async claimReceipt(@Param('id') id: string, @CurrentPerson() person: Person, @Res() res: Response) {
+    const r = await this.portal.receipt(person, id);
+    res.setHeader('Content-Type', r.mime);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(r.data);
   }
 
   @Post('sessions/:id/rsvp')

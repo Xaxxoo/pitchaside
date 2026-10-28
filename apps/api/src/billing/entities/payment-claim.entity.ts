@@ -8,6 +8,10 @@ export enum ClaimStatus {
   PENDING = 'pending',
   /** Paired with a transfer, which went to the player. */
   MATCHED = 'matched',
+  /** The organiser confirmed it on the receipt before the bank reported the money (paid on receipt). */
+  CONFIRMED = 'confirmed',
+  /** The organiser couldn't find the money ("Not received"). */
+  REJECTED = 'rejected',
 }
 
 /**
@@ -48,6 +52,20 @@ export class PaymentClaim {
 
   @Column({ name: 'transfer_id', type: 'uuid', nullable: true })
   transferId: string | null;
+
+  /** The screenshot they attached, if any (payment_receipts). */
+  @Column({ name: 'receipt_id', type: 'uuid', nullable: true })
+  receiptId: string | null;
+
+  /** Who confirmed or turned it down, when, and what they said ("Not received"). */
+  @Column({ name: 'decided_by', type: 'varchar', nullable: true })
+  decidedBy: string | null;
+
+  @Column({ name: 'decided_at', type: 'timestamptz', nullable: true })
+  decidedAt: Date | null;
+
+  @Column({ type: 'varchar', length: 200, nullable: true })
+  note: string | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;

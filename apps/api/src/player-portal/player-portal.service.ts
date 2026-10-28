@@ -423,7 +423,13 @@ export class PlayerPortalService {
         paidAt: p.paidAt,
         viaTransfer: p.source === 'transfer',
       })),
-      groups: this.groupsOf(memberships, owed),
+      // Each group with their latest "I've paid" while it's news (waiting, or answered lately)
+      groups: await Promise.all(
+        this.groupsOf(memberships, owed).map(async (g) => {
+          const m = memberships.find((x) => x.groupId === g.id);
+          return { ...g, claim: m ? await this.billing.latestClaim(g.id, m.playerId) : null };
+        }),
+      ),
       contributions: await this.contributions(memberships),
       keptByGroup: await this.keptByGroup(ids),
     };
@@ -483,10 +489,14 @@ export class PlayerPortalService {
     return player;
   }
 
-  async claimPayment(person: Person, groupId: string, amount: number) {
+  async claimPayment(person: Person, groupId: string, amount: number, receipt?: string) {
     const membership = await this.membershipsRepo.findOne({ where: { groupId, playerId: In(this.ids(person)) } });
     if (!membership) throw new ForbiddenException("You're not in this group");
-    return this.billing.claimPayment(groupId, membership.playerId, amount);
+    return this.billing.claimPayment(groupId, membership.playerId, amount, receipt);
+  }
+
+  receipt(person: Person, claimId: string) {
+    return this.billing.receiptImage(claimId, { playerIds: this.ids(person) });
   }
 
   async setRsvp(person: Person, sessionId: string, status: 'in' | 'out') {

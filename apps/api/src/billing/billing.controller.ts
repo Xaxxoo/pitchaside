@@ -13,11 +13,13 @@ import {
   Query,
   RawBodyRequest,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ConfigService } from '@nestjs/config';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { BillingService } from './billing.service';
 import {
   AssignTransferDto,
@@ -48,6 +50,18 @@ import { UsersService } from '../users/users.service';
 const PIN_RATE_LIMIT = { default: { ttl: 60_000, limit: 10 } };
 
 /** Admin endpoints for a group's account, invite link, transfers and payouts. */
+class RejectClaimDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  note?: string;
+}
+
+class RecheckDto {
+  @IsBoolean()
+  keep: boolean;
+}
+
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class BillingController {
@@ -127,6 +141,45 @@ export class BillingController {
   @Get('groups/:id/owed')
   owed(@Param('id') id: string, @CurrentUser() user: User) {
     return this.billing.listOwed(id, user.organizationId);
+  }
+
+  /** "To check": players who say they've paid (with their receipts), and games paid on a receipt the bank hasn't confirmed. */
+  @AllowTreasurer()
+  @Get('groups/:id/to-check')
+  toCheck(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.billing.toCheck(id, user.organizationId);
+  }
+
+  /** Confirm an "I've paid": the transfer that fits it, else paid on the receipt. */
+  @AllowTreasurer()
+  @Post('claims/:id/confirm')
+  confirmClaim(@Param('id') id: string, @CurrentUser() user: User) {
+    return this.billing.confirmClaim(id, user.organizationId, `${user.firstName} ${user.lastName}`);
+  }
+
+  /** "Not received": the player is told, with the note. */
+  @AllowTreasurer()
+  @Post('claims/:id/reject')
+  rejectClaim(@Param('id') id: string, @Body() dto: RejectClaimDto, @CurrentUser() user: User) {
+    return this.billing.rejectClaim(id, user.organizationId, `${user.firstName} ${user.lastName}`, dto.note);
+  }
+
+  /** The receipt picture: private, never cached (it shows bank details). */
+  @AllowTreasurer()
+  @Get('claims/:id/receipt')
+  async receipt(@Param('id') id: string, @CurrentUser() user: User, @Res() res: Response) {
+    const r = await this.billing.receiptImage(id, { organizationId: user.organizationId });
+    res.setHeader('Content-Type', r.mime);
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.send(r.data);
+  }
+
+  /** A game paid on a receipt that the bank still hasn't confirmed: keep it as paid, or back to owed. */
+  @AllowTreasurer()
+  @Post('payments/:id/receipt-recheck')
+  recheck(@Param('id') id: string, @Body() dto: RecheckDto, @CurrentUser() user: User) {
+    return this.billing.recheckReceiptPaid(id, user.organizationId, dto.keep);
   }
 
   /** Give an unmatched transfer to the player whose "I've paid" it matches. */

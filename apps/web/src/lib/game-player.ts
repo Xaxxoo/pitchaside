@@ -58,6 +58,8 @@ function stateNow(p: IPayment, coveredByDues: boolean, before: boolean): PlayerS
       return { key: 'paid', label, owes: false };
     }
     if (p.source === 'cash') return { key: 'paid', label: 'Paid in cash', owes: false };
+    // Confirmed on the player's receipt: the bank's transfer confirms it when it lands
+    if (p.source === 'receipt') return { key: 'paid', label: 'Paid on receipt · bank to confirm', owes: false };
     return { key: 'paid', label: 'Marked paid', owes: false };
   }
   if (p.status === PaymentStatus.WAIVED) return { key: 'free', label: before ? 'Plays free' : 'Played free', owes: false };

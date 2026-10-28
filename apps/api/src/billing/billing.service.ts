@@ -12,7 +12,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, FindOptionsWhere, In, MoreThanOrEqual, Repository } from 'typeorm';
+import { EntityManager, FindOptionsWhere, In, LessThan, MoreThanOrEqual, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Group, PaymentType } from '../groups/entities/group.entity';
 import { GroupMembership, MemberRole } from '../groups/entities/group-membership.entity';
@@ -26,6 +26,8 @@ import { BankTransfer, TransferStatus, type MoneyInCategory } from './entities/b
 import { OutgoingTransfer, PayoutStatus, type PayoutCategory } from './entities/outgoing-transfer.entity';
 import { ClaimStatus, PaymentClaim } from './entities/payment-claim.entity';
 import { GroupKeptMoney, KEPT_REASONS, type KeptReason } from './entities/group-kept-money.entity';
+import { PaymentReceipt } from './entities/payment-receipt.entity';
+import { RECEIPT_KEEP_DAYS, RECEIPT_RECHECK_MS, parseReceipt } from './receipts';
 import { CLAIM_EXPIRES_MS, CLAIM_WINDOW_MS, CONFIRM_WINDOW_MS, AMOUNT_TOLERANCE, TWIN_WINDOW_MS, claimSettledBy, couldPair } from './claims';
 import { normaliseAccount, payerNameFrom, whoSent } from './payer-name';
 import { IncomingTransfer, PULSE_CLIENT, PulseClient } from './pulse/pulse.client';
@@ -151,6 +153,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     private usersService: UsersService,
     private config: ConfigService,
     @InjectRepository(PaymentClaim) private claimsRepo: Repository<PaymentClaim>,
+    @InjectRepository(PaymentReceipt) private receiptsRepo?: Repository<PaymentReceipt>,
   ) {}
 
   // ── Lifecycle: open new dues periods as time rolls over ──
@@ -845,7 +848,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       .where('session.groupId = :groupId', { groupId })
       .andWhere('payment.playerId = :playerId', { playerId })
       .andWhere('payment.status = :paid', { paid: PaymentStatus.PAID })
-      .andWhere("payment.source = 'manual'")
+      // Marked paid by hand, or on a receipt: both wait for this money
+      .andWhere("payment.source IN ('manual', 'receipt')")
       .andWhere('payment.paidAt >= :since', { since: new Date(Date.now() - CONFIRM_WINDOW_MS) })
       .orderBy('session.date', 'ASC')
       .getMany();
@@ -854,7 +858,7 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     for (const p of marked) {
       if (left + 0.001 < Number(p.amount)) break;
       // Only while it's still waiting: two transfers arriving together can't both confirm it
-      const { affected } = await tx.update(Payment, { id: p.id, status: PaymentStatus.PAID, source: 'manual' }, { source: 'transfer', markedBy: paidBy });
+      const { affected } = await tx.update(Payment, { id: p.id, status: PaymentStatus.PAID, source: p.source as string }, { source: 'transfer', markedBy: paidBy });
       if (!affected) continue;
       left -= Number(p.amount);
       confirmed.push(Object.assign(p, { source: 'transfer', markedBy: paidBy }));
@@ -933,17 +937,26 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * name will match it when it lands, or the organiser sees "said they've paid" on the transfer and
    * confirms. A claim alone never takes an unmatched transfer, since anyone could tap it first.
    */
-  async claimPayment(groupId: string, playerId: string, amount: number): Promise<{ status: 'matched' | 'waiting'; owes: number }> {
+  async claimPayment(groupId: string, playerId: string, amount: number, receipt?: string): Promise<{ status: 'matched' | 'waiting'; owes: number }> {
     if (!(amount > 0)) throw new BadRequestException('Enter the amount you sent');
+    // Checked before anything is saved: a bad picture doesn't leave a claim behind
+    const picture = receipt ? parseReceipt(receipt) : null;
     // A second tap for the same payment reuses the first rather than looking like two.
     const recent = await this.claimsRepo.findOne({
       where: { groupId, playerId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(new Date(Date.now() - CLAIM_WINDOW_MS)) },
       order: { createdAt: 'DESC' },
     });
-    const claim =
-      recent && Math.abs(Number(recent.amount) - amount) <= AMOUNT_TOLERANCE
-        ? recent
-        : await this.claimsRepo.save(this.claimsRepo.create({ groupId, playerId, amount }));
+    const again = !!recent && Math.abs(Number(recent.amount) - amount) <= AMOUNT_TOLERANCE;
+    const claim = again ? recent! : await this.claimsRepo.save(this.claimsRepo.create({ groupId, playerId, amount }));
+    // The screenshot, kept privately with the claim (a second one replaces the first)
+    if (picture && this.receiptsRepo) {
+      const saved = await this.receiptsRepo.save(this.receiptsRepo.create({ groupId, playerId, data: picture.data, mime: picture.mime }));
+      if (claim.receiptId) await this.receiptsRepo.delete({ id: claim.receiptId });
+      claim.receiptId = saved.id;
+      await this.claimsRepo.update({ id: claim.id }, { receiptId: saved.id });
+      // Old receipts go after RECEIPT_KEEP_DAYS: the money has long been sorted
+      await this.receiptsRepo.delete({ createdAt: LessThan(new Date(Date.now() - RECEIPT_KEEP_DAYS * 86_400_000)) });
+    }
 
     const theirs = await this.transfersRepo.find({
       where: {
@@ -964,7 +977,169 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       // Matched isn't "all paid": a part payment still leaves something to pay, and the player is told so
       if (affected) return { status: 'matched', owes: await this.owesNow(groupId, playerId) };
     }
+    // Waiting: the organiser gets it on "To check" (once per claim, and again when a receipt is added)
+    if (!again || picture) this.notifications.later(() => this.tellOrganisersToCheck(groupId, playerId, amount, !!claim.receiptId));
     return { status: 'waiting', owes: await this.owesNow(groupId, playerId) };
+  }
+
+  private async tellOrganisersToCheck(groupId: string, playerId: string, amount: number, receipt: boolean) {
+    const [group, player] = await Promise.all([this.groupsRepo.findOne({ where: { id: groupId } }), this.playersRepo.findOne({ where: { id: playerId } })]);
+    if (!group || !player) return;
+    await this.notifications.notifyOrganisers(group.organizationId, {
+      kind: 'claim_to_check',
+      title: `${player.firstName} says they sent ${naira(amount)}`,
+      body: `${group.name}${receipt ? ' · receipt attached' : ''}. Tap to check.`,
+      url: `/money?group=${group.id}`,
+    });
+  }
+
+  // ── "To check": players who say they've paid, for the organiser to confirm or turn down ──
+
+  /**
+   * What the organiser has to check in a group: each "I've paid" still waiting (newest first), with
+   * its receipt and the one unnamed transfer that fits it, if there is exactly one; and games
+   * confirmed on a receipt more than RECEIPT_RECHECK_MS ago that the bank still hasn't confirmed.
+   */
+  async toCheck(groupId: string, organizationId: string) {
+    await this.findGroup(groupId, organizationId);
+    const [claims, unmatched, onReceipt] = await Promise.all([
+      this.claimsRepo.find({
+        where: { groupId, status: ClaimStatus.PENDING, createdAt: MoreThanOrEqual(new Date(Date.now() - CLAIM_EXPIRES_MS)) },
+        relations: ['player'],
+        order: { createdAt: 'DESC' },
+      }),
+      this.transfersRepo.find({ where: { groupId, status: TransferStatus.UNMATCHED }, order: { receivedAt: 'DESC' }, take: 200 }),
+      this.paymentsRepo
+        .createQueryBuilder('payment')
+        .innerJoinAndSelect('payment.session', 'session')
+        .innerJoinAndSelect('payment.player', 'player')
+        .where('session.groupId = :groupId', { groupId })
+        .andWhere('payment.status = :paid', { paid: PaymentStatus.PAID })
+        .andWhere("payment.source = 'receipt'")
+        .andWhere('payment.paidAt < :before', { before: new Date(Date.now() - RECEIPT_RECHECK_MS) })
+        .orderBy('payment.paidAt', 'ASC')
+        .getMany(),
+    ]);
+    const who = (p: Player) => ({ id: p.id, firstName: p.firstName, lastName: p.lastName, nickname: p.nickname ?? null, photoKey: p.photoKey ?? null });
+    return {
+      claims: claims.map((c) => {
+        const fits = unmatched.filter((t) => couldPair(c, t));
+        const t = fits.length === 1 ? fits[0] : null;
+        return {
+          id: c.id,
+          player: who(c.player),
+          amount: Number(c.amount),
+          createdAt: c.createdAt,
+          hasReceipt: !!c.receiptId,
+          // The bank transfer it's probably about: Confirm gives it to them
+          transfer: t ? { id: t.id, amount: Number(t.amount), senderName: payerNameFrom(t.senderName, t.narration), receivedAt: t.receivedAt } : null,
+        };
+      }),
+      onReceipt: onReceipt.map((p) => ({
+        paymentId: p.id,
+        player: who(p.player),
+        amount: Number(p.amount),
+        date: p.session.date,
+        label: p.session.label ?? null,
+        paidAt: p.paidAt,
+        markedBy: p.markedBy,
+      })),
+    };
+  }
+
+  /** A claim in one of the organiser's groups, still waiting. */
+  private async ownClaim(claimId: string, organizationId: string) {
+    const claim = await this.claimsRepo.findOne({ where: { id: claimId }, relations: ['player'] });
+    if (!claim) throw new NotFoundException('That payment isn’t waiting any more');
+    await this.findGroup(claim.groupId, organizationId);
+    return claim;
+  }
+
+  /**
+   * Confirm a player's "I've paid". With exactly one unnamed transfer that fits, that transfer is
+   * theirs (the bank has the money). Otherwise it's paid on the receipt: their oldest games the
+   * amount covers are marked paid ('receipt'), and the bank's transfer confirms them when it lands
+   * (confirmHandMarked); if it hasn't in RECEIPT_RECHECK_MS, it's back on "To check".
+   */
+  async confirmClaim(claimId: string, organizationId: string, decidedBy: string) {
+    const claim = await this.ownClaim(claimId, organizationId);
+    if (claim.status !== ClaimStatus.PENDING) throw new BadRequestException('Someone already answered this one');
+    const fits = (await this.transfersRepo.find({ where: { groupId: claim.groupId, status: TransferStatus.UNMATCHED } })).filter((t) => couldPair(claim, t));
+    if (fits.length === 1) {
+      await this.acceptClaim(fits[0].id, claim.id, organizationId);
+      return { how: 'transfer' as const, paid: 1 };
+    }
+    const paid = await this.paymentsRepo.manager.transaction(async (tx) => {
+      const { affected } = await tx.update(PaymentClaim, { id: claim.id, status: ClaimStatus.PENDING }, { status: ClaimStatus.CONFIRMED, decidedBy, decidedAt: new Date() });
+      if (!affected) return null;
+      const dues = await this.payableDues(tx, claim.groupId, claim.playerId);
+      let left = Number(claim.amount) + AMOUNT_TOLERANCE;
+      const marked: Payment[] = [];
+      for (const p of dues) {
+        if (left + 0.001 < Number(p.amount)) break;
+        const done = await tx.update(Payment, { id: p.id, status: PaymentStatus.PENDING }, { status: PaymentStatus.PAID, paidAt: new Date(), source: 'receipt', markedBy: decidedBy });
+        if (!done.affected) continue;
+        left -= Number(p.amount);
+        marked.push(p);
+      }
+      if (dues.length && !marked.length) {
+        throw new BadRequestException(`${naira(Number(claim.amount))} doesn’t cover a whole game (${naira(Number(dues[0].amount))}). Wait for the transfer, or mark the game paid on its page.`);
+      }
+      return marked;
+    });
+    if (!paid) throw new BadRequestException('Someone already answered this one');
+    await this.afterPaid(paid, 'manual');
+    return { how: 'receipt' as const, paid: paid.length };
+  }
+
+  /** "Not received": the organiser couldn't find the money. The player is told, with what they said. */
+  async rejectClaim(claimId: string, organizationId: string, decidedBy: string, note?: string) {
+    const claim = await this.ownClaim(claimId, organizationId);
+    const { affected } = await this.claimsRepo.update(
+      { id: claim.id, status: ClaimStatus.PENDING },
+      { status: ClaimStatus.REJECTED, decidedBy, decidedAt: new Date(), note: note?.trim().slice(0, 200) || null },
+    );
+    if (!affected) throw new BadRequestException('Someone already answered this one');
+    const group = await this.groupsRepo.findOne({ where: { id: claim.groupId } });
+    await this.notifications.notifyPlayers([claim.playerId], {
+      kind: 'claim_rejected',
+      title: `Your ${naira(Number(claim.amount))} hasn’t been found yet`,
+      body: `${group?.name ?? 'Your group'}: ${note?.trim() || 'check the account number and send it again, or talk to your organiser.'}`,
+      url: '/me/pay',
+      critical: true,
+    });
+    return { status: 'rejected' as const };
+  }
+
+  /** A receipt, for an organiser of its group or (playerIds) the player who sent it. */
+  async receiptImage(claimId: string, access: { organizationId?: string; playerIds?: string[] }) {
+    const claim = await this.claimsRepo.findOne({ where: { id: claimId } });
+    if (!claim?.receiptId || !this.receiptsRepo) throw new NotFoundException('No receipt');
+    if (access.organizationId) await this.findGroup(claim.groupId, access.organizationId);
+    else if (!access.playerIds?.includes(claim.playerId)) throw new NotFoundException('No receipt');
+    const r = await this.receiptsRepo.createQueryBuilder('r').addSelect('r.data').where('r.id = :id', { id: claim.receiptId }).getOne();
+    if (!r) throw new NotFoundException('No receipt');
+    return r;
+  }
+
+  /** Their latest "I've paid" in a group, while it's news: waiting, or answered in the last 3 days. */
+  async latestClaim(groupId: string, playerId: string) {
+    const c = await this.claimsRepo.findOne({ where: { groupId, playerId }, order: { createdAt: 'DESC' } });
+    if (!c) return null;
+    const fresh = c.status === ClaimStatus.PENDING ? Date.now() - c.createdAt.getTime() < CLAIM_EXPIRES_MS : !!c.decidedAt && Date.now() - c.decidedAt.getTime() < RECEIPT_RECHECK_MS;
+    if (!fresh || c.status === ClaimStatus.MATCHED) return null;
+    return { id: c.id, amount: Number(c.amount), status: c.status, createdAt: c.createdAt, hasReceipt: !!c.receiptId, note: c.note, decidedBy: c.decidedBy };
+  }
+
+  /** "Still no transfer" on a game confirmed on a receipt: back to owed, or the organiser vouches for it. */
+  async recheckReceiptPaid(paymentId: string, organizationId: string, keep: boolean) {
+    const p = await this.paymentsRepo.findOne({ where: { id: paymentId }, relations: ['session'] });
+    if (!p || p.source !== 'receipt') throw new NotFoundException('That payment isn’t waiting any more');
+    await this.findGroup(p.session.groupId, organizationId);
+    if (keep) await this.paymentsRepo.update({ id: p.id, source: 'receipt' }, { source: 'manual' });
+    else await this.paymentsRepo.update({ id: p.id, source: 'receipt' }, { status: PaymentStatus.PENDING, paidAt: null, source: null, markedBy: null });
+    await this.paymentsService.recalculateSessionTotal(p.sessionId);
+    return { ok: true };
   }
 
   /** What a member still has to pay now (played games and their next one), less what they've already sent towards it. */

@@ -33,7 +33,7 @@ function setup(transfers: any[], claims: any[] = []) {
   const service = new BillingService(
     {} as any, {} as any, {} as any, {} as any, {} as any, transfersRepo as any, {} as any,
     {} as any, {} as any,
-    new MockPulseClient('secret'), {} as any, {} as any, {} as any, {} as any, claimsRepo as any,
+    new MockPulseClient('secret'), {} as any, { later: () => undefined } as any, {} as any, {} as any, claimsRepo as any,
   );
   const settle = jest.spyOn(service as any, 'settleTransfer');
   // What's still owed after the claim: covered by its own test below

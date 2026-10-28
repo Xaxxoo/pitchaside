@@ -28,7 +28,8 @@ export default function PlayerPayPage() {
     load();
   }, []);
   // Matched straight away: refresh so the due moves to History.
-  const onClaimed = (status: 'matched' | 'waiting') => status === 'matched' && load();
+  // Matched or waiting, the card changes (paid, or "waiting for your organiser"): load it again
+  const onClaimed = () => load();
 
   if (!data && failed) {
     return (
@@ -135,6 +136,7 @@ export default function PlayerPayPage() {
                 paidAhead={g.paidAhead}
                 claim={g.toPay > 0 ? { groupId: g.id, amount: g.toPay } : undefined}
                 onClaimed={onClaimed}
+                pending={g.claim}
               />
             );
           })}

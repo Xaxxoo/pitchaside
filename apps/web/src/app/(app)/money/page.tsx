@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { ToCheck } from '@/components/money/to-check';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { UserRole } from '@pitchaside/shared';
 import { PageHeader } from '@/components/brand';
@@ -97,6 +98,8 @@ export default function MoneyPage() {
             />
           </div>
           {showAccount && money.billing && <AccountDetailsSheet group={group} billing={money.billing} onClose={() => setShowAccount(false)} />}
+          {/* Players who say they've paid: first, it's what needs a decision */}
+          <ToCheck key={group.id} groupId={group.id} onChanged={() => void Promise.all([loadSessions(), money.reload()])} />
           <GroupMoney
             group={group}
             money={money}
