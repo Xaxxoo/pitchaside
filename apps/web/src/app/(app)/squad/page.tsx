@@ -186,6 +186,7 @@ export default function SquadPage() {
               canManage={canManage}
               onGroupChanged={(fresh) => setGroups((list) => (list ?? []).map((g) => (g.id === fresh.id ? fresh : g)))}
               onPaymentsChanged={() => loadSessions().catch(() => {})}
+              startAdding={params.get('add') === '1'}
             />
           ) : view === 'table' ? (
             <GroupTable groupId={group.id} groupName={group.name} onSeeAll={(s) => pickView('stats', s)} />

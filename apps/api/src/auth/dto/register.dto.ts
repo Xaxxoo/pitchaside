@@ -15,7 +15,7 @@ export class RegisterDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(2)
+  @MinLength(1)
   lastName: string;
 
   @IsEmail()

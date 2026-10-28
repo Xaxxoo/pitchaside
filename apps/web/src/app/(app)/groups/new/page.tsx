@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BackButton } from '@/components/back-button';
 import { FormHero, FormShell, formCardClass } from '@/components/form-hero';
@@ -14,6 +14,9 @@ import { ContributionsVisibilityPicker } from '@/components/contributions-visibi
 import { RsvpToggle } from '@/components/rsvp-toggle';
 import { MatchDayFields, type MatchDay } from '@/components/group/match-day-fields';
 import { DEFAULT_GAME_MINUTES } from '@pitchaside/shared';
+import { Collapse } from '@/components/collapse';
+import { Steps } from '@/components/steps';
+import { SETUP_STEPS } from '@/lib/setup-steps';
 
 type Errors = Record<string, string>;
 
@@ -43,6 +46,11 @@ export default function NewGroupPage() {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [scope, setScope] = useState<GroupScope>('local');
+  const [fee, setFee] = useState('');
+  const [more, setMore] = useState(false);
+  // Straight from signing up: step 2 of 3, and on to adding players after
+  const [setup, setSetup] = useState(false);
+  useEffect(() => setSetup(new URLSearchParams(window.location.search).get('setup') === '1'), []);
   // How match day runs: set here so a new group starts the way it plays. All of it can change later in settings.
   const [matchDay, setMatchDay] = useState<MatchDay>({ timerOn: true, gameMinutes: DEFAULT_GAME_MINUTES, bibs: null });
 
@@ -76,7 +84,7 @@ export default function NewGroupPage() {
       });
       // Home shows what's next for a new group: its bank account, then its first game.
       setGroupId(group.id);
-      router.push('/dashboard');
+      router.push(setup ? `/squad?group=${group.id}&add=1` : '/dashboard');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create group');
       setSubmitting(false);
@@ -99,6 +107,11 @@ export default function NewGroupPage() {
         art={<KitLine className="w-full h-auto" />}
       />
 
+      {setup && (
+        <div className="mb-4 rounded-3xl bg-white border border-gray-100 shadow-card p-4">
+          <Steps heading="Setting up" note="Step 2 of 3" steps={SETUP_STEPS.map((st, i) => ({ ...st, done: i === 0 }))} />
+        </div>
+      )}
       <form onSubmit={handleSubmit} className={formCardClass}>
         <fieldset>
           <legend className="block text-xs font-bold text-gray-700 mb-1.5">Where are your players?</legend>
@@ -139,53 +152,8 @@ export default function NewGroupPage() {
           {errors.name && <p className="text-xs text-kit-600 mt-1">{errors.name}</p>}
         </div>
 
-        <div>
-          <label htmlFor="description" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Description
-          </label>
-          <textarea
-            id="description"
-            name="description"
-            rows={2}
-            placeholder="Optional description"
-            className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600 resize-none"
-          />
-        </div>
 
-        <div>
-          <label htmlFor="location" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Pitch Location
-          </label>
-          <input
-            id="location"
-            name="location"
-            type="text"
-            placeholder="e.g. Teslim Balogun Stadium, Surulere"
-            className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
-          />
-        </div>
 
-        <div className="grid grid-cols-[1fr_130px] gap-3">
-          <div>
-            <label htmlFor="schedule" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Schedule
-            </label>
-            <input
-              id="schedule"
-              name="schedule"
-              type="text"
-              placeholder="e.g. Every Sunday"
-              className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
-            />
-          </div>
-          <div>
-            <label htmlFor="kickoffTime" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Kick-off
-            </label>
-            <input id="kickoffTime" name="kickoffTime" type="time" defaultValue="20:00" className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600" />
-          </div>
-        </div>
-        <p className="-mt-2 text-[11px] text-gray-500">Players get reminders the evening before and 2 hours before.</p>
 
         <div className="grid grid-cols-2 gap-3 items-end">
           <div>
@@ -210,15 +178,103 @@ export default function NewGroupPage() {
               id="feePerPlayer"
               name="feePerPlayer"
               type="number"
+              inputMode="decimal"
               min={0}
               step="0.01"
               placeholder="e.g. 1500"
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
               className={inputClass('feePerPlayer')}
             />
             {errors.feePerPlayer && <p className="text-xs text-kit-600 mt-1">{errors.feePerPlayer}</p>}
           </div>
         </div>
+        {/* Common fees, one tap each: still the organiser's choice, never filled in for them */}
+        {scope === 'local' && (
+          <div className="-mt-1 flex flex-wrap gap-2" role="group" aria-label="Common fees">
+            {[1000, 1500, 2000, 3000, 5000].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setFee(String(n))}
+                aria-pressed={Number(fee) === n}
+                className={`press min-h-11 px-3.5 rounded-full border text-[13px] font-bold tabular-nums transition-colors ${
+                  Number(fee) === n ? 'border-ink bg-ink text-volt-300' : 'border-gray-200 bg-white text-ink hover:border-ink'
+                }`}
+              >
+                ₦{n.toLocaleString('en-NG')}
+              </button>
+            ))}
+          </div>
+        )}
 
+
+
+        <div className="grid grid-cols-[1fr_148px] gap-3">
+          <div>
+            <label htmlFor="schedule" className="block text-xs font-bold text-gray-700 mb-1.5">
+              Schedule
+            </label>
+            <input
+              id="schedule"
+              name="schedule"
+              type="text"
+              placeholder="e.g. Every Sunday"
+              className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
+            />
+          </div>
+          <div>
+            <label htmlFor="kickoffTime" className="block text-xs font-bold text-gray-700 mb-1.5">
+              Kick-off
+            </label>
+            <input id="kickoffTime" name="kickoffTime" type="time" defaultValue="20:00" className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600" />
+          </div>
+        </div>
+        <p className="-mt-2 text-[11px] text-gray-500">Players get reminders the evening before and 2 hours before.</p>
+
+        {/* Everything else has a good default: folded away, open it to change any of it */}
+        <div className="rounded-2xl border border-gray-200">
+          <button
+            type="button"
+            onClick={() => setMore((v) => !v)}
+            aria-expanded={more}
+            aria-controls="new-group-more"
+            className="press w-full min-h-12 flex items-center justify-between gap-3 px-3.5 text-left"
+          >
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold text-ink">More settings</span>
+              <span className="block text-[12px] text-gray-500 truncate">Pay per game · replies on · timer</span>
+            </span>
+            <svg className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${more ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+          <Collapse open={more} id="new-group-more">
+            <div className="px-3.5 pb-4 space-y-4">
+        <div>
+          <label htmlFor="location" className="block text-xs font-bold text-gray-700 mb-1.5">
+            Pitch Location
+          </label>
+          <input
+            id="location"
+            name="location"
+            type="text"
+            placeholder="e.g. Teslim Balogun Stadium, Surulere"
+            className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
+          />
+        </div>
+        <div>
+          <label htmlFor="description" className="block text-xs font-bold text-gray-700 mb-1.5">
+            Description
+          </label>
+          <textarea
+            id="description"
+            name="description"
+            rows={2}
+            placeholder="Optional description"
+            className="w-full px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600 resize-none"
+          />
+        </div>
         <fieldset>
           <legend className="block text-xs font-bold text-gray-700 mb-1.5">How often do players pay?</legend>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
@@ -239,15 +295,16 @@ export default function NewGroupPage() {
             ))}
           </div>
         </fieldset>
-
         <fieldset className="min-w-0 space-y-4">
           <legend className="block text-sm font-bold text-ink mb-2">Match day</legend>
           <MatchDayFields value={matchDay} onChange={(patch) => setMatchDay((m) => ({ ...m, ...patch }))} idPrefix="new" />
         </fieldset>
-
         <RsvpToggle name="requireRsvp" checked />
 
         <ContributionsVisibilityPicker name="contributionsVisibility" />
+            </div>
+          </Collapse>
+        </div>
 
         <div className="flex items-start gap-3 rounded-2xl bg-chalk border border-gray-200 p-3.5">
           <div className="w-8 h-8 rounded-lg bg-ink text-volt-300 flex items-center justify-center shrink-0 font-display font-extrabold text-sm">{currencySymbol(scope)}</div>
@@ -269,7 +326,7 @@ export default function NewGroupPage() {
           disabled={submitting}
           className="w-full py-3 bg-ink text-volt-300 font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? 'Creating…' : 'Create group'}
+          {submitting ? 'Creating…' : setup ? 'Next: add your players' : 'Create group'}
         </button>
       </form>
       </FormShell>

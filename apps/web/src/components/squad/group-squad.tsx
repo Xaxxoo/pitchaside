@@ -1,7 +1,7 @@
 'use client';
 
 import { leftToPay } from '@/lib/game-player';
-import { CalloutIcon } from '@/components/callout';
+import { Callout, CalloutIcon } from '@/components/callout';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/empty-state';
@@ -51,7 +51,10 @@ export function GroupSquad({
   canManage,
   onGroupChanged,
   onPaymentsChanged,
+  startAdding = false,
 }: {
+  /** Straight from making the group: "Add player" opens, the last step of setting up. */
+  startAdding?: boolean;
   group: IGroupWithMembers;
   /** The group's recent games, for "who still owes" against the next one. */
   sessions: ISessionWithDetails[];
@@ -101,6 +104,10 @@ export function GroupSquad({
     if (!showAddMember) getPlayers().then(setAllPlayers).catch(() => setAllPlayers([]));
     setShowAddMember((v) => !v);
   }
+  useEffect(() => {
+    if (startAdding && canManage) toggleAdd();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleAddMember() {
     if (!selectedPlayerId) return;
@@ -353,6 +360,12 @@ export function GroupSquad({
 
       {showAddMember && (
         <div className="mt-2 bg-white rounded-3xl border border-gray-100 shadow-card p-4 animate-fade-in-up space-y-4">
+          {/* Straight from making the group: the last step of setting up */}
+          {startAdding && memberCount === 0 && (
+            <Callout tone="good" title={`${group.name} is ready`}>
+              Last step: add your players here, or send the group link with Invite.
+            </Callout>
+          )}
           <QuickAddPlayers groupId={id} groupName={group.name} onAdded={reloadGroup} />
           {availablePlayers.length > 0 && (
             <div className="pt-3 border-t border-gray-100">
