@@ -23,9 +23,9 @@ export function ContributionsVisibilityPicker({
     <fieldset>
       <legend className="block text-xs font-bold text-gray-700 mb-1.5">What players can see of contributions</legend>
       {/* One option per row, so each says what it means on one line instead of four */}
-      <div className="space-y-2">
+      <div className="grid gap-2">
         {OPTIONS.map((o) => (
-          <label key={o.value} className="cursor-pointer">
+          <label key={o.value} className="block cursor-pointer">
             <input
               type="radio"
               name={name ?? 'contributionsVisibility'}

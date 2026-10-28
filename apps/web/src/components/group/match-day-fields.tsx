@@ -24,7 +24,18 @@ export interface MatchDay {
  * How match day runs, the same when setting a group up and editing it: the timer (on or off, and
  * how long a game lasts) and the bibs the sides wear, with names if the teams keep them.
  */
-export function MatchDayFields({ value, onChange, idPrefix = 'g' }: { value: MatchDay; onChange: (patch: Partial<MatchDay>) => void; idPrefix?: string }) {
+export function MatchDayFields({
+  value,
+  onChange,
+  idPrefix = 'g',
+  isNew = false,
+}: {
+  value: MatchDay;
+  onChange: (patch: Partial<MatchDay>) => void;
+  idPrefix?: string;
+  /** A group being made: no games played yet, so no note about past games. */
+  isNew?: boolean;
+}) {
   const [bibsOpen, setBibsOpen] = useState(false);
   const id = (s: string) => `${idPrefix}-${s}`;
 
@@ -80,7 +91,7 @@ export function MatchDayFields({ value, onChange, idPrefix = 'g' }: { value: Mat
           </span>
           <span className="shrink-0 text-[13px] font-bold text-pitch-700">Change</span>
         </button>
-        <p className="mt-1.5 text-xs text-gray-500">Games already played keep theirs. One game can change on its Teams step.</p>
+        {!isNew && <p className="mt-1.5 text-xs text-gray-500">Games already played keep theirs. One game can change on its Teams step.</p>}
       </div>
 
       {bibsOpen && (
