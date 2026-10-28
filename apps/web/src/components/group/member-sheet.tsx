@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { btnPrimary, btnSecondary } from '@/components/buttons';
+import { SignInLinkButton } from '@/components/sign-in-link-button';
 import { Collapse } from '@/components/collapse';
 import { kitFor } from '@/components/illustrations';
 import { PlayerLevelPicker } from '@/components/player-level';
@@ -315,8 +316,9 @@ export function PlayerSheet({
         </>
       )}
 
-      {(showProfileLink || (canEdit && onRemove)) && (
+      {(showProfileLink || canEdit) && (
         <div className={`${canEdit ? 'mt-1' : 'mt-4'} -mx-2`}>
+          {canEdit && <SignInLinkButton player={player} variant="row" />}
           {showProfileLink && (
             <Link href={`/players/${player.id}`} className="press flex items-center justify-between min-h-12 px-2 rounded-xl text-[15px] font-semibold text-ink hover:bg-chalk">
               Ratings and payment history
