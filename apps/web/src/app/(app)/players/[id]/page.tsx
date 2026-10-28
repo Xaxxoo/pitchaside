@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { levelOf } from '@/lib/rating-level';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
@@ -254,6 +255,9 @@ export default function PlayerDetailPage() {
                 {player.firstName} {player.lastName}
               </h1>
               {player.nickname && <p className="mt-1 text-sm font-bold text-volt-300 truncate">“{player.nickname}”</p>}
+              {ratings?.ovr != null && (
+                <p className="mt-2 self-start rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300">{levelOf(ratings.ovr).name}</p>
+              )}
               {/* Their season in three numbers, so the column carries weight next to the portrait */}
               <dl className="mt-3 grid grid-cols-3 gap-1.5">
                 {(

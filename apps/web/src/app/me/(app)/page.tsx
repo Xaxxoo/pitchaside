@@ -1,6 +1,7 @@
 'use client';
 
 import { NotifyPrompt } from '@/components/notify';
+import { levelOf } from '@/lib/rating-level';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FaceStack } from '@/components/people-row';
@@ -224,7 +225,8 @@ export default function PlayerHomePage() {
         >
           <span className="absolute inset-0 turf-stripes-soft" aria-hidden />
           <span className="relative flex items-center justify-between gap-2">
-            <span className="text-[12px] font-bold text-white/70">Your card</span>
+            {/* What their number makes them, once there is one */}
+            <span className="text-[12px] font-bold text-volt-300 truncate">{r.ovr != null ? levelOf(r.ovr).name : 'Your card'}</span>
             <Avatar name={`${home.player.firstName} ${home.player.lastName}`} photoKey={home.player.photoKey} className="w-8 h-8 text-[10px]" />
           </span>
           <span className="relative">

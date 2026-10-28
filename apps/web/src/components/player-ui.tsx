@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { levelOf } from '@/lib/rating-level';
 import Link from 'next/link';
 import { Ticket } from '@/components/ticket';
 import { photoUrl } from '@/lib/http';
@@ -171,6 +172,8 @@ export function PlayerCardHero({
         <div className="min-w-0">
           <h2 className="font-display text-2xl font-extrabold leading-tight mt-0.5 break-words">{fullName}</h2>
           {nickname && <p className="mt-0.5 text-sm font-bold text-volt-300 truncate">“{nickname}”</p>}
+          {/* The number in words: Regular, Key player, Star… */}
+          {ratings.ovr != null && <p className="mt-2 inline-flex rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300">{levelOf(ratings.ovr).name}</p>}
           <div className="mt-3">
             <AttributeRow ratings={ratings} dark />
           </div>
