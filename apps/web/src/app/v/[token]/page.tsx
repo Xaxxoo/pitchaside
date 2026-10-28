@@ -6,11 +6,13 @@ import { useParams } from 'next/navigation';
 import { KeepHyphens, Logo } from '@/components/brand';
 import { NightStadium, OffsideFlag, Trophy } from '@/components/illustrations';
 import { BallLoader, BallSpinner } from '@/components/skeleton';
-import { VoteClock, VoteResultsList, closeTime, closeWords } from '@/components/ratings';
+import { VoteClock, closeTime, closeWords } from '@/components/ratings';
 import { groupVoteMessage, openWhatsApp } from '@/lib/whatsapp';
 import { buzz } from '@/components/motion';
 import { BallotSteps, type Picks } from '@/components/vote/ballot-steps';
-import { getBallot, getVoteResults, type Ballot, type VoteResults } from '@/lib/api';
+import { getBallot, getVoteCard, getVoteResults, type Ballot, type VoteResults } from '@/lib/api';
+import type { MatchCard } from '@/app/share/[token]/match-card';
+import { VoteReveal } from '@/components/vote/vote-reveal';
 import { PasswordSignIn } from '@/components/password-sign-in';
 import { ShareCardButton, ShareIcon, shareIconLight } from '@/components/share-card';
 import { getMyBallot, submitMyVotes, PlayerAuthError } from '@/lib/player';
@@ -30,6 +32,12 @@ export default function VotePage() {
   const [voter, setVoter] = useState<{ playerId: string; firstName: string } | null>(null);
   const [picks, setPicks] = useState<Picks>({});
   const [results, setResults] = useState<VoteResults | null>(null);
+  // The day behind the results (Team of the Day, goals and assists), once the winners are out
+  const [card, setCard] = useState<MatchCard | null>(null);
+  useEffect(() => {
+    if (results && !results.hidden && !card) getVoteCard(token).then(setCard).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Just sent their ballot, rather than coming back to one they sent before.
@@ -194,7 +202,7 @@ export default function VotePage() {
               </p>
               <div className="mt-4">
                 {results.categories.some((c) => c.standings.length) ? (
-                  <VoteResultsList results={results} />
+                  <VoteReveal results={results} card={card} />
                 ) : (
                   <p className="rounded-3xl bg-chalk px-5 py-6 text-center text-sm text-gray-600">Nobody voted in this game.</p>
                 )}
@@ -287,7 +295,7 @@ export default function VotePage() {
                 </ShareCardButton>
               </div>
               <div className="mt-2">
-                <VoteResultsList results={results} />
+                <VoteReveal results={results} card={card} />
               </div>
                 </>
               )}
