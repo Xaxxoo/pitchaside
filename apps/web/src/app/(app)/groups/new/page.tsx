@@ -15,7 +15,7 @@ import { RsvpToggle } from '@/components/rsvp-toggle';
 import { MatchDayFields, type MatchDay } from '@/components/group/match-day-fields';
 import { DEFAULT_GAME_MINUTES } from '@pitchaside/shared';
 import { Collapse } from '@/components/collapse';
-import { Steps } from '@/components/steps';
+import { Stepper } from '@/components/steps';
 import { SETUP_STEPS } from '@/lib/setup-steps';
 
 type Errors = Record<string, string>;
@@ -60,6 +60,7 @@ export default function NewGroupPage() {
     const validationErrors = validate(form);
     if (validationErrors) {
       setErrors(validationErrors);
+      if (validationErrors.targetPlayers) setMore(true);
       return;
     }
     setErrors({});
@@ -107,12 +108,86 @@ export default function NewGroupPage() {
         art={<KitLine className="w-full h-auto" />}
       />
 
-      {setup && (
-        <div className="mb-4 rounded-3xl bg-white border border-gray-100 shadow-card p-4">
-          <Steps heading="Setting up" note="Step 2 of 3" steps={SETUP_STEPS.map((st, i) => ({ ...st, done: i === 0 }))} />
-        </div>
-      )}
       <form onSubmit={handleSubmit} className={formCardClass}>
+        {/* Setting up: where they are, at the top of the form */}
+        {setup && <Stepper labels={SETUP_STEPS} at={1} note="Then add players" />}
+
+        <div>
+          <label htmlFor="name" className="block text-xs font-bold text-gray-700 mb-1.5">
+            Group Name *
+          </label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            placeholder="e.g. Sunday League"
+            className={inputClass('name')}
+          />
+          {errors.name && <p className="text-xs text-kit-600 mt-1">{errors.name}</p>}
+        </div>
+
+
+
+
+          <div>
+            <label htmlFor="feePerPlayer" className="block text-xs font-bold text-gray-700 mb-1.5">
+              Fee per player ({currencySymbol(scope)}) *
+            </label>
+            <input
+              id="feePerPlayer"
+              name="feePerPlayer"
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              placeholder="e.g. 1500"
+              value={fee}
+              onChange={(e) => setFee(e.target.value)}
+              className={inputClass('feePerPlayer')}
+            />
+            {errors.feePerPlayer && <p className="text-xs text-kit-600 mt-1">{errors.feePerPlayer}</p>}
+          </div>
+        {/* Common fees, one tap each: still the organiser's choice, never filled in for them */}
+        {scope === 'local' && (
+          <div className="-mt-1 flex flex-wrap gap-2" role="group" aria-label="Common fees">
+            {[1000, 1500, 2000].map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setFee(String(n))}
+                aria-pressed={Number(fee) === n}
+                className={`press min-h-11 px-3.5 rounded-full border text-[13px] font-bold tabular-nums transition-colors ${
+                  Number(fee) === n ? 'border-ink bg-ink text-volt-300' : 'border-gray-200 bg-white text-ink hover:border-ink'
+                }`}
+              >
+                ₦{n.toLocaleString('en-NG')}
+              </button>
+            ))}
+          </div>
+        )}
+
+
+
+
+        {/* Everything else has a good default: folded away, open it to change any of it */}
+        <div className="rounded-2xl border border-gray-200">
+          <button
+            type="button"
+            onClick={() => setMore((v) => !v)}
+            aria-expanded={more}
+            aria-controls="new-group-more"
+            className="press w-full min-h-12 flex items-center justify-between gap-3 px-3.5 text-left"
+          >
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold text-ink">More settings</span>
+              <span className="block text-[12px] text-gray-500 truncate">{scope === 'local' ? 'Nigeria' : 'International'} · 10 a game · 8pm · pay per game</span>
+            </span>
+            <svg className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${more ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+            </svg>
+          </button>
+          <Collapse open={more} id="new-group-more">
+            <div className="px-3.5 pb-4 space-y-4">
         <fieldset>
           <legend className="block text-xs font-bold text-gray-700 mb-1.5">Where are your players?</legend>
           <div className="grid grid-cols-2 gap-2">
@@ -137,26 +212,7 @@ export default function NewGroupPage() {
             ))}
           </div>
         </fieldset>
-
         <div>
-          <label htmlFor="name" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Group Name *
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            placeholder="e.g. Sunday League"
-            className={inputClass('name')}
-          />
-          {errors.name && <p className="text-xs text-kit-600 mt-1">{errors.name}</p>}
-        </div>
-
-
-
-
-        <div className="grid grid-cols-2 gap-3 items-end">
-          <div>
             <label htmlFor="targetPlayers" className="block text-xs font-bold text-gray-700 mb-1.5">
               Players per game *
             </label>
@@ -170,46 +226,6 @@ export default function NewGroupPage() {
             />
             {errors.targetPlayers && <p className="text-xs text-kit-600 mt-1">{errors.targetPlayers}</p>}
           </div>
-          <div>
-            <label htmlFor="feePerPlayer" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Fee per player ({currencySymbol(scope)}) *
-            </label>
-            <input
-              id="feePerPlayer"
-              name="feePerPlayer"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
-              placeholder="e.g. 1500"
-              value={fee}
-              onChange={(e) => setFee(e.target.value)}
-              className={inputClass('feePerPlayer')}
-            />
-            {errors.feePerPlayer && <p className="text-xs text-kit-600 mt-1">{errors.feePerPlayer}</p>}
-          </div>
-        </div>
-        {/* Common fees, one tap each: still the organiser's choice, never filled in for them */}
-        {scope === 'local' && (
-          <div className="-mt-1 flex flex-wrap gap-2" role="group" aria-label="Common fees">
-            {[1000, 1500, 2000, 3000, 5000].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setFee(String(n))}
-                aria-pressed={Number(fee) === n}
-                className={`press min-h-11 px-3.5 rounded-full border text-[13px] font-bold tabular-nums transition-colors ${
-                  Number(fee) === n ? 'border-ink bg-ink text-volt-300' : 'border-gray-200 bg-white text-ink hover:border-ink'
-                }`}
-              >
-                ₦{n.toLocaleString('en-NG')}
-              </button>
-            ))}
-          </div>
-        )}
-
-
-
         <div className="grid grid-cols-[1fr_148px] gap-3">
           <div>
             <label htmlFor="schedule" className="block text-xs font-bold text-gray-700 mb-1.5">
@@ -231,26 +247,20 @@ export default function NewGroupPage() {
           </div>
         </div>
         <p className="-mt-2 text-[11px] text-gray-500">Players get reminders the evening before and 2 hours before.</p>
-
-        {/* Everything else has a good default: folded away, open it to change any of it */}
-        <div className="rounded-2xl border border-gray-200">
-          <button
-            type="button"
-            onClick={() => setMore((v) => !v)}
-            aria-expanded={more}
-            aria-controls="new-group-more"
-            className="press w-full min-h-12 flex items-center justify-between gap-3 px-3.5 text-left"
-          >
-            <span className="min-w-0">
-              <span className="block text-[14px] font-bold text-ink">More settings</span>
-              <span className="block text-[12px] text-gray-500 truncate">Pay per game · replies on · timer</span>
-            </span>
-            <svg className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${more ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-            </svg>
-          </button>
-          <Collapse open={more} id="new-group-more">
-            <div className="px-3.5 pb-4 space-y-4">
+        <div className="flex items-start gap-3 rounded-2xl bg-chalk border border-gray-200 p-3.5">
+          <div className="w-8 h-8 rounded-lg bg-ink text-volt-300 flex items-center justify-center shrink-0 font-display font-extrabold text-sm">{currencySymbol(scope)}</div>
+          {scope === 'international' ? (
+            <p className="text-xs text-gray-600 leading-relaxed">
+              We&apos;ll create <span className="font-bold text-ink">USDT/USDC wallet addresses</span> for this group on multiple chains (Polygon, Base, Tron).
+              Players send stablecoins and transfers are matched to them automatically. You&apos;ll also get a link to share for players to join.
+            </p>
+          ) : (
+            <p className="text-xs text-gray-600 leading-relaxed">
+              We&apos;ll open a dedicated <span className="font-bold text-ink">Payrep MFB account</span> for this group. Players pay into it and
+              transfers are matched to them automatically. You&apos;ll also get a link to share for players to join.
+            </p>
+          )}
+        </div>
         <div>
           <label htmlFor="location" className="block text-xs font-bold text-gray-700 mb-1.5">
             Pitch Location
@@ -306,20 +316,6 @@ export default function NewGroupPage() {
           </Collapse>
         </div>
 
-        <div className="flex items-start gap-3 rounded-2xl bg-chalk border border-gray-200 p-3.5">
-          <div className="w-8 h-8 rounded-lg bg-ink text-volt-300 flex items-center justify-center shrink-0 font-display font-extrabold text-sm">{currencySymbol(scope)}</div>
-          {scope === 'international' ? (
-            <p className="text-xs text-gray-600 leading-relaxed">
-              We&apos;ll create <span className="font-bold text-ink">USDT/USDC wallet addresses</span> for this group on multiple chains (Polygon, Base, Tron).
-              Players send stablecoins and transfers are matched to them automatically. You&apos;ll also get a link to share for players to join.
-            </p>
-          ) : (
-            <p className="text-xs text-gray-600 leading-relaxed">
-              We&apos;ll open a dedicated <span className="font-bold text-ink">Payrep MFB account</span> for this group. Players pay into it and
-              transfers are matched to them automatically. You&apos;ll also get a link to share for players to join.
-            </p>
-          )}
-        </div>
 
         <button
           type="submit"
