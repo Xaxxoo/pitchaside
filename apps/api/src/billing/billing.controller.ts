@@ -269,6 +269,12 @@ export class BillingController {
     return this.billing.releaseWaiting(id, playerId, user.organizationId);
   }
 
+  /** The member offered it to the group from the player app: accept it. Organisers only. */
+  @Post('groups/:id/extra/:playerId/accept-gift')
+  acceptGift(@Param('id') id: string, @Param('playerId', ParseUUIDPipe) playerId: string, @CurrentUser() user: User) {
+    return this.billing.acceptGift(id, playerId, user.organizationId, user.id);
+  }
+
   /** The group keeps it: nobody is owed it any more. Organisers only, with a reason the player sees. */
   @Post('groups/:id/extra/:playerId/keep-for-group')
   keepForGroup(@Param('id') id: string, @Param('playerId', ParseUUIDPipe) playerId: string, @Body() dto: KeepForGroupDto, @CurrentUser() user: User) {

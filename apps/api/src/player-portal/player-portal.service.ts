@@ -248,6 +248,10 @@ export class PlayerPortalService {
         later: sum(mine.filter((o) => !o.now)),
         paidAhead: Math.max(0, Number(m.credit ?? 0) - partPaid),
         extra: Number(m.extra ?? 0),
+        /** Their pending request about that extra, for the organiser to act on. */
+        extraRequest: m.extraRequest && Number(m.extra ?? 0) > 0.001 ? m.extraRequest : null,
+        /** What the request was for: less than `extra` if more came in after they asked. */
+        extraRequestAmount: m.extraRequest && Number(m.extra ?? 0) > 0.001 ? Math.min(Number(m.extra), Number(m.extraRequestAmount ?? m.extra)) : 0,
         account: m.group.accountNumber
           ? { accountNumber: m.group.accountNumber, accountName: m.group.accountName, bankName: m.group.bankName }
           : null,
@@ -453,6 +457,26 @@ export class PlayerPortalService {
       note: k.note,
       date: k.createdAt,
     }));
+  }
+
+  /** The membership this person plays under in a group, or a 404 if they don't. */
+  private async myMembership(person: Person, groupId: string) {
+    const ids = this.ids(person);
+    const m = ids.length ? await this.membershipsRepo.findOne({ where: { groupId, playerId: In(ids) } }) : null;
+    if (!m) throw new NotFoundException("You're not in this group");
+    return m;
+  }
+
+  /** "Use it for my games": their extra pays what they owe now; the rest is kept for their next games. */
+  async useHeldMoney(person: Person, groupId: string) {
+    const m = await this.myMembership(person, groupId);
+    return this.billing.useOwnExtra(groupId, m.playerId);
+  }
+
+  /** "Give it to the group" / "Ask for it back": a request the organiser acts on. Null takes it back. */
+  async requestAboutHeldMoney(person: Person, groupId: string, kind: 'give' | 'refund' | null) {
+    const m = await this.myMembership(person, groupId);
+    return this.billing.requestAboutExtra(groupId, m.playerId, kind);
   }
 
   async profile(person: Person) {

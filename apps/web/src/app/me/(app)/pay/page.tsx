@@ -8,9 +8,18 @@ import { MonthList } from '@/components/money/month-list';
 import { PageHeader } from '@/components/brand';
 import { useEffect, useState } from 'react';
 import { SendCard } from '@/components/account-card';
+import { HeldMoneyCard } from '@/components/money/held-money-card';
 import { LoadError, Section, niceDate } from '@/components/player-ui';
-import { KEPT_REASON_WORDS, formatCurrency } from '@/lib/api';
+import { formatCurrency } from '@/lib/api';
 import { getPlayerPayments, type GroupKitty, type PlayerPayments } from '@/lib/player';
+
+/** Why the group kept it, said to the player. */
+const KEPT_FOR_YOU: Record<string, string> = {
+  player_agreed: 'You said the group can keep it',
+  player_gave: 'You gave it to the group',
+  unreachable: 'Your organiser couldn’t reach you',
+  sorted_in_person: 'Sorted out in person',
+};
 
 export default function PlayerPayPage() {
   const [data, setData] = useState<PlayerPayments | null>(null);
@@ -165,17 +174,13 @@ export default function PlayerPayPage() {
       )}
 
       {extra > 0 && (
-        <Callout
-          tone="note"
-          className="mt-3"
-          title={
-            <>
-              <span className="tabular-nums">{formatCurrency(extra)}</span> of yours is with your organiser
-            </>
-          }
-        >
-          Extra you sent, or from a game called off. They keep it for a later game, pass it on or send it back.
-        </Callout>
+        <div className="mt-3 space-y-3 md:space-y-0 md:grid md:grid-cols-2 md:gap-4">
+          {groups
+            .filter((g) => g.extra > 0)
+            .map((g) => (
+              <HeldMoneyCard key={g.id} group={g} showGroup={groups.length > 1} onChanged={load} />
+            ))}
+        </div>
       )}
 
       {kept.length > 0 && (
@@ -186,7 +191,7 @@ export default function PlayerPayPage() {
               <li key={k.id} className="flex items-center justify-between gap-3 px-4 py-3">
                 <span className="min-w-0">
                   <span className="block text-[15px] font-bold text-ink truncate">
-                    {k.reason === 'other' && k.note ? k.note : KEPT_REASON_WORDS[k.reason as keyof typeof KEPT_REASON_WORDS] ?? 'Kept by the group'}
+                    {k.reason === 'other' && k.note ? k.note : KEPT_FOR_YOU[k.reason] ?? 'Kept by the group'}
                   </span>
                   <span className="block text-[13px] text-gray-600 truncate">
                     {k.groupName} · {niceDate(k.date, { day: 'numeric', month: 'short' })}
