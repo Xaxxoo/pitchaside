@@ -28,6 +28,7 @@ import { clockRunning, timerChange, timerOf } from './timer';
 import { lateArrivals, playedIn } from './late-arrivals';
 import { checkKeepers } from './keepers';
 import { fairSplit } from './fair-teams';
+import { cardAttributes } from './card-attributes';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
@@ -191,6 +192,8 @@ export interface PlayerRatings {
   bestOnTeam: number;
   /** Per award (Fastest counts as The Engine): the evidence behind the attributes. */
   evidence: Partial<Record<VoteCategory, AwardEvidence>>;
+  /** Per ability: how far teammates' award nominations lift it (0 up to VOTE_UP_MAX); missing when nobody nominated them for it. */
+  awardLift?: Partial<Record<Ability, number>>;
   /** Games where awards were voted on: how much the attributes rest on. */
   evidenceGames: number;
 }
@@ -331,10 +334,9 @@ export const noEvidence = (): AbilityEvidence => Object.fromEntries(ABILITIES.ma
  */
 export function playerCard(skill: Skill | undefined, abilities: AbilityEvidence, potmVotes: number, ballotsSeen: number) {
   const base = cardRating(skill?.rating ?? DEFAULT_START);
-  const rate = ({ n, e }: { n: number; e: number }) => {
-    const lift = Math.round((VOTE_WEIGHT * (n - e)) / (e + RATING_PRIOR));
-    return Math.max(40, Math.min(99, base + Math.max(0, Math.min(VOTE_UP_MAX, lift))));
-  };
+  const liftOf = ({ n, e }: { n: number; e: number }) => Math.max(0, Math.min(VOTE_UP_MAX, Math.round((VOTE_WEIGHT * (n - e)) / (e + RATING_PRIOR))));
+  const rate = (x: { n: number; e: number }) => Math.max(40, Math.min(99, base + liftOf(x)));
+  const awardLift = Object.fromEntries(ABILITIES.filter((a) => abilities[a].n > 0).map((a) => [a, liftOf(abilities[a])])) as Partial<Record<Ability, number>>;
   const attributes = Object.fromEntries(
     ABILITIES.map((a) => [a, a === 'GK' && abilities.GK.n === 0 ? null : rate(abilities[a])]),
   ) as Record<Ability, number | null>;
@@ -348,6 +350,7 @@ export function playerCard(skill: Skill | undefined, abilities: AbilityEvidence,
     skill: Math.round(skill?.rating ?? DEFAULT_START),
     provisional: (skill?.games ?? 0) < PROVISIONAL_UNDER,
     attributes,
+    awardLift,
     ovr: Math.min(99, Math.round(best.reduce((x, y) => x + y, 0) / best.length) + potmBoost),
   };
 }
@@ -2136,7 +2139,8 @@ export class RatingsService {
           .filter((rec): rec is { w: number; d: number; l: number } => !!rec && rec.w + rec.d + rec.l > 0)
           .map((rec) => (rec.w > rec.l ? 'W' : rec.w < rec.l ? 'L' : 'D') as 'W' | 'D' | 'L')
           .slice(-3);
-        return { ...r, ovr: card.get(r.player.id) ?? r.ovr, form, move: was === undefined || !before.length ? null : was - i };
+        const ovr = card.get(r.player.id) ?? r.ovr;
+        return { ...r, ovr, attributes: ovr == null ? r.attributes : cardAttributes(ovr, r, rows), form, move: was === undefined || !before.length ? null : was - i };
       }),
     };
   }
@@ -2352,15 +2356,19 @@ export class RatingsService {
     const year = String(new Date().getFullYear());
     const of = async (list: Session[]): Promise<PlayerRatings & { compare: StatCompare }> => {
       const everyone = await this.aggregate(list, skills);
-      const compare = compareStats([...everyone.values()].filter((r) => r.games > 0), playerId);
+      const rows = [...everyone.values()];
+      const compare = compareStats(rows.filter((r) => r.games > 0), playerId);
       const s = everyone.get(playerId);
       if (s) {
         const { player: _player, ...ratings } = s;
-        // One card number, the club's all-time rating, for this season's view too.
-        return { ...ratings, ovr: card.get(playerId) ?? ratings.ovr, compare };
+        // One card number, the club's all-time rating, for this season's view too; the attributes
+        // sit around it, moved by what they did and what teammates voted
+        const ovr = card.get(playerId) ?? ratings.ovr;
+        return { ...ratings, ovr, attributes: ovr == null ? ratings.attributes : cardAttributes(ovr, ratings, rows), compare };
       }
-      // Not played yet: the card starts from their level.
-      return { ...blankRatings(), ...playerCard(skills.get(playerId), noEvidence(), 0, 0), compare };
+      // Not played yet: the card starts from their level, with nothing to show for attributes yet.
+      const blank = { ...blankRatings(), ...playerCard(skills.get(playerId), noEvidence(), 0, 0) };
+      return { ...blank, attributes: blankRatings().attributes, compare };
     };
     return { ...(await of(sessions)), season: await of(sessions.filter((s) => String(s.date).startsWith(year))) };
   }

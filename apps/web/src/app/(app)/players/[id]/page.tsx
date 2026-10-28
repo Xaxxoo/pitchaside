@@ -330,9 +330,8 @@ export default function PlayerDetailPage() {
           {ratings && (
             <div className="mt-4 pt-4 border-t border-white/10">
               <AttributeRow ratings={ratings} dark />
-              <p className="mt-2 text-[11px] text-white/50">
-                {ratings.games > 0 ? 'Skills come from teammates’ award votes. Tap the rating to see how it’s made.' : 'Based on their level until they’ve played.'}
-              </p>
+              {/* Only under numbers: with none, the box above already says how they fill in */}
+              {Object.values(ratings.attributes).some((v) => v != null) && <p className="mt-2 text-[11px] text-white/50">From goals, assists, saves and award votes.</p>}
             </div>
           )}
         </div>

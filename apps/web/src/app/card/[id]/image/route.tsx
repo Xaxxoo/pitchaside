@@ -11,9 +11,13 @@ const ordinal = (n: number) => {
   return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
 };
 
-/** The card's eight numbers, FIFA order: attack down the left, the rest down the right. */
-const LEFT: Ability[] = ['SHO', 'PAS', 'TEC', 'DEF'];
-const RIGHT: Ability[] = ['IQ', 'PHY', 'MOV', 'GK'];
+/** The card's skills in FIFA order. Only those with evidence have a number (see the app's card). */
+const ORDER: Ability[] = ['SHO', 'PAS', 'TEC', 'DEF', 'IQ', 'PHY', 'MOV', 'GK'];
+
+/** The skills that have a number; the totals are in the tiles below, so they aren't repeated here. */
+function cardLines(c: PlayerCardData): { k: string; v: number }[] {
+  return ORDER.filter((k) => c.attributes[k] != null).map((k) => ({ k: k as string, v: c.attributes[k]! }));
+}
 
 function Attr({ k, v }: { k: string; v: number | null }) {
   return (
@@ -90,20 +94,27 @@ function PlayerCard({ c }: { c: PlayerCardData }) {
         </div>
       </div>
 
-      {/* Eight numbers, two columns, with a line between */}
+      {/* Up to eight numbers, two columns, with a line between */}
+      {cardLines(c).length === 0 && (
+        <div style={{ display: 'flex', position: 'absolute', left: 40, right: 40, top: 452, borderTop: `4px solid ${C.ink}`, paddingTop: 40, justifyContent: 'center', fontSize: 30, fontWeight: 700 }}>
+          Skills show up as they play
+        </div>
+      )}
+      {cardLines(c).length > 0 && (
       <div style={{ display: 'flex', position: 'absolute', left: 40, right: 40, top: 452, borderTop: `4px solid ${C.ink}`, paddingTop: 14, justifyContent: 'space-around' }}>
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {LEFT.map((k) => (
-            <Attr key={k} k={k} v={c.attributes[k]} />
+          {cardLines(c).slice(0, Math.ceil(cardLines(c).length / 2)).map((l) => (
+            <Attr key={l.k} k={l.k} v={l.v} />
           ))}
         </div>
-        <div style={{ display: 'flex', width: 4, height: 224, background: C.ink }} />
+        <div style={{ display: 'flex', width: 4, height: Math.ceil(cardLines(c).length / 2) * 56, background: C.ink }} />
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {RIGHT.map((k) => (
-            <Attr key={k} k={k} v={c.attributes[k]} />
+          {cardLines(c).slice(Math.ceil(cardLines(c).length / 2)).map((l) => (
+            <Attr key={l.k} k={l.k} v={l.v} />
           ))}
         </div>
       </div>
+      )}
     </div>
   );
 }

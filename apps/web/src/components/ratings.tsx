@@ -559,7 +559,15 @@ export const ATTRIBUTE_NAMES: Record<Attribute, string> = {
 
 /** The card's abilities: seven outfield, plus GK once they've been nominated in goal. */
 export function AttributeRow({ ratings, dark = false }: { ratings: PlayerRatings; dark?: boolean }) {
-  const shown = (Object.keys(ATTRIBUTE_NAMES) as Attribute[]).filter((a) => a !== 'GK' || ratings.attributes.GK != null);
+  // Only abilities with evidence (stats or award votes) have a number; the rest are left out, never made up
+  const shown = (Object.keys(ATTRIBUTE_NAMES) as Attribute[]).filter((a) => ratings.attributes[a] != null);
+  if (!shown.length) {
+    return (
+      <p className={`rounded-xl px-3 py-2.5 text-[12px] leading-snug ${dark ? 'bg-white/10 text-white/70' : 'bg-chalk text-gray-600'}`}>
+        <b className={dark ? 'text-white' : 'text-ink'}>Skills show up as you play.</b> Goals, assists, saves and award votes fill them in.
+      </p>
+    );
+  }
   return (
     <div className="grid grid-cols-4 gap-1">
       {shown.map((a) => {
