@@ -38,6 +38,22 @@ export interface HttpPulseConfig {
 /** How long we wait for any single Payrep API call before giving up. */
 const API_TIMEOUT_MS = 30_000;
 
+/** Retry config for transferOut — the bank often says "try again" on transient timeouts. */
+const TRANSFER_MAX_RETRIES = 2;
+const TRANSFER_RETRY_BASE_MS = 2_000;
+
+/** Whether a failed transfer response is worth retrying (transient bank-side timeout). */
+function isRetryableTransferError(status: number, body: string): boolean {
+  // 408/429/502/503/504 are classic retryable codes
+  if ([408, 429, 502, 503, 504].includes(status)) return true;
+  // Payrep returns 400 with "Transfer request timed out" or "Try again" for downstream timeouts
+  if (status === 400) {
+    const lower = body.toLowerCase();
+    return lower.includes('timed out') || lower.includes('timeout') || lower.includes('try again');
+  }
+  return false;
+}
+
 /**
  * Live PulseMFB client.
  *
@@ -183,30 +199,51 @@ export class HttpPulseClient implements PulseClient {
       reference: input.reference,
     });
 
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      method: 'POST',
-      headers: this.authHeaders('POST', path, body),
-      body,
-      signal: AbortSignal.timeout(API_TIMEOUT_MS),
-    });
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt <= TRANSFER_MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        await new Promise((r) => setTimeout(r, TRANSFER_RETRY_BASE_MS * attempt));
+      }
+      try {
+        const res = await fetch(`${this.baseUrl}${path}`, {
+          method: 'POST',
+          headers: this.authHeaders('POST', path, body),
+          body,
+          signal: AbortSignal.timeout(API_TIMEOUT_MS),
+        });
 
-    if (!res.ok) {
-      // Everything Payrep's support asks for: our reference, their request id, the full reply.
-      const raw = await res.clone().text().catch(() => '');
-      const requestId = res.headers.get('x-request-id') ?? res.headers.get('x-correlation-id') ?? res.headers.get('request-id') ?? '';
-      console.error(
-        `[Payrep] transfer ${input.reference} refused: HTTP ${res.status}${requestId ? ` request-id=${requestId}` : ''} debit=${input.debitAccountNumber} ` +
-          `to=${input.beneficiaryBankCode}/${input.beneficiaryAccountNumber} amount=${input.amount} reply=${raw.slice(0, 1000)}`,
-      );
-      throw new Error(`Payrep MFB transfer failed (${res.status}): ${await pulseReason(res)}`);
+        if (!res.ok) {
+          // Everything Payrep's support asks for: our reference, their request id, the full reply.
+          const raw = await res.clone().text().catch(() => '');
+          const requestId = res.headers.get('x-request-id') ?? res.headers.get('x-correlation-id') ?? res.headers.get('request-id') ?? '';
+          const reason = await pulseReason(res);
+          console.error(
+            `[Payrep] transfer ${input.reference} refused: HTTP ${res.status}${requestId ? ` request-id=${requestId}` : ''} debit=${input.debitAccountNumber} ` +
+              `to=${input.beneficiaryBankCode}/${input.beneficiaryAccountNumber} amount=${input.amount} attempt=${attempt + 1}/${TRANSFER_MAX_RETRIES + 1} reply=${raw.slice(0, 1000)}`,
+          );
+          if (attempt < TRANSFER_MAX_RETRIES && isRetryableTransferError(res.status, reason)) {
+            lastError = new Error(`Payrep MFB transfer failed (${res.status}): ${reason}`);
+            continue;
+          }
+          throw new Error(`Payrep MFB transfer failed (${res.status}): ${reason}`);
+        }
+
+        const json = (await res.json()) as Record<string, any>;
+        const d = json.data ?? json;
+        return {
+          reference: String(d.reference ?? input.reference),
+          status: String(d.status ?? 'pending'),
+        };
+      } catch (err: any) {
+        // Retry on network/timeout errors (AbortError from AbortSignal.timeout)
+        if (attempt < TRANSFER_MAX_RETRIES && (err.name === 'AbortError' || err.name === 'TimeoutError')) {
+          lastError = new Error(`Payrep MFB transfer timed out after ${API_TIMEOUT_MS / 1000}s`);
+          continue;
+        }
+        throw err;
+      }
     }
-
-    const json = (await res.json()) as Record<string, any>;
-    const d = json.data ?? json;
-    return {
-      reference: String(d.reference ?? input.reference),
-      status: String(d.status ?? 'pending'),
-    };
+    throw lastError!;
   }
 
   async getTransfer(reference: string): Promise<TransferStatusResult> {

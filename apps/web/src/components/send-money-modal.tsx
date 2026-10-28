@@ -114,7 +114,7 @@ export function SendMoneyModal({
     if (!ready) return;
     setSending(true);
     try {
-      await initiateGroupPayout(groupId, {
+      const payout = await initiateGroupPayout(groupId, {
         amount: value,
         beneficiaryAccount: account,
         beneficiaryBankCode: bankCode,
@@ -123,7 +123,11 @@ export function SendMoneyModal({
         category: member ? undefined : (category ?? undefined),
         pin,
       });
-      toast.success(`${member ? 'Refunding' : 'Sending'} ${formatCurrency(value)} to ${lookup.name}`);
+      if (payout.status === 'failed') {
+        toast.error(payout.errorMessage || 'The bank couldn\u2019t process this transfer. Try again shortly.');
+      } else {
+        toast.success(`${member ? 'Refunding' : 'Sending'} ${formatCurrency(value)} to ${lookup.name}`);
+      }
       await onSent();
       onClose();
     } catch (err) {
