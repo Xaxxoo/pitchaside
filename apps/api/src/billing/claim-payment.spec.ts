@@ -36,6 +36,8 @@ function setup(transfers: any[], claims: any[] = []) {
     new MockPulseClient('secret'), {} as any, {} as any, {} as any, {} as any, claimsRepo as any,
   );
   const settle = jest.spyOn(service as any, 'settleTransfer');
+  // What's still owed after the claim: covered by its own test below
+  jest.spyOn(service as any, 'owesNow').mockResolvedValue(0);
   return { service, claims, transfers, settle };
 }
 
@@ -51,7 +53,7 @@ const transfer = (id: string, amount: number, playerId: string | null, status: T
 describe('claimPayment ("I\'ve paid")', () => {
   it('waits for the organiser when only an unmatched transfer fits, and never moves money', async () => {
     const { service, claims, settle } = setup([transfer('t1', 3000, null, TransferStatus.UNMATCHED)]);
-    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'waiting' });
+    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'waiting', owes: 0 });
     expect(settle).not.toHaveBeenCalled();
     expect(claims).toHaveLength(1);
     expect(claims[0]).toMatchObject({ playerId: 'ada', status: ClaimStatus.PENDING, transferId: null });
@@ -59,20 +61,20 @@ describe('claimPayment ("I\'ve paid")', () => {
 
   it("is answered at once by the player's own transfer that already matched", async () => {
     const { service, claims, settle } = setup([transfer('t1', 3000, 'ada', TransferStatus.MATCHED)]);
-    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'matched' });
+    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'matched', owes: 0 });
     expect(settle).not.toHaveBeenCalled();
     expect(claims[0]).toMatchObject({ status: ClaimStatus.MATCHED, transferId: 't1' });
   });
 
   it("isn't answered by someone else's matched transfer", async () => {
     const { service } = setup([transfer('t1', 3000, 'bola', TransferStatus.MATCHED)]);
-    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'waiting' });
+    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'waiting', owes: 0 });
   });
 
   it('uses each of their transfers for one claim only', async () => {
     const used = { id: 'c0', groupId: 'g1', playerId: 'ada', amount: '3000.00', status: ClaimStatus.MATCHED, transferId: 't1', createdAt: new Date() };
     const { service } = setup([transfer('t1', 3000, 'ada', TransferStatus.MATCHED)], [used]);
-    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'waiting' });
+    expect(await service.claimPayment('g1', 'ada', 3000)).toEqual({ status: 'waiting', owes: 0 });
   });
 
   it('turns down a ₦0 claim', async () => {

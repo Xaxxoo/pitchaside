@@ -8,6 +8,12 @@
 export const CLAIM_WINDOW_MS = 24 * 60 * 60 * 1000;
 /** Slack for a player's typo or a bank charge when pairing "I've paid" with a transfer. */
 export const AMOUNT_TOLERANCE = 30;
+/** An "I've paid" nobody could pair runs out after this: it stops showing as a suggestion. */
+export const CLAIM_EXPIRES_MS = 7 * 24 * 60 * 60 * 1000;
+/** A hand-typed transfer and the bank's own report of it can be this far apart. */
+export const TWIN_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+/** A game marked paid by hand (they said they'd transfer) waits this long for the transfer that confirms it. */
+export const CONFIRM_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface ClaimLike {
   id: string;

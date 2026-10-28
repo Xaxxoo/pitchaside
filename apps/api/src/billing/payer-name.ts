@@ -62,8 +62,15 @@ export function whoSent(
     const m = members.find((x) => x.paymentRef === ref);
     if (m) return m.playerId;
   }
-  const byAccount = accountOwner && members.some((m) => m.playerId === accountOwner) ? accountOwner : null;
-  const byName = nameMatch(members, payerNameFrom(senderName, narration));
+  const name = payerNameFrom(senderName, narration);
+  const byName = nameMatch(members, name);
+  // An account that paid for someone once is only theirs again when the name fits them too (at
+  // least one word of it): a friend's account paying for himself next time isn't theirs.
+  const owner = accountOwner ? members.find((m) => m.playerId === accountOwner) : undefined;
+  const words = new Set(normaliseName(name ?? ''));
+  // No name at all: nothing says otherwise, so the account stands
+  const fits = (m: MemberLike) => !words.size || [...normaliseName(m.firstName ?? ''), ...normaliseName(m.lastName ?? '')].some((w) => words.has(w));
+  const byAccount = owner && fits(owner) ? owner.playerId : null;
   if (byAccount && byName && byAccount !== byName) return null;
   return byAccount ?? byName;
 }

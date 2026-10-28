@@ -340,7 +340,8 @@ export function getPlayerPayments() {
 
 /** "Yes, I've paid": matched now if the transfer is already in, otherwise when it lands. */
 export function claimPayment(groupId: string, amount: number) {
-  return request<{ status: 'matched' | 'waiting' }>('POST', `/me/groups/${groupId}/paid`, { amount });
+  // `owes`: what's still to pay after it (a part payment leaves some); older servers leave it out
+  return request<{ status: 'matched' | 'waiting'; owes?: number }>('POST', `/me/groups/${groupId}/paid`, { amount });
 }
 
 export interface PlayerProfile {

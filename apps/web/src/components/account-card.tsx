@@ -51,13 +51,16 @@ function PaidSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<'matched' | 'waiting' | null>(null);
+  // What's still to pay once it's in: a part payment isn't "paid"
+  const [owes, setOwes] = useState(0);
 
   async function confirm() {
     setBusy(true);
     setError('');
     try {
-      const { status } = await claimPayment(groupId, Number(sent));
+      const { status, owes: left } = await claimPayment(groupId, Number(sent));
       setResult(status);
+      setOwes(left ?? 0);
       onClaimed?.(status);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong. Try again.');
@@ -73,11 +76,13 @@ function PaidSheet({
           {result === 'matched' ? '✅' : '👍'}
         </p>
         <h2 id="paid-title" className="font-display text-xl font-extrabold text-ink mt-2">
-          {result === 'matched' ? 'Got it, you’re marked as paid' : 'Thanks, your organiser can see it'}
+          {result === 'matched' ? (owes > 0 ? `Got it: ₦${owes.toLocaleString('en-NG')} still to pay` : 'Got it, you’re all paid') : 'Thanks, your organiser can see it'}
         </h2>
         <p className="text-sm text-gray-600 mt-2" role="status">
           {result === 'matched'
-            ? 'We found your transfer and matched it to you.'
+            ? owes > 0
+              ? 'We found your transfer and matched it to you. It counts towards what you owe.'
+              : 'We found your transfer and matched it to you.'
             : `If your payment code or your name is on the transfer, it’s matched to you as soon as it lands. If not, your organiser sees that you said you sent ₦${Number(sent).toLocaleString('en-NG')} and confirms it.`}
         </p>
       </Sheet>

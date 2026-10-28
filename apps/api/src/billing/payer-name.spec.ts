@@ -78,9 +78,14 @@ describe('accounts', () => {
     expect(whoSent(squad, 'MRS LAWAL', 'fives', 'bisi')).toBe('bisi');
   });
 
-  it("leaves it to a person when the sender's own name points at someone else than the account", () => {
-    // Ada once paid for Bisi from this account; now she pays for herself, with no code.
-    expect(whoSent(squad, 'ADA OBI', 'fives', 'bisi')).toBeNull();
+  it("goes by the sender's own name when it points at someone else than the account", () => {
+    // Ada once paid for Bisi from this account; now she pays for herself, with no code: it's Ada's.
+    expect(whoSent(squad, 'ADA OBI', 'fives', 'bisi')).toBe('ada');
+  });
+
+  it("doesn't trust the account when the sender's name fits nobody it paid for", () => {
+    // Tunde paid for Bisi once; his own transfer (his bank name, no code) isn't Bisi's.
+    expect(whoSent(squad, 'BAKARE OLATUNDE', 'fives', 'bisi')).toBeNull();
   });
 
   it("ignores an account owner who has since left the group", () => {

@@ -43,13 +43,9 @@ export class PaymentsController {
   }
 
   @Patch(':id/mark-paid')
-  async markAsPaid(
-    @Param('id') id: string,
-    @Body('markedBy') markedBy: string | undefined,
-    @Body('source') source: 'cash' | 'manual' | undefined,
-    @CurrentUser() user: User,
-  ) {
-    const result = await this.paymentsService.markAsPaid(id, user.organizationId, markedBy, source);
+  async markAsPaid(@Param('id') id: string, @Body('source') source: 'cash' | 'manual' | undefined, @CurrentUser() user: User) {
+    // Who marked it is who's signed in, never what the request says
+    const result = await this.paymentsService.markAsPaid(id, user.organizationId, `${user.firstName} ${user.lastName}`, source === 'cash' ? 'cash' : 'manual');
     await this.auditService.log({
       action: AuditAction.PAYMENT_MARKED_PAID,
       entityType: 'payment',
