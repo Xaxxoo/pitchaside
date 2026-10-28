@@ -1230,6 +1230,27 @@ export class RatingsService {
     return { ...lineup, squad: lineup.squad.map((m) => ({ ...m, ovr: null, skill: 0, paid: undefined })) };
   }
 
+  /**
+   * A captain or vice-captain moves a player to another side, or off the teams (Matt, 27 Oct:
+   * "captains move players freely"): any player, any side, so the captains can sort the teams out
+   * between them at the pitch. Not another captain or vice (that's the organiser's call), and not
+   * once scores are in, except putting someone who came late onto a side, as the organiser can.
+   */
+  async captainMovePlayer(sessionId: string, playerIds: string[], playerId: string, team: string | null) {
+    const { session, organizationId } = await this.captainToday(sessionId, playerIds);
+    const theirs = session.payments?.find((p) => p.playerId === playerId);
+    if (!theirs || !theirs.player || theirs.attendance === 'no_show') throw new BadRequestException("That player isn't in this game");
+    const mine = session.payments!.find((p) => playerIds.includes(p.playerId))!;
+    if (theirs !== mine && (this.isCaptain(session, theirs) || this.isVice(session, theirs))) {
+      throw new BadRequestException('Only the organiser can move a captain or vice-captain');
+    }
+    if (team !== null && !TEAM_KEYS.slice(0, session.teamCount).includes(team as TeamKey)) throw new BadRequestException("That team isn't in this game");
+    if (this.bibsClosed(session)) throw new BadRequestException('Teams are set: the vote is over');
+    // setLineup keeps the organiser's rules: locked once scores are in, late arrivals can still join a side
+    await this.setLineup(sessionId, organizationId, { teams: { [playerId]: team } });
+    return this.playerLineup(sessionId, playerIds);
+  }
+
   /** A captain marks one of their own players as gone (or back): the organiser does the rest. */
   async captainSetAway(sessionId: string, playerIds: string[], playerId: string, at: number | null) {
     const { session, organizationId, team } = await this.captainToday(sessionId, playerIds);

@@ -565,6 +565,10 @@ export class PlayerPortalService {
     return this.ratings.pickTeam(sessionId, this.ids(person), team);
   }
 
+  captainMovePlayer(person: Person, sessionId: string, playerId: string, team: string | null) {
+    return this.ratings.captainMovePlayer(sessionId, this.ids(person), playerId, team);
+  }
+
   myBallot(person: Person, token: string) {
     return this.ratings.myBallot(token, this.ids(person));
   }

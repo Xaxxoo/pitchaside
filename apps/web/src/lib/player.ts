@@ -491,6 +491,11 @@ export function pickBib(sessionId: string, team: TeamKey | null) {
   return request<GameLineup>('POST', `/me/games/${sessionId}/team`, { team });
 }
 
+/** A captain or vice-captain moves a player to another side, or off the teams (null). */
+export function moveGamePlayer(sessionId: string, playerId: string, team: TeamKey | null) {
+  return request<GameLineup>('POST', `/me/games/${sessionId}/match-day/move`, { playerId, team });
+}
+
 // ── Voting ──
 
 export function getMyBallot(token: string) {
