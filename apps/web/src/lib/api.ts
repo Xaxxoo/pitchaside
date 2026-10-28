@@ -1073,6 +1073,7 @@ export type VoteCategory =
   | 'teammate'
   | 'vii'
   | 'vii_sub'
+  | 'vii_gk'
   | 'dribbling'
   | 'smartest'
   | 'engine'
@@ -1114,6 +1115,8 @@ export interface VoteResults {
     voters?: number;
     /** Awards: too few voters to name a winner. */
     inconclusive?: boolean;
+    /** Best VII: its keeper, listed first (null on days voted before the keeper spot). */
+    keeperId?: string | null;
   }[];
 }
 
@@ -1135,13 +1138,16 @@ export interface Ballot {
   notYet: boolean;
   closesAt: string | null;
   categories: { key: VoteCategory; title: string }[];
-  /** Best VII of the Day: six starters and a sub, some from other teams. Null when too few played. */
-  vii: { starters: number; subs: number; minOtherTeams: number } | null;
+  /**
+   * Best VII of the Day: six starters and a sub, some from other teams. Null when too few played.
+   * `keepers`: who can be its keeper (in goal today); empty means no keeper spot.
+   */
+  vii: { starters: number; subs: number; minOtherTeams: number; keepers: string[]; keepersFrom: 'goal' | 'position' | null } | null;
   /** The awards a voter can nominate for, each optional, up to maxAwards. */
   awards: { key: VoteCategory; title: string; hint: string }[];
   maxAwards: number;
   /** Who played, each with their side (null when teams weren't set). */
-  squad: (SquadMember & { team: TeamKey | null })[];
+  squad: (SquadMember & { team: TeamKey | null; position?: Position | null })[];
   teamCount: number;
   captains: Partial<Record<TeamKey, string>>;
   /** Each side's bib colour and name for this game (its own, else the group's). */

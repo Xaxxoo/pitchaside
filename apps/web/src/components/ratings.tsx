@@ -35,6 +35,7 @@ export const categoryMeta: Record<VoteCategory, { short: string; tone: string; c
   teammate: { short: 'TEAM', tone: 'bg-pitch-600 text-white', chip: 'bg-pitch-600' },
   vii: { short: 'VII', tone: 'bg-ink text-sun-400', chip: 'bg-ink' },
   vii_sub: { short: 'SUB', tone: 'bg-ink text-sun-400', chip: 'bg-ink' },
+  vii_gk: { short: 'GK', tone: 'bg-ink text-sun-400', chip: 'bg-ink' },
   dribbling: { short: 'TEC', tone: 'bg-sky-300 text-ink', chip: 'bg-sky-300' },
   smartest: { short: 'IQ', tone: 'bg-pitch-500 text-white', chip: 'bg-pitch-500' },
   engine: { short: 'ENG', tone: 'bg-kit-400 text-ink', chip: 'bg-kit-400' },
@@ -89,13 +90,14 @@ export function VoteResultsList({ results, compact = false }: { results: VoteRes
               </span>
             </div>
             {c.key === 'vii' && c.standings.length > 0 ? (
-              // Best VII of the Day: the six starters, then the sub.
+              // Best VII of the Day: the keeper first (when the vote had one), the outfield starters, then the sub.
               <ol className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5">
                 {c.standings.map((s, i) => (
                   <li key={s.playerId} className="flex items-center gap-2 min-w-0">
                     <Avatar name={`${s.player.firstName} ${s.player.lastName}`} photoKey={s.player.photoKey} className="w-7 h-7 text-[10px]" />
                     <span className="min-w-0 truncate text-[13px] font-bold">
                       {s.player.nickname || s.player.firstName}
+                      {s.playerId === c.keeperId && <span className="font-semibold text-gray-500"> · keeper</span>}
                       {i === c.standings.length - 1 && c.standings.length === 7 && <span className="font-semibold text-gray-500"> · sub</span>}
                     </span>
                   </li>

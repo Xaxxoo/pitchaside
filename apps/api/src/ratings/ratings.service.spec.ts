@@ -33,7 +33,7 @@ function setup(
   opts: {
     votes?: { voterId: string; nomineeId: string; category: VoteCategory }[];
     scores?: number;
-    games?: { teamA: string; teamB: string; scoreA: number; scoreB: number }[];
+    games?: { teamA: string; teamB: string; scoreA: number; scoreB: number; keeperA?: string | null; keeperB?: string | null }[];
   } = {},
 ) {
   const votes = (opts.votes ?? []).map((v) => ({ sessionId: session.id, ...v }));
@@ -289,7 +289,7 @@ describe('the new ballot', () => {
 
   it('asks for Best VII and the awards when enough played', async () => {
     const ballot = await setup(ten()).service.getBallot('tok');
-    expect(ballot.vii).toEqual({ starters: 6, subs: 1, minOtherTeams: 2 });
+    expect(ballot.vii).toEqual({ starters: 6, subs: 1, minOtherTeams: 2, keepers: [], keepersFrom: null });
     expect(ballot.awards.map((a) => a.title)).toContain('The Engine');
     expect(ballot.maxAwards).toBe(9);
     const few = game({ payments: [pay('ada', { team: 'A' }), pay('bisi', { team: 'B' })] });
@@ -325,6 +325,56 @@ describe('the new ballot', () => {
     const ballot = { potm: 'b1', teammate: 'a1', vii: ['a1', 'a2', 'a3', 'a4', 'a5', 'a6'], vii_sub: 'b1' };
     await expect(service.submitVotes('tok', ['ada'], ballot)).rejects.toThrow('at least 2 players from other teams');
     await expect(service.submitVotes('tok', ['ada'], { ...ballot, vii: ['a1', 'a2', 'a3', 'a4', 'a5', 'b2'] })).resolves.toBeDefined();
+  });
+
+  describe('the Best VII keeper', () => {
+    const inGoal = { games: [{ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0, keeperA: 'a4', keeperB: 'b5' }] };
+    const withKeeper = { ...full, vii_gk: 'b5', vii: ['a1', 'a2', 'a3', 'b1', 'b2'] };
+
+    it('offers only those who were in goal today', async () => {
+      const ballot = await setup(ten(), inGoal).service.getBallot('tok');
+      expect(ballot.vii).toMatchObject({ keepers: ['a4', 'b5'], keepersFrom: 'goal' });
+    });
+
+    it('with nobody written down in goal, falls back to those playing in goal', async () => {
+      const marked = game({ payments: ten().payments.map((p) => (p.playerId === 'b5' ? { ...p, position: 'GK' } : p)) });
+      expect((await setup(marked).service.getBallot('tok')).vii).toMatchObject({ keepers: ['b5'], keepersFrom: 'position' });
+    });
+
+    it('takes a keeper and five outfield players, and stores the keeper pick', async () => {
+      const { service, saved } = setup(ten(), inGoal);
+      await service.submitVotes('tok', ['ada'], withKeeper);
+      const rows = saved.flat() as { category: string; nomineeId: string }[];
+      expect(rows.filter((r) => r.category === 'vii_gk').map((r) => r.nomineeId)).toEqual(['b5']);
+      expect(rows.filter((r) => r.category === 'vii')).toHaveLength(5);
+    });
+
+    it("refuses a keeper who wasn't in goal, or no keeper", async () => {
+      const { service } = setup(ten(), inGoal);
+      await expect(service.submitVotes('tok', ['ada'], { ...withKeeper, vii_gk: 'b1', vii: ['a1', 'a2', 'a3', 'b5', 'b2'] })).rejects.toThrow('who were in goal today');
+      await expect(service.submitVotes('tok', ['ada'], full)).rejects.toThrow('who were in goal today');
+    });
+
+    it('a keeper voting with nobody else in goal gets no keeper slot', async () => {
+      const onlyAda = { games: [{ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0, keeperA: 'ada', keeperB: null }] };
+      await expect(setup(ten(), onlyAda).service.submitVotes('tok', ['ada'], full)).resolves.toBeDefined();
+    });
+
+    it('puts the most-picked keeper first in the Best VII of the Day', async () => {
+      const closed = { ...ten(), voteOpensAt: new Date(Date.now() - 100 * HOUR) };
+      const votes = ['ada', 'a1', 'a2'].flatMap((voterId) => [
+        { voterId, nomineeId: 'b5', category: VoteCategory.VII_GK },
+        ...['a3', 'b1', 'b2', 'b3', 'b4'].map((nomineeId) => ({ voterId, nomineeId, category: VoteCategory.VII })),
+        { voterId, nomineeId: 'a4', category: VoteCategory.VII_SUB },
+      ]);
+      const { service } = setup(closed as never, { votes, ...inGoal });
+      const vii = (await service.getPublicResults('tok')).categories.find((c) => c.key === VoteCategory.VII)!;
+      expect(vii.standings.map((x) => x.playerId)).toEqual(['b5', 'a3', 'b1', 'b2', 'b3', 'b4', 'a4']);
+      expect('keeperId' in vii && vii.keeperId).toBe('b5');
+      const card = await service.getMatchCard('tok');
+      expect(card.vii?.[0]).toBe('b5');
+      expect(card.viiKeeper).toBe('b5');
+    });
   });
 
   it('takes every award, and refuses categories it does not ask', async () => {

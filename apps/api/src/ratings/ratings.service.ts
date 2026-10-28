@@ -31,6 +31,7 @@ import { fairSplit } from './fair-teams';
 import { cardAttributes } from './card-attributes';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
+import { bestSeven } from './best-seven';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
 import { MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
 import { Organization, RATING_MODES, type RatingMode } from '../organizations/entities/organization.entity';
@@ -495,9 +496,14 @@ export class RatingsService {
       const voters = votersIn(c.key);
       // An award with nominations from too few voters names nobody: not enough evidence.
       const inconclusive = AWARD_KEYS.includes(c.key) && voters < AWARD_MIN_VOTERS;
+      if (c.key === VoteCategory.VII) {
+        // Best VII of the Day: the keeper, the outfield starters, then the sub (best-seven.ts).
+        const seven = bestSeven(votes);
+        const standings = hidden ? [] : seven.ids.filter((id) => byId.has(id)).map((id) => ({ player: byId.get(id)!, playerId: id, count: seven.picks.get(id) ?? 0 }));
+        return [{ key: c.key, title: c.title, team: null as string | null, standings, voters, inconclusive, keeperId: hidden ? null : seven.keeper }];
+      }
       const standings = hidden || inconclusive ? [] : tally(c.key);
-      // Best VII of the Day: the seven most picked.
-      return [{ key: c.key, title: c.title, team: null as string | null, standings: c.key === VoteCategory.VII ? standings.slice(0, VII_STARTERS + 1) : standings, voters, inconclusive }];
+      return [{ key: c.key, title: c.title, team: null as string | null, standings, voters, inconclusive }];
     });
     return { ballots, squadSize: squad.length, hidden, categories, bibs: bibsFor(session) };
   }
@@ -575,6 +581,7 @@ export class RatingsService {
     const session = await this.loadSessionByToken(token);
     const w = this.window(session);
     const r = await this.results(session);
+    const keepers = this.viiAsked(session) ? await this.keepersToday(session) : null;
     return {
       groupName: session.group?.name,
       date: session.date,
@@ -583,17 +590,19 @@ export class RatingsService {
       closesAt: w.closesAt,
       categories: [VoteCategory.POTM, ...(this.hasTeams(session) ? [VoteCategory.TEAMMATE] : [])].map((key) => ({ key, title: titleOf(key) })),
       // Best VII of the Day: six starters and a sub, at least two from other teams (null: too few played).
-      vii: this.viiAsked(session) ? { starters: VII_STARTERS, subs: 1, minOtherTeams: VII_MIN_OTHER_TEAMS } : null,
+      // `keepers`: who can go in goal (those who were in goal today); none means no keeper slot.
+      vii: keepers ? { starters: VII_STARTERS, subs: 1, minOtherTeams: VII_MIN_OTHER_TEAMS, keepers: keepers.ids, keepersFrom: keepers.from } : null,
       awards: AWARD_KEYS.map((key) => {
         const c = CATEGORIES.find((x) => x.key === key)!;
         return { key, title: c.title, hint: c.hint ?? '' };
       }),
       maxAwards: MAX_AWARDS,
       // Each player's side, so the ballot can group them by team (own team first).
-      squad: this.squad(session).map((p) => ({
-        ...p,
-        team: this.teamOf(session, session.payments?.find((x) => x.playerId === p.id)?.team ?? null),
-      })),
+      squad: this.squad(session).map((p) => {
+        const pay = session.payments?.find((x) => x.playerId === p.id);
+        // Where they played today (else usually), so the Best VII can list them by line
+        return { ...p, team: this.teamOf(session, pay?.team ?? null), position: pay?.position ?? pay?.player?.position ?? null };
+      }),
       teamCount: session.teamCount,
       captains: this.captainsOf(session),
       /** Each side's bib colour and name for this game (its own, else the group's). */
@@ -601,6 +610,19 @@ export class RatingsService {
       ballots: r.ballots,
       squadSize: r.squadSize,
     };
+  }
+
+  /**
+   * Who can be the Best VII's keeper: those who were in goal in a game today. When no game has a
+   * keeper written down, those playing in goal today (or usually); when there's nobody, no keeper slot.
+   */
+  private async keepersToday(session: Session): Promise<{ ids: string[]; from: 'goal' | 'position' | null }> {
+    const squad = new Set(this.squad(session).map((p) => p.id));
+    const games = await this.gamesRepo.find({ where: { sessionId: session.id }, select: ['id', 'keeperA', 'keeperB'] });
+    const inGoal = [...new Set(games.flatMap((g) => [g.keeperA, g.keeperB]).filter((id): id is string => !!id && squad.has(id)))];
+    if (inGoal.length) return { ids: inGoal, from: 'goal' };
+    const marked = (session.payments ?? []).filter((p) => squad.has(p.playerId) && (p.position ?? p.player?.position) === 'GK').map((p) => p.playerId);
+    return marked.length ? { ids: [...new Set(marked)], from: 'position' } : { ids: [], from: null };
   }
 
   /** Enough played for a Best VII to mean something: seven picks from at least eight others. */
@@ -680,10 +702,17 @@ export class RatingsService {
     if (this.viiAsked(session)) {
       const starters = picks[VoteCategory.VII];
       const sub = picks[VoteCategory.VII_SUB];
-      if (!Array.isArray(starters) || starters.length !== VII_STARTERS || !sub) {
-        throw new BadRequestException(`Pick your Best VII: ${VII_STARTERS} starters and a sub`);
+      // A keeper from those who were in goal today (not the voter); then the outfield starters
+      const keepers = (await this.keepersToday(session)).ids.filter((id) => id !== voter.id);
+      const keeper = keepers.length ? picks[VoteCategory.VII_GK] : null;
+      const outfield = keepers.length ? VII_STARTERS - 1 : VII_STARTERS;
+      if (keepers.length && (typeof keeper !== 'string' || !keepers.includes(keeper))) {
+        throw new BadRequestException('Pick your Best VII keeper from those who were in goal today');
       }
-      const seven = [...starters, sub].map(check);
+      if (!Array.isArray(starters) || starters.length !== outfield || !sub) {
+        throw new BadRequestException(`Pick your Best VII: ${keepers.length ? 'a keeper, ' : ''}${outfield} ${keepers.length ? 'outfield players' : 'starters'} and a sub`);
+      }
+      const seven = [...(keeper ? [keeper as string] : []), ...starters, sub].map(check);
       if (new Set(seven).size !== seven.length) throw new BadRequestException('Pick seven different players for your Best VII');
       // At least two from other teams (or all of them, if fewer played).
       const elsewhere = [...squadIds].filter((id) => id !== voter.id && myTeam && teamOf(id) && teamOf(id) !== myTeam).length;
@@ -691,11 +720,12 @@ export class RatingsService {
       if (seven.filter((id) => teamOf(id) && teamOf(id) !== myTeam).length < need) {
         throw new BadRequestException(`Pick at least ${need} players from other teams for your Best VII`);
       }
+      if (keeper) add(VoteCategory.VII_GK, keeper as string);
       for (const id of starters as string[]) add(VoteCategory.VII, id);
       add(VoteCategory.VII_SUB, sub as string);
     }
 
-    const handled = new Set<string>([VoteCategory.POTM, VoteCategory.TEAMMATE, VoteCategory.VII, VoteCategory.VII_SUB]);
+    const handled = new Set<string>([VoteCategory.POTM, VoteCategory.TEAMMATE, VoteCategory.VII, VoteCategory.VII_SUB, VoteCategory.VII_GK]);
     const awards = Object.entries(picks).filter(([k, v]) => !handled.has(k) && v);
     for (const [category] of awards) {
       if (!AWARD_KEYS.includes(category as VoteCategory)) throw new BadRequestException(`Unknown category "${category}"`);
@@ -789,9 +819,10 @@ export class RatingsService {
         yellow: count(events, (e) => (e.kind === 'yellow' ? e.playerId : null), p.player.id),
         red: count(events, (e) => (e.kind === 'red' ? e.playerId : null), p.player.id),
       }));
-    // Best VII of the Day, once the vote has closed: the six most picked, then the sub.
+    // Best VII of the Day, once the vote has closed: the keeper first (when there is one), the sub last.
     const viiCat = w.open ? null : results.categories.find((c) => c.key === VoteCategory.VII);
     const vii = viiCat && !viiCat.inconclusive && viiCat.standings.length >= VII_STARTERS ? viiCat.standings.slice(0, VII_STARTERS + 1).map((s) => s.playerId) : null;
+    const viiKeeper = vii && viiCat && 'keeperId' in viiCat ? (viiCat.keeperId ?? null) : null;
 
     return {
       groupName: group?.name ?? '',
@@ -823,6 +854,7 @@ export class RatingsService {
       captains: this.captainsOf(session),
       players,
       vii,
+      viiKeeper,
     };
   }
 
@@ -1787,7 +1819,7 @@ export class RatingsService {
     };
     const potm = tally([VoteCategory.POTM]);
     const potmTop = Math.max(0, ...potm.values());
-    const vii = [...tally([VoteCategory.VII, VoteCategory.VII_SUB], VoteCategory.VII_SUB).entries()].sort((a, b) => b[1] - a[1]).slice(0, VII_STARTERS + 1);
+    const vii = bestSeven(sv).ids;
     const mate = tally([VoteCategory.TEAMMATE]);
     const sideOf = (id: string) => this.teamOf(session, pays.find((p) => p.playerId === id)?.team ?? null);
     const mateTop = new Map<string, number>();
@@ -1804,7 +1836,7 @@ export class RatingsService {
       yellow: count('yellow'),
       red: count('red'),
       potm: new Set(potmTop > 0 ? [...potm].filter(([, n]) => n === potmTop).map(([id]) => id) : []),
-      viiOfDay: new Set(vii.map(([id]) => id)),
+      viiOfDay: new Set(vii),
       bestOnTeam: new Set([...mate].filter(([id, n]) => { const t = sideOf(id); return !!t && n === mateTop.get(t); }).map(([id]) => id)),
     };
   }
@@ -1906,14 +1938,8 @@ export class RatingsService {
           const t = sideOf(id);
           if (t) mateTop.set(t, Math.max(mateTop.get(t) ?? 0, n));
         }
-        // Best VII of the Day: the seven most picked, a sub pick counting half.
-        const viiScore = new Map<string, number>();
-        for (const v of sv) {
-          if (v.category === VoteCategory.VII || v.category === VoteCategory.VII_SUB) {
-            viiScore.set(v.nomineeId, (viiScore.get(v.nomineeId) ?? 0) + (v.category === VoteCategory.VII ? 1 : 0.5));
-          }
-        }
-        const viiOfDay = new Set([...viiScore.entries()].sort((x, y) => y[1] - x[1]).slice(0, VII_STARTERS + 1).map(([id]) => id));
+        // Best VII of the Day: the keeper, the outfield starters and the sub (best-seven.ts).
+        const viiOfDay = new Set(bestSeven(sv).ids);
         // Who voted in each award this game.
         const awardVoters = new Map<VoteCategory, Set<string>>();
         for (const v of sv) {
@@ -1953,7 +1979,7 @@ export class RatingsService {
           if (potmTop > 0 && potm.get(member.id) === potmTop) s.potmWins += 1;
           const side = sideOf(member.id);
           if (side && mateTop.get(side) && mate.get(member.id) === mateTop.get(side)) s.bestOnTeam += 1;
-          s.viiPicks += sv.filter((v) => v.nomineeId === member.id && (v.category === VoteCategory.VII || v.category === VoteCategory.VII_SUB)).length;
+          s.viiPicks += sv.filter((v) => v.nomineeId === member.id && (v.category === VoteCategory.VII || v.category === VoteCategory.VII_SUB || v.category === VoteCategory.VII_GK)).length;
           if (viiOfDay.has(member.id)) s.viiOfDay += 1;
           s.goals += sessionGoals.filter((g) => g.scorerId === member.id).length;
           s.assists += sessionGoals.filter((g) => g.assistId === member.id).length;

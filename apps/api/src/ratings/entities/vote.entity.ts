@@ -29,6 +29,8 @@ export enum VoteCategory {
   VII = 'vii',
   /** Best VII of the Day: the substitute (one per voter). */
   VII_SUB = 'vii_sub',
+  /** Best VII of the Day: the keeper, from those who were in goal that day (one per voter). */
+  VII_GK = 'vii_gk',
   /** Close control, take-ons, keeping the ball → TEC */
   DRIBBLING = 'dribbling',
   /** Decisions, positioning, reading the game → IQ */
