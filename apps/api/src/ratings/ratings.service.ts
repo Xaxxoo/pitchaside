@@ -27,6 +27,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { clockRunning, timerChange, timerOf } from './timer';
 import { lateArrivals, playedIn } from './late-arrivals';
 import { checkKeepers } from './keepers';
+import { fairSplit } from './fair-teams';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
@@ -1446,31 +1447,25 @@ export class RatingsService {
    * "Best" is half the results rating and half the card's 40/40/20 rating (decided 20 Oct), so
    * goals, assists and votes count as well as results. Both on the card's scale.
    */
+  /**
+   * Fair teams, different on every tap: a random pick among the fairest splits (fair-teams.ts),
+   * never the split already on the board unless it's the only fair one. Captains and vices stay.
+   */
   async balanceTeams(sessionId: string, organizationId: string, teamCount?: number) {
     if (teamCount) await this.setLineup(sessionId, organizationId, { teamCount });
     const lineup = await this.getLineup(sessionId, organizationId);
-    const sides = TEAM_KEYS.slice(0, lineup.teamCount).map((key) => ({ key: key as string, size: 0, total: 0 }));
-    const teams: Record<string, string> = {};
     const strength = (p: (typeof lineup.squad)[number]) => {
       const results = cardRating(p.skill);
       return (results + (p.ovr ?? results)) / 2;
     };
-    for (const p of lineup.squad) {
-      const side = (p.captain || p.vice) && sides.find((x) => x.key === p.team);
-      if (!side) continue;
-      side.size++;
-      side.total += strength(p);
-    }
-    const rest = lineup.squad
-      .filter((p) => !p.captain && !p.vice)
-      .sort((a, b) => strength(b) - strength(a) || a.firstName.localeCompare(b.firstName));
-    for (const p of rest) {
-      const side = sides.reduce((best, x) => (x.size < best.size || (x.size === best.size && x.total < best.total) ? x : best));
-      teams[p.id] = side.key;
-      side.size++;
-      side.total += strength(p);
-    }
-    return this.setLineup(sessionId, organizationId, { teams });
+    const sides = TEAM_KEYS.slice(0, lineup.teamCount) as unknown as string[];
+    const split = fairSplit(
+      lineup.squad.map((p) => ({ id: p.id, strength: strength(p), side: p.team ?? null, fixed: !!(p.captain || p.vice) && !!p.team })),
+      sides,
+    );
+    const teams = Object.fromEntries(Object.entries(split.teams).filter(([id]) => !lineup.squad.find((p) => p.id === id && (p.captain || p.vice) && p.team)));
+    const saved = await this.setLineup(sessionId, organizationId, { teams });
+    return { ...saved, fair: { gap: split.gap, onlyOne: split.onlyOne } };
   }
 
   async addGame(

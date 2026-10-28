@@ -947,7 +947,8 @@ export function setGameBibs(sessionId: string, bibs: Bibs | null): Promise<Lineu
   return http.patch(`/sessions/${sessionId}/bibs`, { bibs });
 }
 
-export function balanceLineup(sessionId: string, teamCount?: number): Promise<Lineup> {
+/** Fair teams, different on each tap. `fair.onlyOne`: no other fair split exists for these players. */
+export function balanceLineup(sessionId: string, teamCount?: number): Promise<Lineup & { fair?: { gap: number; onlyOne: boolean } }> {
   return http.post(`/sessions/${sessionId}/lineup/balance`, teamCount ? { teamCount } : {});
 }
 
