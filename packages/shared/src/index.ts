@@ -115,7 +115,8 @@ export interface IPayment {
   paidAt?: string | null;
   markedBy?: string | null;
   /** 'dues' on a game's ₦0 entry in a group whose period dues cover games. */
-  source?: 'manual' | 'transfer' | 'dues' | 'cash' | null;
+  /** 'receipt': confirmed on the player's receipt; the bank's transfer confirms it when it lands. */
+  source?: 'manual' | 'transfer' | 'dues' | 'cash' | 'receipt' | null;
   /** On games: paid for this game — their own due, or the period's dues that cover it. */
   gamePaid?: 'paid' | 'unpaid' | 'waived';
   /** Already sent towards this due by transfer (a part payment); only on a player's oldest unpaid due. */

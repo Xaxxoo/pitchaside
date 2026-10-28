@@ -10,6 +10,7 @@ import { PaymentsModule } from '../payments/payments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { BankTransfer } from './entities/bank-transfer.entity';
 import { OutgoingTransfer } from './entities/outgoing-transfer.entity';
+import { PaymentReceipt } from './entities/payment-receipt.entity';
 import { PaymentClaim } from './entities/payment-claim.entity';
 import { GroupKeptMoney } from './entities/group-kept-money.entity';
 import { UsersModule } from '../users/users.module';
@@ -23,7 +24,7 @@ import { HttpPulseClient } from './pulse/http-pulse.client';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Group, GroupMembership, Session, Payment, Player, BankTransfer, OutgoingTransfer, PaymentClaim, GroupKeptMoney, Competition, CompetitionTeam]),
+    TypeOrmModule.forFeature([Group, GroupMembership, Session, Payment, Player, BankTransfer, OutgoingTransfer, PaymentClaim, PaymentReceipt, GroupKeptMoney, Competition, CompetitionTeam]),
     PaymentsModule,
     NotificationsModule,
     UsersModule,

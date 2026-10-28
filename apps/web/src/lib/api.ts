@@ -1584,3 +1584,37 @@ export function ignoreCryptoTransfer(transferId: string): Promise<ICryptoTransfe
 export function restoreCryptoTransfer(transferId: string): Promise<ICryptoTransfer> {
   return http.post<ICryptoTransfer>(`/crypto/transfers/${transferId}/restore`);
 }
+
+// ── "To check": players who say they've paid ──
+
+export interface ToCheck {
+  claims: {
+    id: string;
+    player: { id: string; firstName: string; lastName: string; nickname: string | null; photoKey: string | null };
+    amount: number;
+    createdAt: string;
+    hasReceipt: boolean;
+    /** The one unnamed bank transfer that fits it, if there's exactly one: Confirm gives it to them. */
+    transfer: { id: string; amount: number; senderName: string | null; receivedAt: string } | null;
+  }[];
+  /** Games confirmed on a receipt that the bank still hasn't confirmed after 3 days. */
+  onReceipt: { paymentId: string; player: ToCheck['claims'][number]['player']; amount: number; date: string; label: string | null; paidAt: string; markedBy: string | null }[];
+}
+
+export function getToCheck(groupId: string): Promise<ToCheck> {
+  return http.get(`/groups/${groupId}/to-check`);
+}
+
+/** Confirm an "I've paid": the transfer that fits it, else paid on the receipt. */
+export function confirmClaim(claimId: string): Promise<{ how: 'transfer' | 'receipt'; paid: number }> {
+  return http.post(`/claims/${claimId}/confirm`, {});
+}
+
+export function rejectClaim(claimId: string, note?: string): Promise<{ status: 'rejected' }> {
+  return http.post(`/claims/${claimId}/reject`, note ? { note } : {});
+}
+
+/** A game paid on a receipt with no transfer yet: keep it paid (you've seen the money), or back to owed. */
+export function recheckReceipt(paymentId: string, keep: boolean): Promise<{ ok: true }> {
+  return http.post(`/payments/${paymentId}/receipt-recheck`, { keep });
+}

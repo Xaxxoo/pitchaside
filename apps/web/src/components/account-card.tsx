@@ -1,13 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import type { PaymentType } from '@pitchaside/shared';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { btnPrimary, btnSecondary } from '@/components/buttons';
 import { formatCurrency, type GroupAccount } from '@/lib/api';
 import { formatAccountNumber, frequencyShort } from '@/lib/billing';
-import { claimPayment } from '@/lib/player';
+import { claimPayment, type MyClaim } from '@/lib/player';
+import { resizeReceipt } from '@/lib/photo';
+import { receiptUrl } from '@/lib/http';
 
 function useCopy() {
   const [copied, setCopied] = useState<string | null>(null);
@@ -30,7 +32,7 @@ function useCopy() {
 /**
  * Asked after a player copies the account number. Saying they've sent it doesn't mark them paid:
  * their payment code or name matches the transfer when it lands, and if neither is on it the
- * organiser sees that they said they paid and confirms it.
+ * organiser checks it on "To check" (with the screenshot of the transfer, when they add one).
  */
 function PaidSheet({
   groupId,
@@ -51,6 +53,22 @@ function PaidSheet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<'matched' | 'waiting' | null>(null);
+  // The screenshot of their transfer, made small enough to send (optional, but it's what the organiser checks)
+  const [receipt, setReceipt] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const fileId = useId();
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setPreparing(true);
+    setError('');
+    try {
+      setReceipt(await resizeReceipt(file));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'That picture couldn’t be used. Try another.');
+    } finally {
+      setPreparing(false);
+    }
+  }
   // What's still to pay once it's in: a part payment isn't "paid"
   const [owes, setOwes] = useState(0);
 
@@ -58,7 +76,7 @@ function PaidSheet({
     setBusy(true);
     setError('');
     try {
-      const { status, owes: left } = await claimPayment(groupId, Number(sent));
+      const { status, owes: left } = await claimPayment(groupId, Number(sent), receipt ?? undefined);
       setResult(status);
       setOwes(left ?? 0);
       onClaimed?.(status);
@@ -83,7 +101,9 @@ function PaidSheet({
             ? owes > 0
               ? 'We found your transfer and matched it to you. It counts towards what you owe.'
               : 'We found your transfer and matched it to you.'
-            : `If your payment code or your name is on the transfer, it’s matched to you as soon as it lands. If not, your organiser sees that you said you sent ₦${Number(sent).toLocaleString('en-NG')} and confirms it.`}
+            : receipt
+              ? 'Your organiser has your receipt and checks it against the account. You’ll get a message either way.'
+              : `It’s matched as soon as it lands if your payment code or name is on it. If not, your organiser checks that you sent ₦${Number(sent).toLocaleString('en-NG')}.`}
         </p>
       </Sheet>
     );
@@ -99,8 +119,8 @@ function PaidSheet({
           <button onClick={onClose} className={btnSecondary}>
             Not yet
           </button>
-          <button onClick={confirm} disabled={busy || !(Number(sent) > 0)} className={btnPrimary}>
-            {busy ? 'Sending…' : 'Yes, I’ve sent it'}
+          <button onClick={confirm} disabled={busy || preparing || !(Number(sent) > 0)} className={btnPrimary}>
+            {busy ? 'Sending…' : receipt ? 'Send receipt' : 'Yes, I’ve sent it'}
           </button>
         </div>
       }
@@ -124,9 +144,41 @@ function PaidSheet({
           />
         </span>
       </label>
+      {/* The receipt: a screenshot of the transfer in their bank app */}
+      <div className="mt-4">
+        <input id={fileId} type="file" accept="image/*" className="sr-only" onChange={(e) => pick(e.target.files?.[0])} />
+        {receipt ? (
+          <div className="flex items-center gap-3 rounded-2xl border border-gray-200 p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={receipt} alt="Your receipt" className="w-14 h-20 shrink-0 rounded-lg object-cover object-top bg-chalk" />
+            <span className="flex-1 min-w-0">
+              <span className="block text-[14px] font-bold text-ink">Receipt added ✓</span>
+              <span className="block text-[12px] text-gray-500 truncate">For your organiser</span>
+            </span>
+            <label htmlFor={fileId} className="press shrink-0 min-h-11 px-3 inline-flex items-center rounded-xl text-[13px] font-bold text-pitch-700 cursor-pointer">
+              Change
+            </label>
+          </div>
+        ) : (
+          <label
+            htmlFor={fileId}
+            className="press flex items-center gap-3 min-h-16 rounded-2xl border-2 border-dashed border-gray-300 px-3.5 py-3 cursor-pointer hover:border-ink"
+          >
+            <span className="w-10 h-10 shrink-0 rounded-xl bg-volt-300 text-ink flex items-center justify-center" aria-hidden>
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0 0 22.5 18.75V5.25A2.25 2.25 0 0 0 20.25 3H3.75A2.25 2.25 0 0 0 1.5 5.25v13.5A2.25 2.25 0 0 0 3.75 21Z" />
+              </svg>
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[14px] font-bold text-ink">{preparing ? 'Getting it ready…' : 'Add the receipt'}</span>
+              <span className="block text-[12px] text-gray-500 truncate">A screenshot of the transfer · helps it get confirmed</span>
+            </span>
+          </label>
+        )}
+      </div>
       {reference && (
         <p className="mt-3 rounded-2xl bg-chalk px-3.5 py-2.5 text-[13px] text-gray-700">
-          Did you put <b className="font-mono text-ink">{reference}</b> in the description? Then it’s matched as soon as it lands.
+          Put <b className="font-mono text-ink">{reference}</b> in the description and it’s matched as soon as it lands.
         </p>
       )}
       {error && (
@@ -260,6 +312,7 @@ export function SendCard({
   paidAhead = 0,
   claim,
   onClaimed,
+  pending,
 }: {
   groupName: string;
   account: GroupAccount | null;
@@ -272,6 +325,8 @@ export function SendCard({
   paidAhead?: number;
   claim?: { groupId: string; amount: number };
   onClaimed?: (status: 'matched' | 'waiting') => void;
+  /** Their latest "I've paid" while it's news: waiting for the organiser, or not found. */
+  pending?: MyClaim | null;
 }) {
   const { copied, copy } = useCopy();
   const [asking, setAsking] = useState(false);
@@ -365,12 +420,33 @@ export function SendCard({
           </ul>
         )}
 
+        {/* What happened to their "I've sent it": waiting, or not found (with what the organiser said) */}
+        {pending?.status === 'pending' && (
+          <div className="mt-4 flex items-center gap-3 rounded-2xl bg-white/[0.07] px-3.5 py-3" role="status">
+            {pending.hasReceipt && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={receiptUrl(pending.id, true)} alt="Your receipt" className="w-10 h-14 shrink-0 rounded-md object-cover object-top bg-white/10" />
+            )}
+            <span className="flex-1 min-w-0">
+              <span className="block text-[14px] font-bold text-white truncate">Waiting for a check</span>
+              <span className="block text-[12px] text-white/60 truncate tabular-nums">
+                {formatCurrency(pending.amount)} sent{pending.hasReceipt ? ' · receipt sent' : ' · no receipt yet'}
+              </span>
+            </span>
+          </div>
+        )}
+        {pending?.status === 'rejected' && (
+          <div className="mt-4 rounded-2xl bg-kit-500/15 border border-kit-500/40 px-3.5 py-3" role="status">
+            <p className="text-[14px] font-bold text-white">Your {formatCurrency(pending.amount)} wasn’t found yet</p>
+            <p className="mt-0.5 text-[12px] leading-snug text-white/70">{pending.note || 'Check the account number, then send your receipt again.'}</p>
+          </div>
+        )}
         {claim && account && (
           <button
             onClick={() => setAsking(true)}
             className="press mt-4 w-full h-12 inline-flex items-center justify-center rounded-2xl border border-white/20 text-[15px] font-bold text-white hover:bg-white/10 transition-colors"
           >
-            I&apos;ve sent it
+            {pending?.status === 'pending' ? (pending.hasReceipt ? 'Change receipt or amount' : 'Add the receipt') : 'I’ve sent it · add receipt'}
           </button>
         )}
       </div>
