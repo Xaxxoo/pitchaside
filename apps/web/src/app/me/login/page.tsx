@@ -8,6 +8,7 @@ import { PasswordSignIn } from '@/components/password-sign-in';
 import { SignInSwitch } from '@/components/signin-switch';
 import { http, storeRefreshToken } from '@/lib/http';
 import { btnSecondary } from '@/components/buttons';
+import { Callout } from '@/components/callout';
 import { KnownAccountPicker } from '@/components/known-account-picker';
 import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
 import { getPublicGroup } from '@/lib/api';
@@ -65,7 +66,7 @@ export default function PlayerLoginPage() {
         <div className="mb-6">
           <SignInSwitch current="player" />
         </div>
-        {error && <div className="mb-3 bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">{error}</div>}
+        {error && <Callout tone="warn" live className="mb-3">{error}</Callout>}
         {email !== null && <KnownAccountPicker accounts={accounts} chosen={email} onPick={setEmail} />}
         {email !== null && <PasswordSignIn
           key={email}
@@ -130,9 +131,9 @@ function JoinWithLink() {
         </button>
       </form>
       {problem && (
-        <p role="alert" className="mt-2 text-xs text-kit-600">
+        <Callout tone="warn" live className="mt-2">
           {problem}
-        </p>
+        </Callout>
       )}
     </section>
   );

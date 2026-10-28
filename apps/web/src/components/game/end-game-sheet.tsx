@@ -1,6 +1,7 @@
 'use client';
 
 import { Avatar } from '@/components/ratings';
+import { Callout } from '@/components/callout';
 import { useId, useState, type CSSProperties } from 'react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
@@ -150,7 +151,11 @@ export function EndGameSheet({
                 ? `${formatCurrency(owed)} still to collect from ${plural(stillToPay.length, 'player')}.`
                 : 'Everyone who came has paid.'}
           </p>
-          {error && <p className="text-[13px] font-semibold text-kit-600">{error}</p>}
+          {error && (
+            <Callout tone="warn" live>
+              {error}
+            </Callout>
+          )}
           <button onClick={finish} disabled={busy} className={`${btnPrimary} w-full disabled:opacity-50`}>
             {busy ? 'Ending…' : came.length ? `End game · vote link to ${came.length}` : 'End game'}
           </button>
@@ -159,7 +164,9 @@ export function EndGameSheet({
     >
       <SheetTitle id={titleId} title="Who came?" sub="Untick anyone who said they were in and didn’t show. They won’t owe anything." onClose={onClose} />
       {squad.length === 0 ? (
-        <p className="mt-6 text-sm text-gray-600">No one said they were in, so there’s nothing to settle. Ending the game closes it.</p>
+        <Callout tone="info" className="mt-5" title="No one said they were in">
+          There’s nothing to settle. Ending the game closes it.
+        </Callout>
       ) : (
         <ul className="mt-4 -mx-1 space-y-1.5" aria-label="Players who said they were in">
           {squad.map((p, i) => {

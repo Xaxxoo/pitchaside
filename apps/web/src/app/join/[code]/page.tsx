@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Callout } from '@/components/callout';
 import { useParams, useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand';
 import { OffsideFlag, NightStadium, JerseyBadge } from '@/components/illustrations';
@@ -210,9 +211,9 @@ export default function JoinPage() {
         </div>
 
         {error && (
-          <div role="alert" className="mb-4 bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">
+          <Callout tone="warn" live className="mb-4">
             {error}
-          </div>
+          </Callout>
         )}
 
         {stage === 'pick' ? (

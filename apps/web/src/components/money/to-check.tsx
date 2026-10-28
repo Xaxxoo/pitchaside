@@ -5,6 +5,7 @@ import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { Avatar } from '@/components/ratings';
 import { btnDanger, btnPrimary, btnSecondary } from '@/components/buttons';
+import { Callout } from '@/components/callout';
 import { stagger } from '@/components/motion';
 import { useToast } from '@/components/toast';
 import { confirmClaim, formatCurrency, getToCheck, recheckReceipt, rejectClaim, type ToCheck as ToCheckData } from '@/lib/api';
@@ -54,7 +55,7 @@ export function ToCheck({ groupId, onChanged }: { groupId: string; onChanged: ()
         To check
         <span className="min-w-6 h-6 px-1.5 rounded-full bg-kit-500 text-ink text-[12px] font-extrabold leading-6 text-center tabular-nums">{data.claims.length + data.onReceipt.length}</span>
       </h2>
-      <p className="mb-2 text-xs text-gray-500">Players who say they’ve paid. Look at the receipt, then confirm.</p>
+      <p className="mb-2 text-xs text-gray-500">Players who say they’ve paid: open one, check it, confirm.</p>
       <ul className="bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
         {data.claims.map((c, i) => (
           <li key={c.id} className="animate-rise" style={stagger(i, 30, 0)}>
@@ -168,16 +169,17 @@ function CheckSheet({ claim: c, onClose, onDone }: { claim: Claim; onClose: () =
         <>
           {/* What the bank says, first: that's what decides it */}
           {c.transfer ? (
-            <p className="mt-4 rounded-2xl bg-volt-300/40 border border-volt-400 px-3.5 py-3 text-[13px] leading-snug text-ink">
-              <b>
-                {formatCurrency(c.transfer.amount)} came in{c.transfer.senderName ? ` from ${c.transfer.senderName}` : ''} {ago(c.transfer.receivedAt)}.
-              </b>{' '}
+            <Callout
+              tone="good"
+              className="mt-4"
+              title={`${formatCurrency(c.transfer.amount)} came in${c.transfer.senderName ? ` from ${c.transfer.senderName}` : ''} ${ago(c.transfer.receivedAt)}`}
+            >
               Confirming gives it to {name}.
-            </p>
+            </Callout>
           ) : (
-            <p className="mt-4 rounded-2xl bg-chalk px-3.5 py-3 text-[13px] leading-snug text-gray-700">
-              <b className="text-ink">No transfer that fits has come in yet.</b> Confirm marks {name} paid on the receipt; the bank confirms it when it lands.
-            </p>
+            <Callout tone="note" className="mt-4" title="No transfer that fits has come in yet">
+              Confirm marks {name} paid on the receipt; the bank confirms it when it lands.
+            </Callout>
           )}
           {c.hasReceipt ? (
             <a href={receiptUrl(c.id)} target="_blank" rel="noopener noreferrer" className="mt-3 block rounded-2xl border border-gray-200 bg-chalk overflow-hidden" aria-label={`Open ${name}’s receipt`}>
@@ -185,9 +187,9 @@ function CheckSheet({ claim: c, onClose, onDone }: { claim: Claim; onClose: () =
               <img src={receiptUrl(c.id)} alt={`${name}’s receipt`} className="w-full max-h-[46vh] object-contain" />
             </a>
           ) : (
-            <p className="mt-3 rounded-2xl border border-dashed border-gray-300 px-3.5 py-3 text-[13px] text-gray-600">
-              <b className="text-ink">No receipt sent.</b> Check your bank app before confirming.
-            </p>
+            <Callout tone="warn" className="mt-3" title="No receipt sent">
+              Check your bank app before confirming.
+            </Callout>
           )}
         </>
       )}
@@ -230,9 +232,9 @@ function RecheckSheet({ item: p, onClose, onDone }: { item: OnReceipt; onClose: 
       }
     >
       <SheetTitle id={titleId} title={`No transfer yet for ${name}’s ${formatCurrency(p.amount)}`} sub={`Paid on receipt ${ago(p.paidAt)}${p.markedBy ? ` by ${p.markedBy}` : ''}`} onClose={onClose} />
-      <p className="mt-4 text-[14px] leading-snug text-gray-700">
-        If you’ve seen the money (in cash, or a transfer that came another way), keep it paid. If not, it goes back to owed.
-      </p>
+      <Callout tone="note" className="mt-4" title="Seen the money another way? Keep it paid">
+        Cash, or a transfer that came in another way. If not, it goes back to owed.
+      </Callout>
     </Sheet>
   );
 }

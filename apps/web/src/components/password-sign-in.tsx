@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Callout } from '@/components/callout';
+import { StepDot } from '@/components/steps';
 import { BallSpinner } from '@/components/skeleton';
 import { Collapse } from '@/components/collapse';
 import { loginWithPassword, requestCode, resetPassword } from '@/lib/player';
@@ -199,9 +201,9 @@ export function PasswordSignIn({
       </div>
 
       {error && (
-        <div role="alert" className="bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">
+        <Callout tone="warn" live>
           {error}
-        </div>
+        </Callout>
       )}
 
       {step === 'login' && (
@@ -268,9 +270,9 @@ export function PasswordSignIn({
       {step === 'reset' && (
         <form onSubmit={reset} className="space-y-3">
           {devCode && (
-            <p className="text-xs rounded-xl bg-sky-300/30 border border-dashed border-sky-300 px-3 py-2 text-ink">
-              Test mode — no email was sent. Your code is <span className="font-mono font-bold">{devCode}</span>
-            </p>
+            <Callout tone="info" title="Test mode: no email was sent">
+              Your code is <span className="font-mono font-bold">{devCode}</span>
+            </Callout>
           )}
           {/* Step 1: the code, labelled as the code (not a password), with where it went */}
           <div>
@@ -315,24 +317,6 @@ export function PasswordSignIn({
 
       {footer}
     </div>
-  );
-}
-
-/** A numbered step circle that turns to a tick once the step is done. */
-function StepDot({ n, done }: { n: number; done: boolean }) {
-  return (
-    <span
-      aria-hidden
-      className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[12px] font-extrabold transition-colors ${done ? 'bg-volt-300 text-ink' : 'bg-ink text-volt-300'}`}
-    >
-      {done ? (
-        <svg className="w-3.5 h-3.5 animate-pop-in" fill="none" viewBox="0 0 24 24" strokeWidth={3.5} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" />
-        </svg>
-      ) : (
-        n
-      )}
-    </span>
   );
 }
 

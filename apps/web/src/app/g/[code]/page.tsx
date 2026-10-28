@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Callout } from '@/components/callout';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { KeepHyphens, Logo } from '@/components/brand';
@@ -16,6 +17,7 @@ import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
 import { AccountRow, KnownAccountPicker } from '@/components/known-account-picker';
 import { PaymentType } from '@pitchaside/shared';
 import { btnPrimary, btnSecondary } from '@/components/buttons';
+import { Steps } from '@/components/steps';
 
 type Stage = 'signup' | 'signin' | 'joined';
 
@@ -199,51 +201,60 @@ export default function GroupLinkPage() {
         <div className="w-full max-w-sm mx-auto">
           <div className="text-center">
             <Logo />
-            <Trophy className="w-48 h-40 mx-auto mt-6" />
+            <Trophy className="w-36 h-28 mx-auto mt-5" />
             <h1 className="text-3xl font-extrabold text-ink mt-1 text-balance">
               {joined.alreadyMember ? `You’re already in, ${joined.firstName}` : `Welcome, ${joined.firstName}!`}
             </h1>
-            <p className="text-sm text-gray-600 mt-2">
-              {joined.alreadyMember ? 'You’re a member of' : 'You’ve joined'} <span className="font-bold text-ink">{joined.groupName}</span>.{' '}
-              {perGame ? 'Say “I’m in” for a game, and pay once you’re in.' : 'Here’s how to pay your dues.'}
+            <p className="text-sm text-gray-600 mt-1.5">
+              {joined.alreadyMember ? 'You’re a member of' : 'You’re in'} <span className="font-bold text-ink">{joined.groupName}</span>.
             </p>
           </div>
 
-          {perGame ? (
-            <div className="mt-6 rounded-3xl bg-white border border-gray-100 shadow-card p-4">
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500">Your payment code</p>
-              <div className="mt-1 flex items-center justify-between gap-3">
-                <span className="font-display text-2xl font-extrabold tracking-wider text-ink">{joined.paymentRef}</span>
-                <CopyButton text={joined.paymentRef} />
-              </div>
-              <p className="mt-2 text-sm text-gray-600">
-                When you pay for a game, put this code in the transfer description. That’s how {joined.groupName} knows it’s you.
-              </p>
+          {/* What happens next, as steps: joining is done, then the few things between them and a game */}
+          <div className="mt-6 rounded-3xl bg-white border border-gray-100 shadow-card p-4">
+            <Steps
+              heading={perGame ? 'Your first game' : 'Pay your dues'}
+              note={perGame ? '3 steps left' : joined.account ? '2 steps left' : undefined}
+              steps={
+                perGame
+                  ? [
+                      { title: 'Joined the group', done: true },
+                      { title: 'Say “I’m in” for a game', sub: 'On the game, once your organiser opens it' },
+                      {
+                        title: `Pay ${formatCurrency(joined.feePerPlayer)} with your code`,
+                        sub: 'Put it in the transfer description',
+                        action: <CodeChip code={joined.paymentRef} />,
+                      },
+                      { title: 'Play, then vote', sub: 'Player of the Match and your Best VII' },
+                    ]
+                  : [
+                      { title: 'Joined the group', done: true },
+                      joined.account
+                        ? {
+                            title: `Transfer ${formatCurrency(joined.feePerPlayer)}`,
+                            sub: 'To the account below',
+                          }
+                        : { title: `Pay ${formatCurrency(joined.feePerPlayer)} when the account is ready`, sub: 'Your organiser is setting it up' },
+                      {
+                        title: 'Put your code in the description',
+                        sub: 'It’s matched to you, nothing else to do',
+                        action: <CodeChip code={joined.paymentRef} />,
+                      },
+                    ]
+              }
+            />
+          </div>
+
+          {!perGame && (
+            <div className="mt-4">
+              <PayIntoCard
+                account={joined.account}
+                fee={joined.feePerPlayer}
+                paymentType={joined.paymentType}
+                reference={joined.paymentRef}
+                claim={{ groupId: joined.groupId, amount: joined.feePerPlayer }}
+              />
             </div>
-          ) : (
-            <>
-              <div className="mt-6">
-                <PayIntoCard
-                  account={joined.account}
-                  fee={joined.feePerPlayer}
-                  paymentType={joined.paymentType}
-                  reference={joined.paymentRef}
-                  claim={{ groupId: joined.groupId, amount: joined.feePerPlayer }}
-                />
-              </div>
-              {joined.account && <ol className="mt-6 space-y-3">
-                {[
-                  <>Transfer <span className="font-bold text-ink">{formatCurrency(joined.feePerPlayer)}</span> to the account above.</>,
-                  <>Put your payment code <span className="font-bold text-ink">{joined.paymentRef}</span> in the transfer description.</>,
-                  <>That&apos;s it: your organiser sees you as paid automatically.</>,
-                ].map((step, i) => (
-                  <li key={i} className="flex items-start gap-3 text-sm text-gray-600">
-                    <span className="w-6 h-6 rounded-full bg-ink text-volt-300 text-xs font-extrabold flex items-center justify-center shrink-0">{i + 1}</span>
-                    <span className="pt-0.5">{step}</span>
-                  </li>
-                ))}
-              </ol>}
-            </>
           )}
 
           <Link
@@ -291,7 +302,7 @@ export default function GroupLinkPage() {
 
         <div className="mt-6">
           {error && (
-            <div className="mb-3 bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">{error}</div>
+            <Callout tone="warn" live className="mb-3">{error}</Callout>
           )}
 
           {signedIn ? (
@@ -369,6 +380,16 @@ export default function GroupLinkPage() {
   );
 }
 
+/** The payment code to copy, in a chip that fits under a step. */
+function CodeChip({ code }: { code: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-xl bg-chalk border border-gray-200 pl-3 pr-1 py-1">
+      <span className="font-display text-[18px] font-extrabold tracking-wider text-ink">{code}</span>
+      <CopyButton text={code} />
+    </span>
+  );
+}
+
 /** Copies a code and says so in place. */
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
@@ -384,9 +405,10 @@ function CopyButton({ text }: { text: string }) {
           () => {},
         )
       }
-      className="shrink-0 h-10 px-4 rounded-xl bg-ink text-volt-300 text-sm font-bold hover:bg-pitch-900"
+      aria-label={copied ? 'Copied' : `Copy ${text}`}
+      className="press shrink-0 h-10 min-w-11 px-4 rounded-xl bg-ink text-volt-300 text-sm font-bold hover:bg-pitch-900"
     >
-      {copied ? 'Copied' : 'Copy'}
+      {copied ? 'Copied ✓' : 'Copy'}
     </button>
   );
 }

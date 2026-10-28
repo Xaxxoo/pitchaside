@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { Callout } from '@/components/callout';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { BallSpinner } from '@/components/skeleton';
@@ -451,7 +452,7 @@ export function BallotSteps({
       )}
 
       <p className="mt-4 text-xs text-gray-500">You can&apos;t pick yourself. The winners show when the vote closes.</p>
-      {error && <div className="mt-3 bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">{error}</div>}
+      {error && <Callout tone="warn" live className="mt-3">{error}</Callout>}
 
       <div className="fixed bottom-0 inset-x-0 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-t from-white via-white to-transparent">
         <button

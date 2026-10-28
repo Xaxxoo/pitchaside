@@ -1,6 +1,7 @@
 'use client';
 
 import { PlayerGroupSwitch } from '@/components/player-group-switch';
+import { Callout } from '@/components/callout';
 import { usePlayerGroup } from '@/lib/player-group';
 import { Avatar } from '@/components/ratings';
 import { MonthList } from '@/components/money/month-list';
@@ -164,18 +165,17 @@ export default function PlayerPayPage() {
       )}
 
       {extra > 0 && (
-        <div className="mt-3 flex gap-3 rounded-3xl bg-white border border-gray-100 shadow-card px-5 py-4" role="note">
-          <span className="mt-1.5 w-2.5 h-2.5 shrink-0 rounded-full bg-sun-400" aria-hidden />
-          <span className="min-w-0">
-            <span className="block text-[15px] font-bold text-ink">
+        <Callout
+          tone="note"
+          className="mt-3"
+          title={
+            <>
               <span className="tabular-nums">{formatCurrency(extra)}</span> of yours is with your organiser
-            </span>
-            <span className="block mt-0.5 text-[13px] leading-snug text-gray-600">
-              Money that came in beyond what you owed, or from a game that was called off or you were taken off. Your organiser keeps it for a later
-              game, passes it on if it was for someone else, or sends it back to you.
-            </span>
-          </span>
-        </div>
+            </>
+          }
+        >
+          Extra you sent, or from a game called off. They keep it for a later game, pass it on or send it back.
+        </Callout>
       )}
 
       {kept.length > 0 && (

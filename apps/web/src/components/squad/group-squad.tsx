@@ -1,6 +1,7 @@
 'use client';
 
 import { leftToPay } from '@/lib/game-player';
+import { CalloutIcon } from '@/components/callout';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { EmptyState } from '@/components/empty-state';
@@ -480,7 +481,8 @@ export function GroupSquad({
           {/* Numbers WhatsApp can't open: said once, a tap away from the list of who */}
           {memberFilter === 'all' && fixCount > 0 && (
             <p className="mt-2 px-1 flex items-center justify-between gap-3 text-[13px] text-kit-600 animate-rise" role="status">
-              <span className="min-w-0 font-semibold">
+              <span className="min-w-0 flex items-center gap-1.5 font-semibold">
+                <CalloutIcon tone="warn" />
                 {fixCount === 1 ? '1 number won’t open WhatsApp' : `${fixCount} numbers won’t open WhatsApp`}
               </span>
               <button onClick={() => setMemberFilter('fix')} className="shrink-0 min-h-11 px-1 font-bold text-ink hover:text-pitch-700">

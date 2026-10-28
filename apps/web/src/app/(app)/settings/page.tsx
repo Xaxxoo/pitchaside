@@ -1,6 +1,7 @@
 'use client';
 
 import { NotificationSettings } from '@/components/notify';
+import { Callout } from '@/components/callout';
 import { PhoneHint, useTouched } from '@/components/phone-hint';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth';
@@ -223,11 +224,13 @@ export default function SettingsPage() {
             </span>
           </p>
         ) : user?.bvn || user?.nin ? (
-          <p className="text-sm text-gray-600 mb-4">
-            {user.bvn ? `BVN ${user.bvn} added.` : `NIN ${user.nin} added.`} Add your {user.bvn ? 'NIN' : 'BVN'} too: the bank needs both.
-          </p>
+          <Callout tone="note" className="mb-4" title={`Add your ${user.bvn ? 'NIN' : 'BVN'} too`}>
+            {user.bvn ? `BVN ${user.bvn} added.` : `NIN ${user.nin} added.`} The bank needs both.
+          </Callout>
         ) : (
-          <p className="text-sm text-gray-600 mb-4">Add your BVN and NIN. Until you add both, your groups can’t get a collection account.</p>
+          <Callout tone="note" className="mb-4" title="Add your BVN and NIN">
+            Until you add both, your groups can’t get an account for players to pay into.
+          </Callout>
         )}
         <IdentityForm submitLabel={user?.bvn || user?.nin ? 'Save' : 'Add'} onDone={() => toast.success('Saved: your BVN and NIN are on file')} />
       </div>

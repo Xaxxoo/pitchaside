@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Callout } from '@/components/callout';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { KeepHyphens, Logo } from '@/components/brand';
@@ -217,31 +218,33 @@ export default function VotePage() {
             </div>
           )
         ) : !ballot.open && stage !== 'done' ? (
-          <div className="mt-6 text-center bg-chalk rounded-3xl p-6 border border-gray-200">
-            <p className="font-display text-xl font-extrabold text-ink">
-              {ballot.notYet ? 'The vote opens at full time' : 'Voting has closed'}
-            </p>
-            <p className="text-sm text-gray-500 mt-1">
-              {ballot.notYet
-                ? 'It opens when your organiser ends the game, for 36 hours.'
-                : ballot.closesAt
-                  ? `Closed ${closeTime(ballot.closesAt)}.`
-                  : 'The results are in.'}
-            </p>
-          </div>
+          <Callout
+            tone={ballot.notYet ? 'info' : 'note'}
+            className="mt-6"
+            title={ballot.notYet ? 'The vote opens at full time' : 'Voting has closed'}
+          >
+            {ballot.notYet
+              ? 'It opens when your organiser ends the game, for 36 hours.'
+              : ballot.closesAt
+                ? `Closed ${closeTime(ballot.closesAt)}.`
+                : 'The results are in.'}
+          </Callout>
         ) : stage === 'notPlayer' ? (
-          <div className="mt-6 text-center bg-chalk rounded-3xl p-6 border border-gray-200">
-            <p className="font-display text-xl font-extrabold text-ink">This vote is for the players who played</p>
-            <p className="text-sm text-gray-500 mt-1">
-              {error ?? 'Only players who came to this game vote.'} You’ll vote after your next game.
-            </p>
-            <Link href="/me" className="mt-4 inline-flex items-center justify-center px-5 py-3 text-sm font-bold text-volt-300 bg-ink rounded-2xl hover:bg-pitch-900 transition-colors">
+          <Callout
+            tone="note"
+            className="mt-6"
+            title="This vote is for the players who played"
+            action={
+            <Link href="/me" className="press inline-flex items-center justify-center min-h-11 px-5 text-sm font-bold text-volt-300 bg-ink rounded-2xl hover:bg-pitch-900 transition-colors">
               Back to my PitchAside
             </Link>
-          </div>
+            }
+          >
+            {error ?? 'Only players who came to this game vote.'} You’ll vote after your next game.
+          </Callout>
         ) : stage === 'signin' ? (
           <div className="mt-6 space-y-3">
-            {error && <div className="bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">{error}</div>}
+            {error && <Callout tone="warn" live>{error}</Callout>}
             {busy ? (
               <div className="py-10 flex justify-center">
                 <BallSpinner className="w-8 h-8" />
