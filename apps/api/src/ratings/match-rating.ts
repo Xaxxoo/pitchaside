@@ -33,6 +33,8 @@ export interface DayInput {
   saves?: Record<string, number>;
   yellow?: Record<string, number>;
   red?: Record<string, number>;
+  /** The group this match day was for: missing your group's days lowers the card a little (MISS_*). */
+  groupId?: string;
   /** Vote results for the day (empty sets when nobody voted). */
   potm?: Set<string>;
   viiOfDay?: Set<string>;
@@ -100,8 +102,21 @@ export const MOVE_SETTLED = 1;
 export const NEW_FOR = 6;
 /** How far toward the day's target one match day goes, before the cap. */
 const PULL = 0.3;
-/** Fewer games than this on a day count for less (someone who played one game and went home). */
+/**
+ * A day counts in full for whoever played the most games that day; anyone else counts for their
+ * share of that (a sub who played 2 of 8: a quarter). Days shorter than this many games count for
+ * less for everyone (someone who played one game and went home).
+ */
 const FULL_DAY_GAMES = 3;
+
+/**
+ * Not turning up: after MISS_GRACE of their groups' match days missed in a row, each further one
+ * takes MISS_STEP off the card, MISS_MAX at most since they last played (like a player out of the
+ * side). Playing again stops it; form builds the card back. Never for someone who hasn't played yet.
+ */
+export const MISS_GRACE = 2;
+export const MISS_STEP = 0.5;
+export const MISS_MAX = 5;
 
 export function emptyLine(): DayLine {
   return { games: 0, w: 0, d: 0, l: 0, goals: 0, assists: 0, inGoal: 0, keeperCleanSheets: 0, conceded: 0, cleanSheets: 0, cleanSheetCredit: 0, saves: 0, yellow: 0, red: 0, potm: false, vii: false, best: false };
@@ -195,6 +210,9 @@ export interface Steady {
   last: number | null;
   /** Recent form: the average match rating, newer days counting more (FORM_WEIGHT once settled). */
   form: number | null;
+  /** Their groups' match days missed in a row, and how much that has taken off since they last played. */
+  missed?: number;
+  drift?: number;
 }
 
 export function ovrTarget(rating: number) {
@@ -209,13 +227,14 @@ export const FORM_WEIGHT = 0.2;
  * newest day counts FORM_WEIGHT); the OVR steps toward what that form is worth, capped, and less
  * for a short day. Aiming at form, not the one day, is what stops a lucky hat-trick swinging it.
  */
-export function stepOvr(s: Steady, rating: number, games: number, target: (form: number) => number = ovrTarget): Steady {
-  const share = Math.min(1, games / FULL_DAY_GAMES);
+export function stepOvr(s: Steady, rating: number, games: number, target: (form: number) => number = ovrTarget, dayMost = FULL_DAY_GAMES): Steady {
+  // Their share of the day: games played against the most anyone played (FULL_DAY_GAMES at least)
+  const share = Math.min(1, games / Math.max(dayMost, FULL_DAY_GAMES));
   const w = Math.max(FORM_WEIGHT, 1 / (s.days + 1)) * share;
   const form = s.form === null ? rating : s.form + (rating - s.form) * w;
   const cap = s.days < NEW_FOR ? MOVE_NEW : MOVE_SETTLED;
   const move = Math.max(-cap, Math.min(cap, PULL * (target(form) - s.ovr))) * share;
-  return { ovr: Math.round((s.ovr + move) * 10) / 10, days: s.days + 1, last: rating, form: Math.round(form * 100) / 100 };
+  return { ovr: Math.round((s.ovr + move) * 10) / 10, days: s.days + 1, last: rating, form: Math.round(form * 100) / 100, missed: 0, drift: 0 };
 }
 
 /**
@@ -258,9 +277,12 @@ export function replaySteady(
   for (const [id, ovr] of starts) out.set(id, { ovr, days: 0, last: null, form: null });
   const history = new Map<string, { sum: number; n: number }>();
   const all = { sum: 0, n: 0 };
+  // The groups each player has played in: missing one of their days counts against them
+  const groupsOf = new Map<string, Set<string>>();
   days.forEach((day, i) => {
     const lines = dayLines(day, positions);
     const ratings = new Map<string, MatchRating>();
+    const dayMost = Math.max(0, ...[...lines.values()].map((l) => l.games));
     // The club's settled form before today, so everyone today is measured against the same thing
     const target = clubTarget([...out.values()].filter((x) => x.form !== null && x.days >= SETTLED_FORM_DAYS).map((x) => x.form!));
     for (const [id, l] of lines) {
@@ -272,7 +294,7 @@ export function replaySteady(
       const pos = l.inGoal * 2 >= l.games ? 'GK' : (positions.get(id) ?? 'unknown');
       const h = history.get(pos);
       const gap = h && all.n ? ((h.sum / h.n - all.sum / all.n) * h.n) / (h.n + POSITION_PRIOR) : 0;
-      out.set(id, stepOvr(s, mr.rating - POSITION_FAIRNESS * gap, l.games, target));
+      out.set(id, stepOvr(s, mr.rating - POSITION_FAIRNESS * gap, l.games, target, dayMost));
     }
     // Learn from today only after rating everyone, so the order players are listed in doesn't matter
     for (const [id, mr] of ratings) {
@@ -282,6 +304,17 @@ export function replaySteady(
       history.set(pos, { sum: h.sum + mr.rating, n: h.n + 1 });
       all.sum += mr.rating;
       all.n += 1;
+    }
+    // Their group played and they weren't there: a little off once they've missed a few in a row
+    if (day.groupId && lines.size) {
+      for (const [id, s] of out) {
+        if (ratings.has(id) || !groupsOf.get(id)?.has(day.groupId)) continue;
+        const missed = (s.missed ?? 0) + 1;
+        const drift = s.drift ?? 0;
+        const step = missed > MISS_GRACE ? Math.min(MISS_STEP, MISS_MAX - drift) : 0;
+        out.set(id, { ...s, ovr: Math.round((s.ovr - step) * 10) / 10, missed, drift: drift + step });
+      }
+      for (const id of ratings.keys()) groupsOf.set(id, (groupsOf.get(id) ?? new Set()).add(day.groupId));
     }
     onDay?.(i, lines, ratings, out);
   });

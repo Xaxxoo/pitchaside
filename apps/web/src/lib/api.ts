@@ -1304,6 +1304,10 @@ export interface SteadyBreakdown {
   votesFull: number;
   votesFloor: number;
   form: number | null;
+  /** Their groups' match days missed in a row, and what that has taken off (after missGrace). Newer servers. */
+  missed?: number;
+  missedLost?: number;
+  missGrace?: number;
   /** Newest first. */
   recent: { date: string; rating: number; parts: MatchRatingParts; games: number; move: number }[];
 }
