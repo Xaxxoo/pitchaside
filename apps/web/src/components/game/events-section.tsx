@@ -16,6 +16,17 @@ const KINDS: { kind: MatchEventKind; label: string; mark: React.ReactNode }[] = 
   { kind: 'yellow', label: 'Yellow card', mark: <span className="w-3.5 h-[18px] rounded-[3px] bg-sun-400 border border-ink/20" aria-hidden /> },
   { kind: 'red', label: 'Red card', mark: <span className="w-3.5 h-[18px] rounded-[3px] bg-[#e5484d] border border-ink/20" aria-hidden /> },
   {
+    kind: 'pen_miss',
+    label: 'Missed penalty',
+    // A ball with a line through it
+    mark: (
+      <svg className="w-[18px] h-[18px] text-kit-600" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
+        <circle cx="12" cy="12" r="8" />
+        <path strokeLinecap="round" d="M5 19 19 5" />
+      </svg>
+    ),
+  },
+  {
     kind: 'save',
     label: 'Save',
     mark: (
@@ -27,9 +38,9 @@ const KINDS: { kind: MatchEventKind; label: string; mark: React.ReactNode }[] = 
 ];
 
 /**
- * Cards and saves on match day: tap "+ Card or save", pick the player, then what it was. Today's
- * list below, newest first, each removable by whoever may (the organiser, or the captain who
- * added it). Cards take a little off the rating; saves add a little.
+ * Cards, saves and missed penalties on match day: tap "+ Add", pick the player, then what it was.
+ * Today's list below, newest first, each removable by whoever may (the organiser, or the captain
+ * who added it). Cards and misses take a little off the rating; saves add a little.
  */
 export function EventsSection({
   lineup,
@@ -65,7 +76,7 @@ export function EventsSection({
           onClick={() => setOpen(true)}
           className="press min-h-11 px-3.5 rounded-full border border-gray-200 bg-white text-[13px] font-bold text-ink hover:border-ink"
         >
-          + Card or save
+          + Add
         </button>
       </div>
       {events.length > 0 ? (
@@ -106,15 +117,15 @@ export function EventsSection({
           })}
         </ul>
       ) : (
-        <p className="mt-1 px-1 text-[12px] text-gray-500">None yet. A card takes a little off a player’s rating; a save adds a little.</p>
+        <p className="mt-1 px-1 text-[12px] text-gray-500">Cards, saves and missed penalties. Cards and misses take a little off a rating; saves add a little.</p>
       )}
 
       {open && (
         <Sheet titleId={titleId} onClose={close} align="left">
           <SheetTitle
             id={titleId}
-            title={who ? `${shortName(who)}: what was it?` : 'Card or save: who?'}
-            sub={who ? (who.team ? teamName(who.team as TeamKey, lineup.captains, lineup.bibs) : undefined) : 'Tap the player.'}
+            title={who ? `${shortName(who)}: what was it?` : 'Who was it?'}
+            sub={who ? (who.team ? teamName(who.team as TeamKey, lineup.captains, lineup.bibs) : undefined) : 'A card, a save or a missed penalty. Tap the player.'}
             onClose={close}
           />
           {!who ? (

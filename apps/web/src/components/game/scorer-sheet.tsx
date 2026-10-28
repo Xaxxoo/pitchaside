@@ -19,6 +19,7 @@ type Member = Lineup['squad'][number];
  */
 export function ScorerSheet({
   team,
+  against = null,
   lineup,
   onPick,
   onClose,
@@ -26,9 +27,11 @@ export function ScorerSheet({
   scoreAfter,
 }: {
   team: TeamKey;
+  /** The other side in this game: an own goal is put in by one of theirs. */
+  against?: TeamKey | null;
   lineup: Lineup;
-  /** scorerId null: a goal nobody saw clearly. */
-  onPick: (goal: { scorerId: string | null; assistId: string | null }) => void;
+  /** scorerId null: a goal nobody saw clearly. `ownGoal`: scorerId is the other side's player who put it in. */
+  onPick: (goal: { scorerId: string | null; assistId: string | null; ownGoal?: boolean }) => void;
   onClose: () => void;
   /** Off when naming a goal already on the scoreboard. */
   allowUnnamed?: boolean;
@@ -38,19 +41,25 @@ export function ScorerSheet({
   const titleId = useId();
   const [scorer, setScorer] = useState<Member | null>(null);
   const [assist, setAssist] = useState<Member | null>(null);
-  const side = lineup.squad.filter((m) => m.team === team).sort((a, b) => shortName(a).localeCompare(shortName(b)));
+  // An own goal: the list is the other side's players, and nobody set it up
+  const [own, setOwn] = useState(false);
+  const side = lineup.squad.filter((m) => m.team === (own && against ? against : team)).sort((a, b) => shortName(a).localeCompare(shortName(b)));
   const name = teamName(team, lineup.captains, lineup.bibs);
 
   const footer = (
     <div className="space-y-2">
       <button
         disabled={!scorer}
-        onClick={() => scorer && onPick({ scorerId: scorer.id, assistId: assist?.id ?? null })}
+        onClick={() => scorer && onPick(own ? { scorerId: scorer.id, assistId: null, ownGoal: true } : { scorerId: scorer.id, assistId: assist?.id ?? null })}
         className={`${btnPrimary} w-full`}
       >
-        {scorer ? `Add goal: ${shortName(scorer)}${assist ? ` (${shortName(assist)})` : ''}${scoreAfter ? ` · ${scoreAfter}` : ''}` : 'Tap who scored'}
+        {scorer
+          ? `${own ? 'Add own goal' : 'Add goal'}: ${shortName(scorer)}${assist && !own ? ` (${shortName(assist)})` : ''}${scoreAfter ? ` · ${scoreAfter}` : ''}`
+          : own
+            ? 'Tap who put it in'
+            : 'Tap who scored'}
       </button>
-      {allowUnnamed && !scorer && (
+      {allowUnnamed && !scorer && !own && (
         <button
           onClick={() => onPick({ scorerId: null, assistId: null })}
           className="press w-full min-h-11 rounded-2xl text-[14px] font-bold text-gray-600 hover:text-ink"
@@ -65,8 +74,8 @@ export function ScorerSheet({
     <Sheet titleId={titleId} onClose={onClose} align="left" footer={footer}>
       <SheetTitle
         id={titleId}
-        title={`Goal for ${name}: who scored?`}
-        sub="Their goal goes on their record."
+        title={own ? `Own goal for ${name}: who put it in?` : `Goal for ${name}: who scored?`}
+        sub={own ? `Someone on ${against ? teamName(against, lineup.captains, lineup.bibs) : 'the other team'}. It isn’t their goal.` : 'Their goal goes on their record.'}
         onClose={onClose}
       />
       <ul className="mt-4 grid grid-cols-3 gap-2" role="radiogroup" aria-label="Who scored">
@@ -93,7 +102,21 @@ export function ScorerSheet({
         })}
       </ul>
 
-      {scorer && side.length > 1 && (
+      {/* Quietly below the list: an own goal comes from the other side */}
+      {against && (
+        <button
+          onClick={() => {
+            setOwn(!own);
+            setScorer(null);
+            setAssist(null);
+          }}
+          className="press mt-3 min-h-11 px-1 text-[14px] font-bold text-pitch-700"
+        >
+          {own ? `← Back to ${name}’s players` : 'Own goal? Pick from the other team'}
+        </button>
+      )}
+
+      {scorer && !own && side.length > 1 && (
         <section className="mt-5 animate-fade-in-up" aria-labelledby={`${titleId}-assist`}>
           <h3 id={`${titleId}-assist`} className="flex items-center gap-1.5 text-[14px] font-bold text-ink">
             <Swatch team={team} bibs={lineup.bibs} />

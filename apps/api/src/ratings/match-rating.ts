@@ -33,6 +33,9 @@ export interface DayInput {
   saves?: Record<string, number>;
   yellow?: Record<string, number>;
   red?: Record<string, number>;
+  /** Who put one in their own net (once per own goal), and missed penalties per player. */
+  ownGoals?: string[];
+  penMisses?: Record<string, number>;
   /** The group this match day was for: missing your group's days lowers the card a little (MISS_*). */
   groupId?: string;
   /** Vote results for the day (empty sets when nobody voted). */
@@ -57,6 +60,8 @@ export interface DayLine {
   saves: number;
   yellow: number;
   red: number;
+  ownGoals: number;
+  penMisses: number;
   potm: boolean;
   vii: boolean;
   best: boolean;
@@ -83,6 +88,9 @@ const CONCEDED = 0.15;
 export const CLEAN_SHEET: Record<Exclude<Position, 'GK'> | 'unknown', number> = { DEF: 0.6, MID: 0.3, ATT: 0.15, unknown: 0.3 };
 const YELLOW = 0.5;
 const RED = 1.5;
+/** An own goal, and a missed penalty: less than a red card, more than nothing. */
+const OWN_GOAL = 0.6;
+const PEN_MISS = 0.4;
 /** Vote bonuses before they taper. */
 const VOTE = { potm: 1, vii: 0.5, best: 0.3 } as const;
 
@@ -119,7 +127,7 @@ export const MISS_STEP = 0.5;
 export const MISS_MAX = 5;
 
 export function emptyLine(): DayLine {
-  return { games: 0, w: 0, d: 0, l: 0, goals: 0, assists: 0, inGoal: 0, keeperCleanSheets: 0, conceded: 0, cleanSheets: 0, cleanSheetCredit: 0, saves: 0, yellow: 0, red: 0, potm: false, vii: false, best: false };
+  return { games: 0, w: 0, d: 0, l: 0, goals: 0, assists: 0, inGoal: 0, keeperCleanSheets: 0, conceded: 0, cleanSheets: 0, cleanSheetCredit: 0, saves: 0, yellow: 0, red: 0, ownGoals: 0, penMisses: 0, potm: false, vii: false, best: false };
 }
 
 /**
@@ -171,6 +179,8 @@ export function dayLines(day: DayInput, usual: Map<string, Position> = new Map()
   for (const [id, n] of Object.entries(day.saves ?? {})) get(id).saves += n;
   for (const [id, n] of Object.entries(day.yellow ?? {})) get(id).yellow += n;
   for (const [id, n] of Object.entries(day.red ?? {})) get(id).red += n;
+  for (const id of day.ownGoals ?? []) get(id).ownGoals += 1;
+  for (const [id, n] of Object.entries(day.penMisses ?? {})) get(id).penMisses += n;
   for (const id of day.potm ?? []) get(id).potm = true;
   for (const id of day.viiOfDay ?? []) get(id).vii = true;
   for (const id of day.bestOnTeam ?? []) get(id).best = true;
@@ -180,7 +190,7 @@ export function dayLines(day: DayInput, usual: Map<string, Position> = new Map()
 /** The parts of a match rating, so a player can see why (shown as "+1.2 goals" etc.). */
 export interface MatchRating {
   rating: number;
-  parts: { goals: number; assists: number; results: number; keeping: number; cleanSheets: number; cards: number; votes: number };
+  parts: { goals: number; assists: number; results: number; keeping: number; cleanSheets: number; cards: number; mistakes: number; votes: number };
 }
 
 export function matchRating(l: DayLine, votesWeight: number): MatchRating | null {
@@ -193,6 +203,7 @@ export function matchRating(l: DayLine, votesWeight: number): MatchRating | null
     keeping: l.inGoal ? KEEPER_CS * (l.keeperCleanSheets / l.inGoal) - CONCEDED * (l.conceded / l.inGoal) + Math.min(SAVE_CAP, SAVE * l.saves) : 0,
     cleanSheets: per(l.cleanSheetCredit),
     cards: -(YELLOW * l.yellow + RED * l.red),
+    mistakes: -(OWN_GOAL * l.ownGoals + PEN_MISS * l.penMisses),
     votes: votesWeight * ((l.potm ? VOTE.potm : 0) + (l.vii ? VOTE.vii : 0) + (l.best ? VOTE.best : 0)),
   };
   const raw = BASE + Object.values(parts).reduce((a, b) => a + b, 0);

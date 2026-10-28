@@ -229,7 +229,7 @@ export function ScoresStep({
     return <Avatar name={m ? `${m.firstName} ${m.lastName}` : '?'} photoKey={m?.photoKey} className={className} />;
   };
   /** "Ada (Chidi), Bisi": a side's scorers, with who set each one up. */
-  const scorersLine = (goals: GoalInput[]) => goals.map((g) => `${who(g.scorerId)}${g.assistId ? ` (${who(g.assistId)})` : ''}`).join(', ');
+  const scorersLine = (goals: GoalInput[]) => goals.map((g) => `${who(g.scorerId)}${g.ownGoal ? ' (own goal)' : g.assistId ? ` (${who(g.assistId)})` : ''}`).join(', ');
   const valid = teams.includes(draft.teamA) && teams.includes(draft.teamB) && draft.teamA !== draft.teamB;
 
   /** Who kept goal for a team in its last saved game: the starting guess for its next one. */
@@ -290,13 +290,13 @@ export function ScoresStep({
   }
 
   /** A goal for the game being played: the score goes up, and the scorer is noted if known. */
-  function goalFor(side: 'teamA' | 'teamB', goal: { scorerId: string | null; assistId: string | null }) {
+  function goalFor(side: 'teamA' | 'teamB', goal: { scorerId: string | null; assistId: string | null; ownGoal?: boolean }) {
     buzz(6);
     const score = side === 'teamA' ? 'scoreA' : 'scoreB';
     setDraft((d) => ({
       ...d,
       [score]: Math.min(99, d[score] + 1),
-      goals: goal.scorerId ? [...d.goals, { team: d[side], scorerId: goal.scorerId, assistId: goal.assistId }] : d.goals,
+      goals: goal.scorerId ? [...d.goals, { team: d[side], scorerId: goal.scorerId, assistId: goal.assistId, ...(goal.ownGoal ? { ownGoal: true } : {}) }] : d.goals,
     }));
   }
 
@@ -409,7 +409,7 @@ export function ScoresStep({
                 {face(g.scorerId, 'w-5 h-5 text-[8px]')}
                 <span className="min-w-0 truncate">
                   {who(g.scorerId)}
-                  {g.assistId && <span className="text-white/55"> ({who(g.assistId)})</span>}
+                  {g.ownGoal ? <span className="text-white/55"> (own goal)</span> : g.assistId && <span className="text-white/55"> ({who(g.assistId)})</span>}
                 </span>
               </li>
             ))}
@@ -696,6 +696,14 @@ export function ScoresStep({
       {scoring && (
         <ScorerSheet
           team={scoring.team}
+          against={
+            scoring.side
+              ? draft[scoring.side === 'teamA' ? 'teamB' : 'teamA']
+              : (() => {
+                  const g = lineup.games.find((x) => x.id === scoring.gameId);
+                  return g ? (g.teamA === scoring.team ? g.teamB : g.teamA) : null;
+                })()
+          }
           lineup={lineup}
           allowUnnamed={!scoring.gameId}
           scoreAfter={
@@ -706,7 +714,7 @@ export function ScoresStep({
             const s = scoring;
             setScoring(null);
             if (s.side) goalFor(s.side, goal);
-            else if (s.gameId && goal.scorerId) nameScorer(s.gameId, { team: s.team, scorerId: goal.scorerId, assistId: goal.assistId });
+            else if (s.gameId && goal.scorerId) nameScorer(s.gameId, { team: s.team, scorerId: goal.scorerId, assistId: goal.assistId, ...(goal.ownGoal ? { ownGoal: true } : {}) });
           }}
         />
       )}
@@ -795,7 +803,7 @@ export function ScoresStep({
                         <span className="flex-1 min-w-0">
                           <span className="block text-[15px] font-bold text-ink truncate">
                             {who(goal.scorerId)}
-                            {goal.assistId && <span className="font-semibold text-gray-600"> · set up by {who(goal.assistId)}</span>}
+                            {goal.ownGoal ? <span className="font-semibold text-gray-600"> · own goal</span> : goal.assistId && <span className="font-semibold text-gray-600"> · set up by {who(goal.assistId)}</span>}
                           </span>
                           {goal.recordedBy && <span className="block text-[12px] text-gray-500">Added by {goal.recordedBy}</span>}
                         </span>

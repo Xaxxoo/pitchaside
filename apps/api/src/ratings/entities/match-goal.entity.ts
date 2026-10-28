@@ -31,6 +31,10 @@ export class MatchGoal {
   @Column({ name: 'assist_id', type: 'uuid', nullable: true })
   assistId: string | null;
 
+  /** Put in their own net: it counts for `team`, and `scorerId` is the other side's player who did it. */
+  @Column({ name: 'own_goal', type: 'boolean', default: false })
+  ownGoal: boolean;
+
   /** "Tunde (organiser)", "Ada (captain)". */
   @Column({ name: 'recorded_by', type: 'varchar', nullable: true })
   recordedBy: string | null;

@@ -336,7 +336,7 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   );
 }
 
-const KIND_LABEL: Record<string, string> = { yellow: 'Yellow card', red: 'Red card', save: 'Save' };
+const KIND_LABEL: Record<string, string> = { yellow: 'Yellow card', red: 'Red card', save: 'Save', pen_miss: 'Missed penalty' };
 
 /**
  * The day so far: the teams' table (your side marked), then each game newest first with its
@@ -406,7 +406,7 @@ function Live({
                     <Avatar name={x.scorer!} photoKey={x.scorerPhoto} className="w-5 h-5 text-[8px]" />
                     <span className="min-w-0 truncate">
                       {x.mine ? 'You' : x.scorer}
-                      {x.assist && <span className="text-white/50"> ({x.assist})</span>}
+                      {x.ownGoal ? <span className="text-white/50"> (own goal)</span> : x.assist && <span className="text-white/50"> ({x.assist})</span>}
                     </span>
                   </span>
                 ))}
