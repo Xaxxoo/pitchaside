@@ -34,14 +34,8 @@ export default function PlayerProfilePage() {
         lastName={profile.player.lastName}
         nickname={profile.player.nickname}
         ratings={r}
-        caption={
-          [
-            r.record.w + r.record.d + r.record.l ? `Won ${r.record.w} · drew ${r.record.d} · lost ${r.record.l}` : 'Play, win and get votes to build your card',
-            r.potmWins ? `★ ${r.potmWins} Player of the Match` : null,
-          ]
-            .filter(Boolean)
-            .join(' · ')
-        }
+        // Won, drawn and lost are in the stats just below: the card only adds what they don't show
+        caption={r.potmWins ? `★ ${r.potmWins} × Player of the Match` : undefined}
         photoKey={profile.player.photoKey}
         photoButton={
           <CardPhotoButton
@@ -80,8 +74,8 @@ export default function PlayerProfilePage() {
       {/* The card is one club's: with more than one, say which, and where the others are. */}
       {profile.clubs.length > 1 && (
         <p className="mt-3 text-[13px] leading-snug text-gray-600">
-          Your card and stats are from <b className="text-ink">{profile.clubs.find((c) => c.playerId === profile.ratingsPlayerId)?.clubName ?? profile.clubs[0].clubName}</b>,
-          where you’ve played most. Your rating at each club is under My clubs.
+          Card from <b className="text-ink">{(profile.clubs.find((c) => c.playerId === profile.ratingsPlayerId)?.clubName ?? profile.clubs[0].clubName).trim()}</b>, where you play most.
+          Each club’s rating is under My clubs.
         </p>
       )}
       <div className="mt-5">

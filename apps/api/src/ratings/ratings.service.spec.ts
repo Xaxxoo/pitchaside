@@ -223,10 +223,10 @@ describe('the one-question ballot', () => {
     ];
     const { rows } = await setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { votes }).service.getGroupTable('grp', 'org');
     for (const r of rows) {
-      // GK stays empty until someone's nominated in goal.
-      const a = Object.values(r.attributes).filter((v) => v !== null);
-      expect(new Set(a).size).toBe(1);
-      expect(a[0]).toBe(cardRating(DEFAULT_START));
+      // No award or stat evidence: nothing below the card, and nothing made up either
+      const a = Object.values(r.attributes).filter((v) => v !== null) as number[];
+      expect(a.every((v) => v >= (r.ovr ?? 0))).toBe(true);
+      expect(a).toEqual([]);
     }
   });
 });
@@ -373,7 +373,8 @@ describe('award evidence', () => {
   it('lifts the abilities an award is evidence of, and counts how many people said so', async () => {
     const rows = await table([passing('b'), passing('c'), passing('d'), passing('e')]);
     const ada = rows.find((r) => r.player.id === 'ada')!;
-    expect(ada.attributes.PAS!).toBeGreaterThan(ada.attributes.SHO!);
+    expect(ada.attributes.PAS!).toBeGreaterThan(ada.ovr!);
+    expect(ada.attributes.SHO).toBeNull();
     expect(ada.evidence.passing).toMatchObject({ nominations: 4, voters: 4, games: 1, enough: true });
   });
 
@@ -388,14 +389,14 @@ describe('award evidence', () => {
     const playmaker = (await table(pm)).find((r) => r.player.id === 'ada')!;
     const passer = (await table(ps)).find((r) => r.player.id === 'ada')!;
     expect(playmaker.attributes.PAS!).toBeLessThan(passer.attributes.PAS!);
-    expect(playmaker.attributes.IQ!).toBeGreaterThan(passer.attributes.IQ!);
+    expect(playmaker.attributes.IQ!).toBeGreaterThan(passer.attributes.IQ ?? passer.ovr!);
   });
 
   it('counts old Fastest votes as The Engine', async () => {
     const pace = ['b', 'c', 'd'].map((voterId) => ({ voterId, nomineeId: 'ada', category: VoteCategory.PACE }));
     const ada = (await table(pace)).find((r) => r.player.id === 'ada')!;
     expect(ada.evidence.engine).toMatchObject({ nominations: 3, enough: true });
-    expect(ada.attributes.PHY!).toBeGreaterThan(ada.attributes.SHO!);
+    expect(ada.attributes.PHY!).toBeGreaterThan(ada.ovr!);
   });
 });
 
