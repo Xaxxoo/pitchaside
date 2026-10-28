@@ -23,6 +23,8 @@ export interface MatchCard {
   players?: CardPlayer[];
   /** Best VII of the Day once the vote has closed: six starters then the sub (player ids). */
   vii?: string[] | null;
+  /** The Best VII's keeper (first in `vii`), when the vote had a keeper spot. */
+  viiKeeper?: string | null;
 }
 
 export interface CardPlayer {

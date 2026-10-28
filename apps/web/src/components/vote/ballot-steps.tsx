@@ -13,6 +13,9 @@ import { TEAMS, bibFill, bibOf, bibTint, teamName } from '@/lib/teams';
 export type Picks = Partial<Record<VoteCategory, string | string[]>>;
 type Player = Ballot['squad'][number];
 type Step = 'potm' | 'mate' | 'vii' | 'awards';
+type Line = 'DEF' | 'MID' | 'ATT';
+/** A Best VII spot: the keeper, an outfield spot (by index), or the sub. */
+type Spot = 'gk' | number | 'sub';
 
 const short = (p: Player) => `${p.nickname || p.firstName} ${p.lastName.charAt(0)}.`;
 const initials = (p: Player) => `${p.firstName.charAt(0)}${p.lastName.charAt(0)}`.toUpperCase();
@@ -63,17 +66,34 @@ export function BallotSteps({
   const steps: Step[] = ['potm', ...(mates.length ? (['mate'] as const) : []), ...(ballot.vii ? (['vii'] as const) : []), 'awards'];
   const at = steps.indexOf(step);
 
-  // Best VII: starters in the order picked, then the sub.
-  const starters = (Array.isArray(picks.vii) ? picks.vii : []).filter((id) => byId(id));
-  const sub = typeof picks.vii_sub === 'string' && byId(picks.vii_sub) ? picks.vii_sub : null;
-  const seven = [...starters, ...(sub ? [sub] : [])];
+  /*
+   * Best VII: a pitch in shape, Keeper + 2-1-2 and a sub. The keeper spot takes only someone who
+   * was in goal today; with nobody to pick there it's six outfield spots, 2-2-2. Tap a spot, then
+   * a player; the next empty spot is picked for you.
+   */
+  const keepers = (ballot.vii?.keepers ?? []).filter((id) => id !== me && byId(id));
+  const hasKeeper = keepers.length > 0;
+  const lines: Line[] = hasKeeper ? ['DEF', 'DEF', 'MID', 'ATT', 'ATT'] : ['DEF', 'DEF', 'MID', 'MID', 'ATT', 'ATT'];
+  const keeper = hasKeeper && typeof picks.vii_gk === 'string' && keepers.includes(picks.vii_gk) ? picks.vii_gk : null;
+  const raw = Array.isArray(picks.vii) ? picks.vii : [];
+  // One entry per outfield spot, '' while empty
+  const outfield = lines.map((_, i) => (raw[i] && byId(raw[i]) && raw[i] !== keeper ? raw[i] : ''));
+  const starters = outfield.filter(Boolean);
+  const sub = typeof picks.vii_sub === 'string' && byId(picks.vii_sub) && picks.vii_sub !== keeper && !starters.includes(picks.vii_sub) ? picks.vii_sub : null;
+  const seven = [...(keeper ? [keeper] : []), ...starters, ...(sub ? [sub] : [])];
+  const spots = (hasKeeper ? 1 : 0) + lines.length + 1;
+  const firstEmpty = (k: string | null, of: string[], sb: string | null): Spot | null =>
+    hasKeeper && !k ? 'gk' : of.findIndex((x) => !x) >= 0 ? of.findIndex((x) => !x) : !sb ? 'sub' : null;
+  const [chosen, setChosen] = useState<Spot | null>(null);
+  // The spot being filled: the one tapped, else the first empty one
+  const spot: Spot | null = chosen !== null && (chosen === 'gk' ? hasKeeper && !keeper : chosen === 'sub' ? !sub : !outfield[chosen]) ? chosen : firstEmpty(keeper, outfield, sub);
   const fromElsewhere = seven.filter((id) => {
     const t = byId(id)?.team;
     return !!myTeam && !!t && t !== myTeam;
   }).length;
   const elsewhereAvailable = others.filter((p) => !!myTeam && p.team && p.team !== myTeam).length;
   const needElsewhere = ballot.vii ? Math.min(ballot.vii.minOtherTeams, elsewhereAvailable) : 0;
-  const viiDone = !ballot.vii || (starters.length === ballot.vii.starters && !!sub && fromElsewhere >= needElsewhere);
+  const viiDone = !ballot.vii || (seven.length === spots && fromElsewhere >= needElsewhere);
 
   const awardKeys = ballot.awards.map((a) => a.key);
   const awardsPicked = awardKeys.filter((k) => typeof picks[k] === 'string' && byId(picks[k]));
@@ -86,15 +106,38 @@ export function BallotSteps({
     buzz(6);
     onPicks({ ...picks, teammate: picks.teammate === id ? undefined : id });
   }
-  function toggleSeven(id: string) {
-    if (!ballot.vii) return;
+  /** The Best VII as the server takes it: keeper, outfield spots in order, sub. */
+  const sevenPicks = (k: string | null, of: string[], sb: string | null): Picks => ({ ...picks, vii_gk: k ?? undefined, vii: of, vii_sub: sb ?? undefined });
+  /** Take someone off their spot, and make that spot the one to fill next. */
+  function takeOff(id: string) {
     buzz(6);
-    if (starters.includes(id)) onPicks({ ...picks, vii: starters.filter((x) => x !== id) });
-    else if (sub === id) onPicks({ ...picks, vii_sub: undefined });
-    else if (starters.length < ballot.vii.starters) onPicks({ ...picks, vii: [...starters, id] });
-    else if (!sub) onPicks({ ...picks, vii_sub: id });
+    if (id === keeper) {
+      setChosen('gk');
+      onPicks(sevenPicks(null, outfield, sub));
+    } else if (id === sub) {
+      setChosen('sub');
+      onPicks(sevenPicks(keeper, outfield, null));
+    } else {
+      const i = outfield.indexOf(id);
+      setChosen(i);
+      onPicks(sevenPicks(keeper, outfield.map((x) => (x === id ? '' : x)), sub));
+    }
+  }
+  function pickSeven(id: string) {
+    if (!ballot.vii) return;
+    if (seven.includes(id)) return takeOff(id);
+    if (spot === null) return;
+    buzz(6);
+    let [k, of, sb] = [keeper, [...outfield], sub];
+    if (spot === 'gk') k = id;
+    else if (spot === 'sub') sb = id;
+    else of[spot] = id;
+    setChosen(null);
+    onPicks(sevenPicks(k, of, sb));
   }
 
+  const LINE_NAME: Record<Line, string> = { DEF: 'Defence', MID: 'Midfield', ATT: 'Attack' };
+  const spotName = (x: Spot) => (x === 'gk' ? 'Keeper' : x === 'sub' ? 'Sub' : LINE_NAME[lines[x]]);
   const nextLabel = (to: Step) => (to === 'mate' ? 'Next: best on your team' : to === 'vii' ? 'Next: your Best VII' : 'Next: awards');
 
   /** A player as the ballot shows them: their face with a small bib in their side's colour, else the bib with their initials. */
@@ -134,9 +177,9 @@ export function BallotSteps({
     </li>
   );
 
-  const bySide = (render: (p: Player) => React.ReactNode, only?: (p: Player) => boolean) =>
+  const bySide = (render: (p: Player) => React.ReactNode, only?: (p: Player) => boolean, first?: (p: Player) => boolean) =>
     sides.map((side) => {
-      const players = side.players.filter((p) => !only || only(p));
+      const players = side.players.filter((p) => !only || only(p)).sort((a, b) => (first ? Number(first(b)) - Number(first(a)) : 0));
       if (!players.length) return null;
       return (
         <section key={side.key ?? 'all'} aria-label={side.label} className="mt-3.5">
@@ -149,6 +192,26 @@ export function BallotSteps({
         </section>
       );
     });
+
+  /** One spot on the Best VII pitch: the player in it (tap to take off), else an empty shirt to tap. */
+  const spotButton = (x: Spot) => {
+    const id = x === 'gk' ? keeper : x === 'sub' ? sub : outfield[x as number];
+    const p = id ? byId(id) : undefined;
+    const now = spot === x;
+    return (
+      <button
+        key={String(x)}
+        type="button"
+        onClick={() => (p ? takeOff(p.id) : setChosen(x))}
+        aria-pressed={now}
+        aria-label={p ? `${spotName(x)}: ${full(p)}. Tap to take off` : `${spotName(x)}: empty${now ? ', picking now' : ''}`}
+        className={`press w-[76px] min-h-[76px] flex flex-col items-center justify-center gap-1 rounded-2xl text-white ${now ? 'bg-white/10 ring-2 ring-volt-300' : ''}`}
+      >
+        {p ? <span className="animate-pop-in">{face(p)}</span> : <BibShirt empty label={x === 'gk' ? 'GK' : ''} className={`w-11 h-11 ${now ? 'text-volt-300' : 'text-white/60'}`} />}
+        <span className={`max-w-full truncate px-1.5 rounded-md text-[11px] font-bold ${p ? 'bg-ink' : now ? 'text-volt-300' : 'text-white/70'}`}>{p ? short(p) : spotName(x)}</span>
+      </button>
+    );
+  };
 
   let button: { label: string; disabled: boolean; onClick: () => void };
   if (step === 'potm') {
@@ -164,11 +227,15 @@ export function BallotSteps({
       onClick: () => setStep(steps[at + 1]),
     };
   } else if (step === 'vii') {
-    const left = ballot.vii!.starters - starters.length + (sub ? 0 : 1);
+    const left = spots - seven.length;
     button = {
       label: left > 0 ? `Pick ${left} more` : fromElsewhere < needElsewhere ? `Pick ${needElsewhere} from other teams` : nextLabel('awards'),
       disabled: !viiDone,
-      onClick: () => setStep('awards'),
+      // Sent in the shape the server takes: no keeper pick when there's no keeper spot
+      onClick: () => {
+        onPicks(sevenPicks(keeper, outfield, sub));
+        setStep('awards');
+      },
     };
   } else {
     button = {
@@ -267,42 +334,32 @@ export function BallotSteps({
         <>
           <h2 className="font-display text-2xl font-extrabold text-ink">Your Best VII</h2>
           <p className="text-sm text-gray-600 mt-0.5">
-            The seven best today: {ballot.vii.starters} starters, then a sub.
+            {hasKeeper ? 'A keeper, five outfield and a sub.' : 'Six outfield players and a sub.'}
             {needElsewhere > 0 && ` At least ${needElsewhere} from other teams.`}
           </p>
-          {/* The seven so far, on a pitch: tap one to take them off */}
-          <div className="relative mt-3 rounded-3xl bg-pitch-700 turf-stripes border-[3px] border-ink overflow-hidden px-2 pt-4 pb-3">
-            <span className="absolute left-1/2 top-[42%] w-20 h-20 -ml-10 -mt-10 rounded-full border-2 border-white/25" aria-hidden />
-            <span className="absolute inset-x-0 top-[42%] h-0.5 bg-white/25" aria-hidden />
-            <ol className="relative grid grid-cols-3 gap-y-3 gap-x-1" aria-label="Starters">
-              {Array.from({ length: ballot.vii.starters }, (_, i) => {
-                const p = byId(starters[i]);
-                return (
-                  <li key={i} className="min-w-0">
-                    <button
-                      onClick={() => p && toggleSeven(p.id)}
-                      disabled={!p}
-                      aria-label={p ? `Starter ${i + 1}: ${full(p)}. Tap to take off` : `Starter ${i + 1}: empty`}
-                      className="press w-full min-h-[76px] flex flex-col items-center gap-1 text-white"
-                    >
-                      {p ? (
-                        <span className="animate-pop-in">{face(p)}</span>
-                      ) : (
-                        <BibShirt empty label={String(i + 1)} className="w-12 h-12 text-white/60" />
-                      )}
-                      <span className={`max-w-full truncate px-1.5 rounded-md text-[11px] font-bold ${p ? 'bg-ink' : 'text-white/60'}`}>{p ? short(p) : 'Empty'}</span>
-                    </button>
-                  </li>
-                );
-              })}
+          {/* The seven on a pitch in shape, attack at the top: tap a spot to fill it, a face to take them off */}
+          <div className="relative mt-3 rounded-3xl bg-pitch-700 turf-stripes border-[3px] border-ink overflow-hidden px-2 pt-3 pb-3">
+            <span className="absolute left-1/2 -top-10 w-20 h-20 -ml-10 rounded-full border-2 border-white/25" aria-hidden />
+            <span className="absolute left-1/2 bottom-0 w-2/5 h-12 -translate-x-1/2 border-2 border-b-0 border-white/25" aria-hidden />
+            <ol className="relative space-y-1" aria-label="Your Best VII">
+              {(['ATT', 'MID', 'DEF'] as Line[]).map((line) => (
+                <li key={line} className="flex justify-center gap-1">
+                  {lines.map((l, i) => (l === line ? spotButton(i) : null))}
+                </li>
+              ))}
+              {hasKeeper && (
+                <li className="flex justify-center">
+                  {spotButton('gk')}
+                </li>
+              )}
             </ol>
-            <div className="relative mt-3 flex items-center gap-2 rounded-2xl bg-ink/40 px-2 py-1.5">
+            <div className="relative mt-2 flex items-center gap-2 rounded-2xl bg-ink/40 px-2 py-1.5">
               <span className="shrink-0 text-[11px] font-extrabold text-white/80">SUB</span>
               <button
-                onClick={() => sub && toggleSeven(sub)}
-                disabled={!sub}
-                aria-label={sub ? `Sub: ${full(byId(sub)!)}. Tap to take off` : 'Sub: empty'}
-                className="press flex-1 min-h-11 flex items-center gap-2 text-left text-white"
+                onClick={() => (sub ? takeOff(sub) : setChosen('sub'))}
+                aria-label={sub ? `Sub: ${full(byId(sub)!)}. Tap to take off` : `Sub: empty${spot === 'sub' ? ', picking now' : ''}`}
+                aria-pressed={spot === 'sub'}
+                className={`press flex-1 min-h-11 flex items-center gap-2 rounded-xl px-1 text-left text-white ${spot === 'sub' ? 'ring-2 ring-volt-300' : ''}`}
               >
                 {sub ? (
                   <>
@@ -312,14 +369,14 @@ export function BallotSteps({
                 ) : (
                   <>
                     <BibShirt empty label="7" className="w-9 h-9 text-white/60" />
-                    <span className="text-[12px] font-bold text-white/60">{starters.length < ballot.vii.starters ? 'After the starters' : 'Pick your sub'}</span>
+                    <span className={`text-[12px] font-bold ${spot === 'sub' ? 'text-volt-300' : 'text-white/60'}`}>{spot === 'sub' ? 'Pick your sub below' : 'Tap to pick your sub'}</span>
                   </>
                 )}
               </button>
             </div>
           </div>
-          <p className="mt-2 text-[13px] font-semibold text-gray-600 tabular-nums" aria-live="polite">
-            {seven.length} of {ballot.vii.starters + ballot.vii.subs} picked
+          <p className="mt-2 text-[13px] font-semibold text-gray-600 tabular-nums truncate" aria-live="polite">
+            {seven.length} of {spots} picked
             {needElsewhere > 0 && (
               <span className={fromElsewhere >= needElsewhere ? 'text-pitch-700' : 'text-amber-700'}>
                 {' '}
@@ -327,11 +384,25 @@ export function BallotSteps({
               </span>
             )}
           </p>
-          {bySide((p) => {
-            const slot = starters.indexOf(p.id);
-            const isSub = sub === p.id;
-            return chip(p, slot >= 0 || isSub, () => toggleSeven(p.id), isSub ? 'Sub' : String(slot + 1), seven.length >= ballot.vii!.starters + 1);
-          })}
+          {spot !== null && (
+            <p className="mt-3 text-[15px] font-extrabold text-ink truncate" aria-live="polite">
+              {spot === 'gk'
+                ? ballot.vii.keepersFrom === 'goal'
+                  ? 'Keeper: who was in goal today'
+                  : 'Keeper: who played in goal today'
+                : `${spotName(spot)}: pick a player`}
+            </p>
+          )}
+          {bySide(
+            (p) => {
+              const i = outfield.indexOf(p.id);
+              const mark = p.id === keeper ? 'GK' : p.id === sub ? 'Sub' : i >= 0 ? LINE_NAME[lines[i]].slice(0, 3).toUpperCase() : null;
+              return chip(p, mark !== null, () => pickSeven(p.id), mark, spot === null);
+            },
+            // The keeper spot lists only those in goal; outfield spots list everyone, that line first
+            spot === 'gk' ? (p) => keepers.includes(p.id) || seven.includes(p.id) : undefined,
+            typeof spot === 'number' ? (p) => p.position === lines[spot] : undefined,
+          )}
         </>
       )}
 
