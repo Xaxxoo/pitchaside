@@ -49,8 +49,42 @@ function stickerName(p: CardPlayer) {
   return last ? `${first} ${last[0]}.` : first;
 }
 
-/** Poster type: the shorter the name, the bigger it's set. */
-const heroSize = (name: string) => (name.length <= 8 ? 92 : name.length <= 12 ? 74 : name.length <= 16 ? 58 : 44);
+/** How wide poster type runs, in ems: satori can't measure, so a little over the font's real widths. */
+const emWidth = (word: string) => [...word].reduce((w, ch) => w + (/[IJ\-'.]/.test(ch) ? 0.35 : /[MW&]/.test(ch) ? 0.95 : 0.76), 0);
+const SPACE = 0.3;
+const HERO_LEADING = 0.98;
+
+/** The name broken into lines at this size, word by word; null if one word won't fit a line. */
+function wrap(words: string[], size: number, width: number) {
+  const lines: string[] = [];
+  let line = 0;
+  for (const word of words) {
+    const w = emWidth(word) * size;
+    if (w > width) return null;
+    if (lines.length && line + SPACE * size + w <= width) {
+      lines[lines.length - 1] += ` ${word}`;
+      line += SPACE * size + w;
+    } else {
+      lines.push(word);
+      line = w;
+    }
+  }
+  return lines;
+}
+
+/**
+ * Poster type: the biggest size the whole name fits at, on one line or two, in the room above
+ * the stats row, broken between words. A long name drops a size rather than losing its second
+ * line under the stats.
+ */
+function heroType(name: string, room: number, width: number) {
+  const words = name.toUpperCase().split(/\s+/).filter(Boolean);
+  for (const size of [92, 74, 58, 48, 40, 34, 30]) {
+    const lines = wrap(words, size, width);
+    if (lines && lines.length <= 2 && lines.length * size * HERO_LEADING <= room) return { size, lines };
+  }
+  return { size: 30, lines: [name.toUpperCase()] };
+}
 
 /** The star's photo as a square sticker, tilted as if just pressed into the album; initials without one. */
 function Portrait({ p, size, tilt }: { p: { name: string; photo?: string | null }; size: number; tilt: number }) {
@@ -113,6 +147,10 @@ function Hero({ card, players }: { card: MatchCard; players: CardPlayer[] }) {
     star && star.assists ? { k: star.assists === 1 ? 'ASSIST' : 'ASSISTS', v: star.assists } : null,
     { k: potm.votes === 1 ? 'VOTE' : 'VOTES', v: potm.votes },
   ].filter((x): x is { k: string; v: number } => !!x);
+  // The name's room: the hero's inside (300 less its padding and border), less the label, the
+  // stats row and, with a nickname, the full name under it. Its width: beside the portrait.
+  const room = 224 - 40 - 83 - (shown.sub ? 37 : 0);
+  const hero = heroType(shown.main, room, INNER - 80 - 8 - 280 - 28);
 
   return (
     <div
@@ -134,24 +172,15 @@ function Hero({ card, players }: { card: MatchCard; players: CardPlayer[] }) {
             {winners.length > 1 || potm.name.includes('&') ? 'PLAYERS OF THE MATCH' : potm.shared ? 'PLAYER OF THE MATCH · JOINT' : 'PLAYER OF THE MATCH'}
           </div>
         </div>
-        <div
-          style={{
-            display: 'block',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            lineClamp: 2,
-            fontFamily: DISPLAY,
-            fontWeight: 800,
-            fontSize: heroSize(shown.main),
-            lineHeight: 0.98,
-            letterSpacing: -1,
-            marginTop: 16,
-          }}
-        >
-          {shown.main.toUpperCase()}
+        <div style={{ display: 'flex', flexDirection: 'column', fontFamily: DISPLAY, fontWeight: 800, fontSize: hero.size, lineHeight: HERO_LEADING, letterSpacing: -1, marginTop: 16 }}>
+          {hero.lines.map((line, i) => (
+            <div key={i} style={oneLine}>
+              {line}
+            </div>
+          ))}
         </div>
         {shown.sub && <div style={{ ...oneLine, fontSize: 24, fontWeight: 700, color: 'rgba(15,26,20,0.7)', marginTop: 8 }}>{shown.sub}</div>}
-        <div style={{ display: 'flex', gap: 34, marginTop: 'auto', paddingTop: 14, borderTop: `3px solid ${C.ink}` }}>
+        <div style={{ display: 'flex', flexShrink: 0, gap: 34, marginTop: 'auto', paddingTop: 14, borderTop: `3px solid ${C.ink}` }}>
           {stats.map((s) => (
             <div key={s.k} style={{ display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', fontFamily: DISPLAY, fontWeight: 800, fontSize: 44, lineHeight: 1 }}>{s.v}</div>

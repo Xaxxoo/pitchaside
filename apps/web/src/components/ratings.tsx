@@ -314,7 +314,12 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
         </p>
       )}
       <p className="px-1 text-[11px] leading-snug text-gray-500">
-        {table.points.win} pts a win · {table.points.draw} a draw · +{table.points.teamOfDay} for Team of the Day (<TrophyMark />) · +{table.points.potm} for
+        {table.points.win} pts a win · {table.points.draw} a draw · +{table.points.teamOfDay} for Team of the Day
+        {/* The trophy is drawn, so it isn't text: its brackets are drawn with it, or copied text and screen readers get "()" */}
+        <span aria-hidden className="ml-1 before:content-['('] after:content-[')']">
+          <TrophyMark />
+        </span>{' '}
+        · +{table.points.potm} for
         Player of the Match (★). ▲▼ places moved since the last match day. Form: their last 3 match days, W more games won than lost, D level, L fewer.
       </p>
     </div>
