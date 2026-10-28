@@ -6,7 +6,8 @@ import { Avatar } from '@/components/ratings';
 import { FilterBar, FilterMenu } from '@/components/filter-menu';
 import { stagger } from '@/components/motion';
 import { RatingBreakdownSheet } from '@/components/rating-breakdown-sheet';
-import { getGroupTable, getRatingBreakdown, getRatingTrial, type LeagueTable, type RatingBreakdown, type RatingTrial, type TableRange } from '@/lib/api';
+import { getGroupTable, getRatingBreakdown, getRatingTrial, setRatingMode, type LeagueTable, type RatingBreakdown, type RatingMode, type RatingTrial, type TableRange } from '@/lib/api';
+import { RatingModeRow } from '@/components/squad/rating-mode';
 
 /**
  * Where the table and stats come from: the organiser's routes, or the player app's (which check the
@@ -18,6 +19,8 @@ export interface ClubApi {
   ratings: (groupId: string) => Promise<RatingTrial>;
   breakdown: (playerId: string) => Promise<RatingBreakdown | null>;
   playerHref: ((playerId: string) => string) | null;
+  /** Organisers only: change how the club's ratings are worked out. */
+  setMode?: (mode: RatingMode) => Promise<unknown>;
 }
 
 export const ORGANISER_CLUB: ClubApi = {
@@ -25,6 +28,7 @@ export const ORGANISER_CLUB: ClubApi = {
   ratings: getRatingTrial,
   breakdown: getRatingBreakdown,
   playerHref: (id) => `/players/${id}`,
+  setMode: setRatingMode,
 };
 
 type Row = LeagueTable['rows'][number];
@@ -34,6 +38,8 @@ const PARTS = [
   ['votes', 'Votes'],
   ['results', 'Results'],
 ] as const;
+/** A match rating out of 10, one decimal ("7.4"), or a dash before there is one. */
+const fmtRating = (n: number | null | undefined) => (n == null ? '–' : n.toFixed(1));
 /** Where a 40–99 score sits along a bar, and where the club's middle (70) is. */
 const along = (n: number) => `${Math.max(0, Math.min(100, ((n - 40) / 59) * 100))}%`;
 export type StatSort =
@@ -121,6 +127,7 @@ export function GroupStats({
   const none = counts ? played.filter((r) => stat.of(r) === 0).length : 0;
   const rows = [...(counts ? played.filter((r) => stat.of(r) > 0) : played)].sort((a, b) => value(b) - value(a) || (b.ovr ?? 0) - (a.ovr ?? 0) || nameOf(a).localeCompare(nameOf(b)));
   const notYet = (table?.rows.length ?? 0) - played.length;
+  const steady = table?.ratingMode === 'steady';
 
   return (
     <section aria-labelledby="stats-title">
@@ -128,6 +135,11 @@ export function GroupStats({
         Stats
       </h2>
       <p className="mb-2.5 text-xs text-gray-500">Every player, ranked. Pick what to rank by.</p>
+      {api.setMode && table && sort === 'rating' && (
+        <div className="-mt-1 mb-2.5">
+          <RatingModeRow mode={table.ratingMode ?? 'classic'} onChange={(m) => api.setMode!(m).then(load)} />
+        </div>
+      )}
       <FilterBar>
         <FilterMenu
           label="Rank by"
@@ -174,9 +186,9 @@ export function GroupStats({
         </p>
       ) : (
         <>
-          {sort === 'rating' && <RatingSpotlight top={rows.filter((r) => value(r) === value(rows[0]))} parts={parts} of={played.length} onExplain={setExplaining} />}
+          {sort === 'rating' && <RatingSpotlight top={rows.filter((r) => value(r) === value(rows[0]))} parts={parts} of={played.length} steady={steady} onExplain={setExplaining} />}
           <div className="mt-3 bg-white rounded-3xl border border-gray-100 shadow-card overflow-hidden">
-            {sort === 'rating' && (
+            {sort === 'rating' && !steady && (
               <div className="flex items-center gap-3 px-3.5 pt-2.5 pb-2 border-b border-gray-100 text-[9px] font-extrabold uppercase tracking-[0.1em] text-gray-500" aria-hidden>
                 <span className="w-6 shrink-0 text-center">#</span>
                 <span className="w-9 shrink-0" />
@@ -213,8 +225,12 @@ export function GroupStats({
                       <Avatar name={name} photoKey={r.player.photoKey} className="w-9 h-9 text-[11px]" />
                       <span className="flex-1 min-w-0">
                         <span className="block text-[15px] font-bold text-ink truncate">{name}</span>
-                        {sort === 'rating' && p ? (
+                        {sort === 'rating' && p && !steady ? (
                           <PartBars parts={p.parts} />
+                        ) : sort === 'rating' && p?.steady ? (
+                          <span className="block text-[12px] text-gray-500 tabular-nums truncate">
+                            Form {fmtRating(p.steady.form)} · last {fmtRating(p.steady.last)}
+                          </span>
                         ) : (
                           <span className="block text-[12px] text-gray-500 tabular-nums truncate">
                             {r.games} played · {r.goals} G · {r.assists} A{r.potmWins ? ` · ★ ${r.potmWins}` : ''}
@@ -283,9 +299,22 @@ function PartBars({ parts }: { parts: Parts }) {
  * number, what it is made of against the club's middle, and how the number is built. "How it's
  * made" opens the same breakdown as tapping a player card.
  */
-function RatingSpotlight({ top, parts, of, onExplain }: { top: Row[]; parts: Map<string, RatingTrial['rows'][number]>; of: number; onExplain: (r: Row) => void }) {
+function RatingSpotlight({
+  top,
+  parts,
+  of,
+  steady,
+  onExplain,
+}: {
+  top: Row[];
+  parts: Map<string, RatingTrial['rows'][number]>;
+  of: number;
+  steady: boolean;
+  onExplain: (r: Row) => void;
+}) {
   const lead = top[0];
-  const p = parts.get(lead.player.id)?.parts;
+  const p = steady ? undefined : parts.get(lead.player.id)?.parts;
+  const st = steady ? parts.get(lead.player.id)?.steady : null;
   const name = `${lead.player.firstName} ${lead.player.lastName}`.trim();
   const others = top.length - 1;
   return (
@@ -333,8 +362,26 @@ function RatingSpotlight({ top, parts, of, onExplain }: { top: Row[]; parts: Map
             ))}
           </dl>
         )}
+        {st && (
+          <dl className="mt-4 grid grid-cols-3 gap-2">
+            {(
+              [
+                ['Form', fmtRating(st.form)],
+                ['Last match', fmtRating(st.last)],
+                ['Days rated', String(st.matchDays)],
+              ] as const
+            ).map(([label, v]) => (
+              <div key={label} className="min-w-0 rounded-2xl bg-white/[0.07] px-2.5 py-2">
+                <dt className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/60 truncate">{label}</dt>
+                <dd className="mt-0.5 font-display text-[20px] leading-none font-extrabold tabular-nums">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
         <p className="mt-3 text-[12px] leading-snug text-white/70">
-          Every rating is 40% stats, 40% votes and 20% team results, each against the rest of the club. The line on each bar is the middle, 70.
+          {steady
+            ? 'Form is their average match rating out of 10. The rating follows it, a few points at most each match day.'
+            : 'Every rating is 40% stats, 40% votes and 20% team results, each against the rest of the club. The line on each bar is the middle, 70.'}
         </p>
         <button
           onClick={() => onExplain(lead)}

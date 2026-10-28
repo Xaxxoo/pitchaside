@@ -10,6 +10,9 @@ import { User } from '../../users/entities/user.entity';
 import { Group } from '../../groups/entities/group.entity';
 import { Player } from '../../players/entities/player.entity';
 
+export type RatingMode = 'classic' | 'steady';
+export const RATING_MODES: RatingMode[] = ['classic', 'steady'];
+
 @Entity('organizations')
 export class Organization {
   @PrimaryGeneratedColumn('uuid')
@@ -26,6 +29,14 @@ export class Organization {
 
   @Column({ unique: true, nullable: true })
   inviteCode: string;
+
+  /**
+   * How the player card's number is worked out, for the whole club (every group, both apps):
+   * 'classic' ranks players against the club (40% stats, 40% votes, 20% results);
+   * 'steady' moves a little each match day from what they did (ratings/match-rating.ts).
+   */
+  @Column({ name: 'rating_mode', type: 'varchar', length: 10, default: 'classic' })
+  ratingMode: RatingMode;
 
   @OneToMany(() => User, (user) => user.organization)
   users: User[];
