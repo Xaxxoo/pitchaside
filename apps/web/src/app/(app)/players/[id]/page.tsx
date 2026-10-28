@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/empty-state';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { useToast } from '@/components/toast';
 import { prettyPhone, whatsappNumber } from '@/lib/whatsapp';
+import { SignInLinkButton } from '@/components/sign-in-link-button';
 import { PlayerSheet } from '@/components/group/member-sheet';
 import { UserRole } from '@pitchaside/shared';
 import { useAuth } from '@/lib/auth';
@@ -313,7 +314,8 @@ export default function PlayerDetailPage() {
                   </a>
                 )}
               </div>
-              {!player.email && <p className="mt-2 text-[11px] leading-snug text-white/60">No email yet: they can’t sign in until you add one.</p>}
+              {/* Can't get in (no email, forgot the password): a one-time link to their WhatsApp */}
+              {canManage && <SignInLinkButton player={player} variant="dark" />}
               {player.phone &&
                 (waNumber ? (
                   <p className="mt-2 text-[12px] text-white/60 tabular-nums truncate">{prettyPhone(player.phone)}</p>

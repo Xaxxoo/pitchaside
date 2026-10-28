@@ -15,6 +15,8 @@ import { RatingsModule } from '../ratings/ratings.module';
 import { RsvpModule } from '../rsvp/rsvp.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { PhoneOtp } from './entities/phone-otp.entity';
+import { SignInLink } from './entities/sign-in-link.entity';
+import { SignInLinksService } from './sign-in-links.service';
 import { PlayerAccount } from './entities/player-account.entity';
 import { PlayerAuthGuard, PlayerAuthService } from './player-auth.service';
 import { PlayerPortalService } from './player-portal.service';
@@ -23,7 +25,7 @@ import { PlayerAuthController, PlayerPortalController } from './player-portal.co
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PhoneOtp, PlayerAccount, Player, User, Organization, Group, GroupMembership, Session, Payment]),
+    TypeOrmModule.forFeature([PhoneOtp, SignInLink, PlayerAccount, Player, User, Organization, Group, GroupMembership, Session, Payment]),
     AuthModule,
     UsersModule,
     JwtModule.register({}),
@@ -34,6 +36,6 @@ import { PlayerAuthController, PlayerPortalController } from './player-portal.co
     PlayersModule,
   ],
   controllers: [PlayerAuthController, PlayerPortalController],
-  providers: [PlayerAuthService, PlayerAuthGuard, PlayerPortalService],
+  providers: [PlayerAuthService, PlayerAuthGuard, PlayerPortalService, SignInLinksService],
 })
 export class PlayerPortalModule {}

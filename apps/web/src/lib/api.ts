@@ -216,6 +216,11 @@ export function updatePlayer(
   return http.patch<IPlayer>(`/players/${id}`, data);
 }
 
+/** A one-time link for a player who can't get in: 24 hours, once. The organiser sends it on WhatsApp. */
+export function createSignInLink(playerId: string) {
+  return http.post<{ link: string; expiresAt: string; firstName: string; phone: string | null; hasEmail: boolean }>(`/players/${playerId}/sign-in-link`);
+}
+
 export function deletePlayer(id: string): Promise<void> {
   return http.delete<void>(`/players/${id}`);
 }

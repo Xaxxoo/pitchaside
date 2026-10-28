@@ -75,6 +75,15 @@ export function gameLink(link: string, gameId: string) {
   return `${link}${link.includes('?') ? '&' : '?'}game=${gameId}`;
 }
 
+/** A sign-in link for one player, from their organiser: what it does, and that it's theirs alone. */
+export function signInLinkMessage(p: { firstName: string; link: string }) {
+  return [
+    `Hi ${p.firstName} 👋 Here's your link to get into PitchAside. Tap it and choose a password:`,
+    p.link,
+    `It works once, for 24 hours. It's just for you, so don't forward it.`,
+  ].join('\n');
+}
+
 /** A game to share in the group chat: when, where, how full, and the link to say you're in. */
 export function gameInviteMessage(g: {
   groupName: string;

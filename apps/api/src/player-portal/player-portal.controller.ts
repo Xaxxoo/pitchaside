@@ -7,6 +7,7 @@ import { BillingService } from '../billing/billing.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushSubscriptionDto, UnsubscribeDto } from '../notifications/notifications.controller';
 import { CurrentPerson, Person, PlayerAuthGuard, PlayerAuthService } from './player-auth.service';
+import { SignInLinksService } from './sign-in-links.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AllowTreasurer } from '../auth/decorators/allow-treasurer.decorator';
 import { SkipCsrf } from '../auth/decorators/skip-csrf.decorator';
@@ -133,6 +134,17 @@ export class ResetPasswordDto {
   password: string;
 }
 
+/** Using a sign-in link: a new password, and an email when their record has none. */
+export class UseSignInLinkDto {
+  @IsString()
+  @MinLength(8, { message: 'Use 8 characters or more' })
+  password: string;
+
+  @IsOptional()
+  @IsEmail({}, { message: 'Enter a valid email address' })
+  email?: string;
+}
+
 export class ChangePasswordDto {
   @IsOptional()
   @IsString()
@@ -202,6 +214,7 @@ export class PlayerAuthController {
     private readonly billing: BillingService,
     private readonly configService: ConfigService,
     private readonly usersService: UsersService,
+    private readonly links: SignInLinksService,
   ) {}
 
   /** Signs the browser in as this person (access + refresh cookies) and returns the access token. */
@@ -239,6 +252,33 @@ export class PlayerAuthController {
     await this.usersService.revokeAllPlayerRefreshTokens(emailKey(dto.email));
     await this.startSession(res, dto.email);
     return result;
+  }
+
+  /** Organiser: a one-time link for a player who can't get in (sent to their WhatsApp from the app). */
+  @UseGuards(JwtAuthGuard)
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  @Post('players/:id/sign-in-link')
+  async createSignInLink(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    const { token, ...rest } = await this.links.create(user, id);
+    return { ...rest, link: `${this.configService.get('APP_URL', 'http://localhost:3000')}/s/${token}` };
+  }
+
+  /** The link page: who it's for, and whether they need to add an email. Doesn't use the link. */
+  @Throttle({ default: { ttl: 60000, limit: 30 } })
+  @Get('public/sign-in/:token')
+  peekSignInLink(@Param('token') token: string) {
+    return this.links.peek(token);
+  }
+
+  /** Uses the link: their new password (and email), then signed in here and out everywhere else. */
+  @SkipCsrf()
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Post('public/sign-in/:token')
+  async useSignInLink(@Param('token') token: string, @Body() dto: UseSignInLinkDto, @Res({ passthrough: true }) res: Response) {
+    const { email, firstName } = await this.links.use(token, dto.password, dto.email);
+    await this.usersService.revokeAllPlayerRefreshTokens(email);
+    await this.startSession(res, email);
+    return { firstName };
   }
 
   /** Sign-up, step 1: is this email new, or should they sign in (with a password, or a code)? */

@@ -106,6 +106,16 @@ export async function isPlayerSignedIn(): Promise<boolean> {
 
 export type PasswordSignIn = { token: string; firstName: string } | { needsPassword: true; firstName: string };
 
+/** A sign-in link from the organiser: who it's for, and whether they need to give an email. */
+export function peekSignInLink(token: string) {
+  return request<{ firstName: string; clubName: string | null; email: string | null }>('GET', `/public/sign-in/${encodeURIComponent(token)}`, undefined, false);
+}
+
+/** Uses the link: a new password (and an email when they had none). Signs them in. */
+export function signInWithLink(token: string, password: string, email?: string) {
+  return request<{ firstName: string }>('POST', `/public/sign-in/${encodeURIComponent(token)}`, { password, ...(email ? { email } : {}) }, false);
+}
+
 export function loginWithPassword(email: string, password: string) {
   return request<PasswordSignIn>('POST', '/player-auth/login', { email, password }, false);
 }
