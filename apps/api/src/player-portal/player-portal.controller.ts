@@ -20,6 +20,7 @@ import { UsersService } from '../users/users.service';
 import { emailKey } from '../common/format.util';
 import { AwayDto, EventDto, GameDto, GoalDto } from '../ratings/ratings.controller';
 import { KEEPER_PREFS } from '../ratings/plan';
+import { POSITIONS, type Position } from '../ratings/match-rating';
 import { tableRange } from '../ratings/ratings.service';
 import type { KeeperPref } from '@pitchaside/shared';
 
@@ -139,6 +140,12 @@ export class KeeperDto {
   @IsOptional()
   @IsIn(KEEPER_PREFS)
   keeper?: KeeperPref;
+}
+
+export class PositionDto {
+  @IsOptional()
+  @IsIn(POSITIONS)
+  position?: Position | null;
 }
 
 export class StartGroupDto {
@@ -469,6 +476,12 @@ export class PlayerPortalController {
   @Patch('keeper')
   setKeeper(@Body() dto: KeeperDto, @CurrentPerson() person: Person) {
     return this.playerAuth.setKeeper(person, dto.keeper ?? null);
+  }
+
+  /** Where they usually play, for every club they're in. */
+  @Patch('position')
+  setPosition(@Body() dto: PositionDto, @CurrentPerson() person: Person) {
+    return this.playerAuth.setPosition(person, dto.position ?? null);
   }
 
   @Post('password')

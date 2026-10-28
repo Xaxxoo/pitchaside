@@ -1,4 +1,4 @@
-import type { Bibs, GroupScope, KeeperPref, MatchPlan } from '@pitchaside/shared';
+import type { Bibs, GroupScope, KeeperPref, MatchPlan, Position } from '@pitchaside/shared';
 import type {
   ContributionsVisibility,
   IGroup,
@@ -190,6 +190,7 @@ export function createPlayer(data: {
   email?: string;
   phone?: string;
   level?: PlayerLevel;
+  position?: Position | null;
 }): Promise<IPlayer> {
   return http.post<IPlayer>('/players', data);
 }
@@ -207,6 +208,8 @@ export function updatePlayer(
     level: PlayerLevel;
     /** null: doesn't mind. */
     keeper: KeeperPref;
+    /** null clears it. */
+    position: Position | null;
   }>,
 ): Promise<IPlayer> {
   return http.patch<IPlayer>(`/players/${id}`, data);
@@ -896,7 +899,18 @@ export interface Lineup extends PlanInfo {
   /** Each side's bib colour and name for this game (its own, else the group's). */
   bibs?: Bibs;
   /** `paid`: for this game, or for the dues period it falls in when dues cover games. */
-  squad: (SquadMember & { team: TeamKey | null; captain: boolean; vice?: boolean; keeper?: KeeperPref; ovr: number | null; skill: number; paid?: 'paid' | 'unpaid' | 'waived' })[];
+  squad: (SquadMember & {
+    team: TeamKey | null;
+    captain: boolean;
+    vice?: boolean;
+    keeper?: KeeperPref;
+    /** Where they play today (their usual position unless changed for today), and where they usually play. */
+    position?: Position | null;
+    usualPosition?: Position | null;
+    ovr: number | null;
+    skill: number;
+    paid?: 'paid' | 'unpaid' | 'waived';
+  })[];
   games: MatchGame[];
   /** Cards and saves recorded today, oldest first. */
   events: MatchEvent[];
@@ -917,6 +931,8 @@ export function saveLineup(
     teams?: Record<string, TeamKey | null>;
     captains?: Partial<Record<TeamKey, string | null>>;
     vices?: Partial<Record<TeamKey, string | null>>;
+    /** Where they play today; null: their usual position. */
+    positions?: Record<string, Position | null>;
   },
 ): Promise<Lineup> {
   return http.put(`/sessions/${sessionId}/lineup`, data);

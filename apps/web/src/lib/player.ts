@@ -3,7 +3,7 @@
  * their own session in HttpOnly cookies (separate from the organiser's).
  */
 import type { GameTimer, PaymentType } from '@pitchaside/shared';
-import type { Bibs, KeeperPref } from '@pitchaside/shared';
+import type { Bibs, KeeperPref, Position } from '@pitchaside/shared';
 import { tableQuery, type TableRange } from './api';
 import type { GoalInput, Lineup, PlanInfo, MatchEventKind, RatingBreakdown, RatingTrial, LeagueTable, PlayerRatings, VoteCategory, VoteResults, GroupAccount, PublicGroup, TeamKey } from './api';
 import { serverMessage } from './http';
@@ -213,7 +213,7 @@ export type PlayerGroup = {
 export type Organiser = { clubName: string; email: string } | null;
 
 export interface PlayerHome {
-  player: { id: string; firstName: string; lastName: string; nickname: string | null; photoKey?: string | null; keeper?: KeeperPref; emailNotices?: boolean; email: string; phone: string | null };
+  player: { id: string; firstName: string; lastName: string; nickname: string | null; photoKey?: string | null; keeper?: KeeperPref; position?: Position | null; emailNotices?: boolean; email: string; phone: string | null };
   organiser: Organiser;
   groups: PlayerGroup[];
   upcoming: {
@@ -409,6 +409,7 @@ export interface GameLineup extends PlanInfo {
     /** Missing from servers before the match day plan. */
     id?: string;
     keeper?: KeeperPref;
+    position?: Position | null;
     name: string;
     /** Nickname, else first name. */
     short?: string;
@@ -476,6 +477,10 @@ export function setCaptainAway(sessionId: string, playerId: string, at: number |
 /** Emails when a notification can't reach them: on unless they switch it off. */
 export function setMyEmailNotices(email: boolean) {
   return request<{ emailNotices: boolean }>('PATCH', '/me/notices', { email });
+}
+
+export function setMyPosition(position: Position | null) {
+  return request<{ position: Position | null }>('PATCH', '/me/position', { position });
 }
 
 export function setMyKeeper(keeper: KeeperPref) {

@@ -31,7 +31,7 @@ import { fairSplit } from './fair-teams';
 import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
-import { MOVE_NEW, MOVE_SETTLED, NEW_FOR, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Steady } from './match-rating';
+import { MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
 import { Organization, RATING_MODES, type RatingMode } from '../organizations/entities/organization.entity';
 
 /** Sides on match day. Colours live in the UI (Orange, Yellow, Blue, White, Green, Red). */
@@ -866,6 +866,9 @@ export class RatingsService {
           captain: this.isCaptain(session, p),
           vice: this.isVice(session, p),
           keeper: p.player.keeper ?? null,
+          /** Where they play today, and where they usually play (null: not said). */
+          position: p.position ?? p.player.position ?? null,
+          usualPosition: p.player.position ?? null,
           ovr: ovr.get(p.player.id) ?? cardRating(skills.get(p.player.id)?.rating ?? DEFAULT_START),
           skill: Math.round(skills.get(p.player.id)?.rating ?? DEFAULT_START),
           // Organisers always see who's paid for this game (or the period it falls in).
@@ -1033,10 +1036,23 @@ export class RatingsService {
       teams?: Record<string, string | null>;
       captains?: Record<string, string | null>;
       vices?: Record<string, string | null>;
+      positions?: Record<string, string | null>;
     },
   ) {
     const session = await this.loadSession(sessionId, organizationId);
     if (session.kind === SessionKind.DUES) throw new BadRequestException('Dues periods don’t have a lineup');
+    // Where someone plays today can change any time, scores or not: it only shares out the day's clean sheets
+    if (input.positions) {
+      const changed = (session.payments ?? []).filter((p) => p.playerId in input.positions!);
+      for (const p of changed) {
+        const next = input.positions[p.playerId];
+        if (next !== null && !POSITIONS.includes(next as Position)) throw new BadRequestException('Pick keeper, defence, midfield or attack');
+        // Their usual position needs no note for today
+        p.position = next && next !== p.player?.position ? (next as Position) : null;
+      }
+      if (changed.length) await this.sessionsRepo.manager.save(changed);
+      if (!input.teams && !input.captains && !input.vices && input.teamCount === undefined) return this.getLineup(sessionId, organizationId);
+    }
     if (await this.scoresIn(session.id)) {
       // Scores are in, so the sides stay as the games were played. The one change still allowed:
       // someone who came late (not on a side yet) goes onto one, from here on.
@@ -1378,6 +1394,7 @@ export class RatingsService {
           /** For the match day plan: the swaps go by player, the same on every phone. */
           id: p.playerId,
           keeper: p.player.keeper ?? null,
+          position: p.position ?? p.player.position ?? null,
           name: sheetName(p.player),
           /** What teammates call them: nickname, else first name. */
           short: pitchName(p.player),
@@ -1460,7 +1477,7 @@ export class RatingsService {
     };
     const sides = TEAM_KEYS.slice(0, lineup.teamCount) as unknown as string[];
     const split = fairSplit(
-      lineup.squad.map((p) => ({ id: p.id, strength: strength(p), side: p.team ?? null, fixed: !!(p.captain || p.vice) && !!p.team })),
+      lineup.squad.map((p) => ({ id: p.id, strength: strength(p), side: p.team ?? null, fixed: !!(p.captain || p.vice) && !!p.team, keeper: p.position === 'GK' })),
       sides,
     );
     const teams = Object.fromEntries(Object.entries(split.teams).filter(([id]) => !lineup.squad.find((p) => p.id === id && (p.captain || p.vice) && p.team)));
@@ -1694,12 +1711,13 @@ export class RatingsService {
   private async steadyCard(organizationId: string, without?: string) {
     const [all, players] = await Promise.all([
       this.gamesQuery(organizationId).orderBy('session.date', 'ASC').addOrderBy('session.createdAt', 'ASC').getMany(),
-      this.sessionsRepo.manager.find(Player, { where: { organizationId }, select: ['id', 'level'] }),
+      this.sessionsRepo.manager.find(Player, { where: { organizationId }, select: ['id', 'level', 'position'] }),
     ]);
     const starts = new Map(players.map((p) => [p.id, cardRating(p.level ? LEVEL_START[p.level] : DEFAULT_START)]));
+    const usual = new Map(players.filter((p) => p.position).map((p) => [p.id, p.position as Position]));
     const sessions = without ? all.filter((x) => x.id !== without) : all;
     const history = new Map<string, { date: string; rating: MatchRating; games: number; before: number; after: number }[]>();
-    if (!sessions.length) return { steady: replaySteady([], starts), history };
+    if (!sessions.length) return { steady: replaySteady([], starts, usual), history };
 
     const ids = sessions.map((x) => x.id);
     const [games, goals, events, votes] = await Promise.all([
@@ -1717,7 +1735,7 @@ export class RatingsService {
     const days = sessions.map((session) => this.steadyDay(session, g.get(session.id) ?? [], gl.get(session.id) ?? [], ev.get(session.id) ?? [], vt.get(session.id) ?? []));
 
     const last = new Map(starts);
-    const steady = replaySteady(days, starts, new Map(), (i, lines, ratings, after) => {
+    const steady = replaySteady(days, starts, usual, (i, lines, ratings, after) => {
       for (const [id, rating] of ratings) {
         const before = last.get(id) ?? cardRating(DEFAULT_START);
         const now = after.get(id)!.ovr;
@@ -1753,8 +1771,10 @@ export class RatingsService {
       const t = sideOf(id);
       if (t) mateTop.set(t, Math.max(mateTop.get(t) ?? 0, n));
     }
+    // Where people played today when it wasn't their usual position: every game of the day
+    const today = Object.fromEntries(pays.filter((p) => p.position).map((p) => [p.playerId, p.position as Position]));
     return {
-      games: games.map((x) => ({ sideA: side(x.teamA, x), sideB: side(x.teamB, x), scoreA: x.scoreA, scoreB: x.scoreB, keeperA: x.keeperA, keeperB: x.keeperB })),
+      games: games.map((x) => ({ sideA: side(x.teamA, x), sideB: side(x.teamB, x), scoreA: x.scoreA, scoreB: x.scoreB, keeperA: x.keeperA, keeperB: x.keeperB, positions: today })),
       goals: goals.map((x) => ({ scorerId: x.scorerId, assistId: x.assistId })),
       saves: count('save'),
       yellow: count('yellow'),

@@ -27,6 +27,7 @@ import { PhoneOtp } from './entities/phone-otp.entity';
 import { PlayerAccount } from './entities/player-account.entity';
 import { Organization } from '../organizations/entities/organization.entity';
 import { COOKIE_NAMES } from '../auth/cookie.util';
+import type { Position } from '../ratings/match-rating';
 
 const CODE_TTL_MS = 10 * 60 * 1000;
 const RESEND_AFTER_MS = 30 * 1000;
@@ -300,6 +301,16 @@ export class PlayerAuthService {
     for (const p of person.players) p.emailNotices = on;
     if (person.players.length) await this.playersRepo.save(person.players);
     return { emailNotices: on };
+  }
+
+  /** Where they usually play, on every club's record of them. Picking keeper also says they're happy in goal. */
+  async setPosition(person: Person, position: Position | null) {
+    for (const p of person.players) {
+      p.position = position;
+      if (position === 'GK') p.keeper = 'happy';
+    }
+    if (person.players.length) await this.playersRepo.save(person.players);
+    return { position, keeper: position === 'GK' ? ('happy' as const) : undefined };
   }
 
   async setKeeper(person: Person, keeper: KeeperPref) {

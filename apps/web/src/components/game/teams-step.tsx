@@ -13,6 +13,8 @@ import { BibShirt } from '@/components/bib-shirt';
 import { BibsSheet } from '@/components/bibs-sheet';
 import type { Bibs } from '@pitchaside/shared';
 import { TEAMS, bibFill, bibOf, bibTint, teamName } from '@/lib/teams';
+import { POSITIONS, positionLabel, positionOrder, positionShort } from '@/lib/positions';
+import type { Position } from '@pitchaside/shared';
 
 const KEYS = Object.keys(TEAMS) as TeamKey[];
 type Member = Lineup['squad'][number];
@@ -91,6 +93,12 @@ export function TeamsStep({
     setMoving(null);
     run(m.id, () => saveLineup(sessionId, { captains: { [team]: on ? m.id : null } }));
   };
+  // Where they play today; their usual position is stored as no change
+  const playAs = (m: Member, position: Position | null) => {
+    setMoving(null);
+    buzz(8);
+    run(m.id, () => saveLineup(sessionId, { positions: { [m.id]: position } }));
+  };
   const vice = (m: Member, team: TeamKey, on: boolean) => {
     setMoving(null);
     run(m.id, () => saveLineup(sessionId, { vices: { [team]: on ? m.id : null } }));
@@ -139,7 +147,13 @@ export function TeamsStep({
             {m.captain && <span className="shrink-0 w-4 h-4 rounded-full bg-ink text-volt-300 text-[9px] font-extrabold leading-4 text-center">C</span>}
             {m.vice && <span className="shrink-0 h-4 px-1 rounded-full bg-white border border-ink text-ink text-[9px] font-extrabold leading-[14px] text-center">VC</span>}
           </span>
-          {m.paid === 'unpaid' && <span className="block text-[11px] font-semibold leading-tight text-amber-700">Not paid</span>}
+          {(m.position || m.paid === 'unpaid') && (
+            <span className="block text-[11px] font-semibold leading-tight truncate">
+              {m.position && <span className="text-gray-500">{positionShort(m.position)}</span>}
+              {m.position && m.paid === 'unpaid' && <span className="text-gray-400"> · </span>}
+              {m.paid === 'unpaid' && <span className="text-amber-700">Not paid</span>}
+            </span>
+          )}
         </span>
         {busy === m.id ? (
           <BallSpinner className="w-3.5 h-3.5" />
@@ -250,7 +264,8 @@ export function TeamsStep({
         {teams.map((t) => {
           const members = lineup.squad
             .filter((m) => m.team === t)
-            .sort((a, b) => Number(b.captain) - Number(a.captain) || Number(!!b.vice) - Number(!!a.vice) || shortName(a).localeCompare(shortName(b)));
+            // Leaders first, then keeper to attack, so each side reads like a team sheet
+            .sort((a, b) => Number(b.captain) - Number(a.captain) || Number(!!b.vice) - Number(!!a.vice) || positionOrder(a.position) - positionOrder(b.position) || shortName(a).localeCompare(shortName(b)));
           const a = avg(t);
           const best = lineup.teamOfTheDay === t;
           return (
@@ -348,6 +363,30 @@ export function TeamsStep({
               );
             })}
           </div>
+          {moving.usualPosition !== undefined && (
+            <>
+              <p className="mt-4 text-[13px] font-bold text-gray-600">
+                Playing today as
+                {moving.usualPosition && <span className="font-semibold text-gray-500"> · usually {positionLabel(moving.usualPosition)?.toLowerCase()}</span>}
+              </p>
+              <div className="mt-2 grid grid-cols-4 gap-1.5" role="radiogroup" aria-label="Playing today as">
+                {POSITIONS.map((p) => {
+                  const on = moving.position === p.value;
+                  return (
+                    <button
+                      key={p.value}
+                      role="radio"
+                      aria-checked={on}
+                      onClick={() => !on && playAs(moving, p.value === moving.usualPosition ? null : p.value)}
+                      className={`press min-h-11 rounded-xl border text-[13px] font-bold ${on ? 'bg-ink border-ink text-volt-300' : 'bg-white border-gray-200 text-ink hover:border-ink'}`}
+                    >
+                      {p.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
+          )}
           <ul className="mt-3 -mx-2">
             {moving.team && (
               <li>

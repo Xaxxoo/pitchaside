@@ -9,11 +9,12 @@ import { btnPrimary, btnSecondary } from '@/components/buttons';
 import { Collapse } from '@/components/collapse';
 import { kitFor } from '@/components/illustrations';
 import { PlayerLevelPicker } from '@/components/player-level';
+import { PositionPicker } from '@/components/position-picker';
 import { useToast } from '@/components/toast';
 import { formatCurrency, removePlayerPhoto, setPlayerPhoto, updatePlayer } from '@/lib/api';
 import { Avatar } from '@/components/ratings';
 import { PhotoPicker } from '@/components/photo-picker';
-import type { IPlayer, KeeperPref, PlayerLevel } from '@pitchaside/shared';
+import type { IPlayer, KeeperPref, PlayerLevel, Position } from '@pitchaside/shared';
 
 export type MemberDue = { label: string; state: 'paid' | 'owes' | 'waived' | 'out'; amount: number; paidSoFar?: number } | null;
 
@@ -69,6 +70,7 @@ export function PlayerSheet({
     phone: player.phone ?? '',
     level: (player.level ?? 'average') as PlayerLevel,
     keeper: (player.keeper ?? '') as Exclude<KeeperPref, null> | '',
+    position: (player.position ?? '') as Position | '',
   };
   const [form, setForm] = useState(initial);
   const phoneSeen = useTouched();
@@ -89,6 +91,7 @@ export function PlayerSheet({
         phone: form.phone.trim() || null,
         level: form.level,
         keeper: form.keeper || null,
+        ...(player.position !== undefined ? { position: form.position || null } : {}),
       });
       onSaved(saved);
       setEditing(false);
@@ -263,8 +266,16 @@ export function PlayerSheet({
                 <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Optional" className={input} autoComplete="off" />
               </label>
               <PlayerLevelPicker value={form.level} onChange={(level) => setForm({ ...form, level })} />
+              {/* Missing (not null) from a server before positions: it wouldn't be saved. */}
+              {player.position !== undefined && (
+                <PositionPicker
+                  value={form.position || null}
+                  // A keeper is happy in goal: the server saves that too, so the choice below would only repeat it
+                  onChange={(position) => setForm({ ...form, position: position ?? '', ...(position === 'GK' ? { keeper: 'happy' as const } : {}) })}
+                />
+              )}
               {/* Missing (not null) from a server before day plans: it wouldn't be saved. */}
-              {player.keeper !== undefined && (
+              {player.keeper !== undefined && form.position !== 'GK' && (
               <fieldset>
                 <legend className="block text-xs font-bold text-gray-700 mb-1">
                   In goal <span className="font-semibold text-gray-500">(for the day plan’s swaps)</span>

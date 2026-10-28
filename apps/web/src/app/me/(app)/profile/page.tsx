@@ -17,6 +17,7 @@ import { CardPhotoButton } from '@/components/photo-picker';
 import { btnSecondary } from '@/components/buttons';
 import { openTour } from '@/lib/onboarding';
 import { KeeperSetting } from '@/components/plan/keeper-setting';
+import { PositionSetting } from '@/components/plan/position-setting';
 
 export default function PlayerProfilePage() {
   const router = useRouter();
@@ -146,7 +147,12 @@ export default function PlayerProfilePage() {
       {/* Missing (not null) from a server before day plans: nothing to save it to yet. */}
       {profile.player.keeper !== undefined && (
         <Section title="On the pitch">
-          <KeeperSetting value={profile.player.keeper} onSaved={refresh} />
+          <div className="space-y-3">
+            {/* Missing (not null) from a server before positions: nothing to save it to yet */}
+            {profile.player.position !== undefined && <PositionSetting value={profile.player.position} onSaved={refresh} />}
+            {/* A keeper is happy in goal already: asking again would only repeat it */}
+            {profile.player.position !== 'GK' && <KeeperSetting key={String(profile.player.keeper)} value={profile.player.keeper} onSaved={refresh} />}
+          </div>
         </Section>
       )}
 

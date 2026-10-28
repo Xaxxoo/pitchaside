@@ -67,4 +67,16 @@ describe('fairSplit', () => {
     expect(shape(b.teams)).not.toBe(shape(a.teams));
     expect(b.gap).toBe(0);
   });
+
+  it('shares keepers out: one per side when there are enough, never two on one side while another has none', () => {
+    const players = squad(15).map((p, i) => ({ ...p, keeper: i < 3 }));
+    for (let i = 0; i < 8; i++) {
+      const { teams } = fairSplit(players, ['A', 'B', 'C'], seeded(40 + i));
+      const per = ['A', 'B', 'C'].map((t) => players.filter((p) => p.keeper && teams[p.id] === t).length);
+      expect(per.sort()).toEqual([1, 1, 1]);
+    }
+    const two = squad(15).map((p, i) => ({ ...p, keeper: i < 2 }));
+    const { teams } = fairSplit(two, ['A', 'B', 'C'], seeded(50));
+    expect(Math.max(...['A', 'B', 'C'].map((t) => two.filter((p) => p.keeper && teams[p.id] === t).length))).toBe(1);
+  });
 });

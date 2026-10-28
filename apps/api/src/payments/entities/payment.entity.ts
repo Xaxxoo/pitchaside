@@ -82,6 +82,10 @@ export class Payment {
   @Column({ name: 'joined_side_at', type: 'timestamptz', nullable: true })
   joinedSideAt: Date | null;
 
+  /** Where they're playing on this match day when it isn't their usual position; null: their usual one. */
+  @Column({ name: 'position', type: 'varchar', length: 3, nullable: true })
+  position: 'GK' | 'DEF' | 'MID' | 'ATT' | null;
+
   /**
    * Marked paid by hand on top of a part payment: how much of it came from the money the player
    * had already sent by transfer (their kept money). Goes back to them if the payment is undone.

@@ -15,6 +15,8 @@ export interface FairPlayer {
   side: string | null;
   /** Captains and vices: they stay on `side`. */
   fixed: boolean;
+  /** Usual keepers are shared out first, one per side where there are enough. */
+  keeper?: boolean;
 }
 
 /** A split counts as fair when its team averages are within this many points of the fairest one found. */
@@ -66,7 +68,20 @@ export function fairSplit(players: FairPlayer[], sides: string[], rand: () => nu
     // Strongest first, with some jitter so near-equal players come out in a different order each time
     const jitter = 6 * rand() + 2;
     const order = [...free].map((p) => ({ p, k: p.strength + jitter * (rand() * 2 - 1) })).sort((a, b) => b.k - a.k);
-    for (const { p } of order) {
+    // Keepers first, each to the side with the fewest keepers (then the usual rules), so no side gets two while another has none
+    const gks = new Map(sides.map((x) => [x, fixed.filter((p) => p.keeper && p.side === x).length]));
+    for (const { p } of order.filter(({ p }) => p.keeper)) {
+      const fewest = Math.min(...sides.map((x) => gks.get(x)!));
+      const open = sides.filter((x) => gks.get(x) === fewest);
+      const smallest = Math.min(...open.map((x) => size.get(x)!));
+      const pick = open.filter((x) => size.get(x) === smallest);
+      const s = pick[Math.floor(rand() * pick.length)];
+      teams[p.id] = s;
+      gks.set(s, gks.get(s)! + 1);
+      size.set(s, size.get(s)! + 1);
+      total.set(s, total.get(s)! + p.strength);
+    }
+    for (const { p } of order.filter(({ p }) => !p.keeper)) {
       // The smallest side; level on size, the weakest; level on both, any of them
       const min = Math.min(...sides.map((s) => size.get(s)!));
       const open = sides.filter((s) => size.get(s) === min);
@@ -87,7 +102,8 @@ export function fairSplit(players: FairPlayer[], sides: string[], rand: () => nu
       for (const a of free) {
         for (const b of free) {
           const sa = teams[a.id], sb = teams[b.id];
-          if (sa === sb || a.strength === b.strength) continue;
+          // Keepers only swap with keepers, so the spread of keepers stays
+          if (sa === sb || a.strength === b.strength || !!a.keeper !== !!b.keeper) continue;
           const now = gapNow();
           const d = b.strength - a.strength;
           total.set(sa, total.get(sa)! + d);
