@@ -54,6 +54,11 @@ function isRetryableTransferError(status: number, body: string): boolean {
   return false;
 }
 
+/** Whether the bank says a transfer with this reference was already registered. */
+function isDuplicateReferenceError(reason: string): boolean {
+  return reason.toLowerCase().includes('already exists');
+}
+
 /**
  * Live PulseMFB client.
  *
@@ -221,6 +226,14 @@ export class HttpPulseClient implements PulseClient {
             `[Payrep] transfer ${input.reference} refused: HTTP ${res.status}${requestId ? ` request-id=${requestId}` : ''} debit=${input.debitAccountNumber} ` +
               `to=${input.beneficiaryBankCode}/${input.beneficiaryAccountNumber} amount=${input.amount} attempt=${attempt + 1}/${TRANSFER_MAX_RETRIES + 1} reply=${raw.slice(0, 1000)}`,
           );
+          // "already exists" means Payrep registered the reference from a previous attempt
+          // that timed out on our side. Check the real status instead of failing.
+          if (isDuplicateReferenceError(reason)) {
+            const existing = await this.getTransfer(input.reference).catch(() => null);
+            if (existing && existing.status !== 'not_found') {
+              return { reference: input.reference, status: existing.status };
+            }
+          }
           if (attempt < TRANSFER_MAX_RETRIES && isRetryableTransferError(res.status, reason)) {
             lastError = new Error(`Payrep MFB transfer failed (${res.status}): ${reason}`);
             continue;
