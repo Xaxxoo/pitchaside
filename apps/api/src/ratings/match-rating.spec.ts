@@ -152,3 +152,43 @@ describe('stress: odd and extreme match days never break it', () => {
     expect(Number.isFinite(out.get('a')!.ovr)).toBe(true);
   });
 });
+
+describe('how much of the day they played, and days missed', () => {
+  // Eight games A v B; the sub on A played two of them
+  const eight = (sub: boolean) => Array.from({ length: 8 }, (_, i) => ({ sideA: ['a1', 'a2', ...(sub && i < 2 ? ['sub'] : [])], sideB: ['b1', 'b2'], scoreA: 1, scoreB: 0 }));
+
+  it('a sub who played 2 of 8 moves less than a starter with the same match rating', () => {
+    const out = replaySteady([{ games: eight(true), goals: [] }]);
+    const starter = out.get('a1')!.ovr - 50;
+    const sub = out.get('sub')!.ovr - 50;
+    expect(sub).toBeGreaterThan(0);
+    expect(sub).toBeLessThan(starter / 2);
+  });
+
+  it('missing your group’s days takes a little off after two in a row, never more than 5', () => {
+    const played = { groupId: 'g', games: [{ sideA: ['ada', 'x'], sideB: ['bisi', 'y'], scoreA: 0, scoreB: 0 }], goals: [] };
+    const without = { groupId: 'g', games: [{ sideA: ['x'], sideB: ['y'], scoreA: 0, scoreB: 0 }], goals: [] };
+    const two = replaySteady([played, without, without]).get('ada')!;
+    const three = replaySteady([played, without, without, without]).get('ada')!;
+    const many = replaySteady([played, ...Array.from({ length: 30 }, () => without)]).get('ada')!;
+    expect(two.ovr).toBe(replaySteady([played]).get('ada')!.ovr);
+    expect(three.ovr).toBeCloseTo(two.ovr - 0.5, 5);
+    expect(two.ovr - many.ovr).toBeCloseTo(5, 5);
+  });
+
+  it('another group’s day, or never having played, takes nothing off', () => {
+    const mine = { groupId: 'g', games: [{ sideA: ['ada', 'x'], sideB: ['y'], scoreA: 0, scoreB: 0 }], goals: [] };
+    const other = { groupId: 'h', games: [{ sideA: ['x'], sideB: ['y'], scoreA: 0, scoreB: 0 }], goals: [] };
+    const out = replaySteady([mine, other, other, other, other], new Map([['newbie', 50]]));
+    expect(out.get('ada')!.drift).toBe(0);
+    expect(out.get('newbie')!.ovr).toBe(50);
+  });
+
+  it('playing again stops it', () => {
+    const played = { groupId: 'g', games: [{ sideA: ['ada', 'x'], sideB: ['y'], scoreA: 0, scoreB: 0 }], goals: [] };
+    const without = { groupId: 'g', games: [{ sideA: ['x'], sideB: ['y'], scoreA: 0, scoreB: 0 }], goals: [] };
+    const back = replaySteady([played, without, without, without, played]).get('ada')!;
+    expect(back.missed).toBe(0);
+    expect(back.drift).toBe(0);
+  });
+});

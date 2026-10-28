@@ -33,7 +33,7 @@ import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { bestSeven } from './best-seven';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
-import { MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
+import { MISS_GRACE, MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
 import { Organization, RATING_MODES, type RatingMode } from '../organizations/entities/organization.entity';
 
 /** Sides on match day. Colours live in the UI (Orange, Yellow, Blue, White, Green, Red). */
@@ -1876,6 +1876,8 @@ export class RatingsService {
         history.set(id, [...(history.get(id) ?? []), { date: String(sessions[i].date).slice(0, 10), rating, games: lines.get(id)!.games, before, after: now }]);
         last.set(id, now);
       }
+      // Missed days that took something off: the next day's move starts from there, not before it
+      for (const [id, st] of after) if (!ratings.has(id) && last.has(id) && last.get(id) !== st.ovr) last.set(id, st.ovr);
     });
     return { steady, history };
   }
@@ -1910,6 +1912,7 @@ export class RatingsService {
     // Where people played today when it wasn't their usual position: every game of the day
     const today = Object.fromEntries(pays.filter((p) => p.position).map((p) => [p.playerId, p.position as Position]));
     return {
+      groupId: session.groupId,
       games: games.map((x) => ({ sideA: side(x.teamA, x), sideB: side(x.teamB, x), scoreA: x.scoreA, scoreB: x.scoreB, keeperA: x.keeperA, keeperB: x.keeperB, positions: today })),
       goals: goals.map((x) => ({ scorerId: x.scorerId, assistId: x.assistId })),
       saves: count('save'),
@@ -2471,6 +2474,10 @@ export class RatingsService {
       votesFull: VOTES_FULL,
       votesFloor: VOTES_FLOOR,
       form: s?.form ?? null,
+      /** Their groups' match days missed in a row, and what that has taken off (after MISS_GRACE). */
+      missed: s?.missed ?? 0,
+      missedLost: s?.drift ?? 0,
+      missGrace: MISS_GRACE,
       /** Newest first. `move` is what the card showed after minus before, as whole numbers. */
       recent: days
         .slice(-5)

@@ -179,10 +179,15 @@ function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
       </dl>
       <p className="text-[13px] leading-snug text-gray-600">
         {data.settling
-          ? `New players move up to ${data.maxMove} a match day for their first ${data.newFor}, then ${data.settledMove}.`
-          : `Settled: the rating moves ${data.settledMove} at most a match day.`}{' '}
+          ? `Moves up to ${data.maxMove} a match day for the first ${data.newFor}, then ${data.settledMove}.`
+          : `Settled: moves ${data.settledMove} at most a match day.`}{' '}
         Votes count {votes}% for {first} now.
       </p>
+      {(data.missedLost ?? 0) > 0 && (
+        <p className="rounded-2xl bg-kit-400/10 px-3 py-2.5 text-[13px] leading-snug text-kit-600">
+          <b>Missed {data.missed} match days in a row: −{data.missedLost!.toFixed(1)}.</b> Playing again stops it.
+        </p>
+      )}
 
       {data.recent.length === 0 ? (
         <div className="rounded-3xl bg-chalk px-4 py-4">
@@ -194,7 +199,7 @@ function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
           <h3 id="steady-days" className="text-[14px] font-extrabold text-ink">
             Latest match days
           </h3>
-          <p className="text-[12px] text-gray-500">Everyone starts a match day on 6.0. These add or take off.</p>
+          <p className="text-[12px] text-gray-500">Each starts on 6.0. Fewer of the day’s games played, the less it moves the card.</p>
           <ol className="mt-2 space-y-2">
             {data.recent.map((d) => {
               const made = PART_LABELS.filter(([k]) => d.parts[k] !== 0);

@@ -9,7 +9,7 @@ export function ratingWords(mode: RatingMode | undefined) {
     ? {
         short: 'what each player did on every match day (goals, assists, clean sheets, results), with votes counting most while they’re new',
         long:
-          'Each player’s rating, from 30 to 95. Every match day gives them a match rating out of 10, mostly from goals, assists, clean sheets, saves and results; votes count most while they’re new. The rating moves a few points at most each match day.',
+          'Each player’s rating, from 30 to 95. Every match day gives them a match rating out of 10, mostly from goals, assists, clean sheets, saves and results; votes count most while they’re new. The rating moves a few points at most each match day, less for someone who played fewer of the day’s games. Missing several of their group’s match days in a row takes a little off.',
       }
     : {
         short: '40% goals and assists, 40% the votes after each game, 20% team results',
