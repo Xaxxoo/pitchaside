@@ -14,7 +14,7 @@ export class CreatePlayerDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(2)
+  @MinLength(1)
   lastName: string;
 
   /** What they're called on the pitch; blank clears it. */
@@ -52,7 +52,7 @@ export class UpdatePlayerDto {
   @IsOptional()
   @IsString()
   @IsNotEmpty()
-  @MinLength(2)
+  @MinLength(1)
   lastName?: string;
 
   /** What they're called on the pitch; blank clears it. */

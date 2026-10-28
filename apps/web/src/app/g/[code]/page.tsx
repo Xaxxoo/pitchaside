@@ -11,7 +11,7 @@ import { PasswordSignIn } from '@/components/password-sign-in';
 import { PlayerSignupForm, type SignupData } from '@/components/player-signup-form';
 import { formatCurrency, getPublicGroup, invitedBy, type PublicGroup } from '@/lib/api';
 import { frequencyShort } from '@/lib/billing';
-import { getPlayerGame, getPlayerHome, joinAsPlayer, signupFromLink, type JoinResult } from '@/lib/player';
+import { checkSignupPhone, getPlayerGame, getPlayerHome, joinAsPlayer, signupFromLink, type JoinResult } from '@/lib/player';
 import { knownAccounts, type KnownAccount } from '@/lib/known-accounts';
 import { AccountRow, KnownAccountPicker } from '@/components/known-account-picker';
 import { PaymentType } from '@pitchaside/shared';
@@ -31,6 +31,8 @@ export default function GroupLinkPage() {
   // Already in this group: they go straight in, never through joining again.
   const [openingAs, setOpeningAs] = useState<string | null>(null);
   const [lastEmail, setLastEmail] = useState('');
+  // Sign-up found an email their organiser added (no password yet): sign-in opens by emailing a code
+  const [startCode, setStartCode] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState<JoinResult | null>(null);
@@ -163,6 +165,7 @@ export default function GroupLinkPage() {
   const useAccount = (email: string) => {
     setError(null);
     setSignedIn(false);
+    setStartCode(false);
     setLastEmail(email);
     setStage('signin');
   };
@@ -303,48 +306,36 @@ export default function GroupLinkPage() {
           ) : stage === 'signin' ? (
             <>
             {/* Accounts this phone has used: one tap fills the email, so they only type the password */}
-            <KnownAccountPicker accounts={accounts} chosen={lastEmail} onPick={(email) => { setError(null); setLastEmail(email); }} />
+            <KnownAccountPicker accounts={accounts} chosen={lastEmail} onPick={(email) => { setError(null); setStartCode(false); setLastEmail(email); }} />
             <PasswordSignIn
               key={chosenAccount?.email ?? 'other'}
               title={chosenAccount ? `Welcome back, ${chosenAccount.firstName}` : 'Welcome back'}
               subtitle={game ? `Sign in and we'll take you to the game.` : `Sign in and you're in ${group.groupName}.`}
               cta={game ? 'Sign in and see the game' : `Sign in & join`}
               initialEmail={lastEmail}
+              startWithCode={startCode}
               onSignedIn={onSignedIn}
               footer={
-                <button onClick={() => { setError(null); setStage('signup'); }} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
+                <button onClick={() => { setError(null); setStartCode(false); setStage('signup'); }} className="w-full min-h-11 text-[13px] font-semibold text-gray-500 hover:text-ink">
                   New to PitchAside? Create an account
                 </button>
               }
             />
             </>
           ) : (
-            <>
-            <button
-              onClick={() => {
-                setError(null);
-                setStage('signin');
-              }}
-              className="press mb-3 w-full min-h-12 flex items-center justify-between gap-3 px-4 rounded-2xl bg-chalk text-left"
-            >
-              <span className="text-[14px] font-bold text-ink">Already play on PitchAside?</span>
-              <span className="shrink-0 text-[14px] font-bold text-pitch-700">Sign in ›</span>
-            </button>
             <PlayerSignupForm
-              subtitle={
-                game
-                  ? `Sign up once and you're in ${group.groupName}, then straight to the game. Next time, this code takes you right there.`
-                  : "Create your PitchAside account — you'll get your payment code straight after."
-              }
+              title={game ? 'Join and play' : 'Join the group'}
               cta={game ? 'Join and see the game' : 'Join the group'}
               onSubmit={signup}
               onEmailChange={setLastEmail}
-              onSwitchToSignIn={() => {
+              checkPhone={(phone) => checkSignupPhone({ group: code }, phone)}
+              onSwitchToSignIn={(email, needsCode) => {
                 setError(null);
+                setLastEmail(email);
+                setStartCode(!!needsCode);
                 setStage('signin');
               }}
             />
-            </>
           )}
         </div>
 

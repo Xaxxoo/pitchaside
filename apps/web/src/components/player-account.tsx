@@ -115,7 +115,7 @@ export function PlayerAccountSettings({
               </div>
               <div>
                 {label('me-last', 'Last name')}
-                <input id="me-last" required minLength={2} value={name.lastName} onChange={(e) => setName({ ...name, lastName: e.target.value })} className={input} />
+                <input id="me-last" required minLength={1} value={name.lastName} onChange={(e) => setName({ ...name, lastName: e.target.value })} className={input} />
               </div>
             </div>
             <div>

@@ -11,6 +11,7 @@ import { useToast } from '@/components/toast';
 import { formatCurrency } from '@/lib/api';
 import { frequencyShort } from '@/lib/billing';
 import {
+  checkSignupPhone,
   getClub,
   getPlayerProfile,
   isPlayerSignedIn,
@@ -37,6 +38,7 @@ export default function JoinPage() {
   const [stage, setStage] = useState<Stage>('signup');
   const [firstName, setFirstName] = useState('');
   const [lastEmail, setLastEmail] = useState('');
+  const [startCode, setStartCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -270,11 +272,13 @@ export default function JoinPage() {
             subtitle={`Sign in and we'll add you to ${club.clubName}.`}
             cta="Sign in & join"
             initialEmail={lastEmail}
+            startWithCode={startCode}
             onSignedIn={onSignedIn}
             footer={
               <button
                 onClick={() => {
                   setError(null);
+                  setStartCode(false);
                   setStage('signup');
                 }}
                 className="w-full text-xs font-semibold text-gray-500 hover:text-ink"
@@ -285,12 +289,15 @@ export default function JoinPage() {
           />
         ) : (
           <PlayerSignupForm
-            subtitle="Create your PitchAside account to see your games, pay and vote."
-            cta="Join"
+            title="Join the club"
+            cta="Join the club"
             onSubmit={signup}
             onEmailChange={setLastEmail}
-            onSwitchToSignIn={() => {
+            checkPhone={(phone) => checkSignupPhone({ club: code }, phone)}
+            onSwitchToSignIn={(email, needsCode) => {
               setError(null);
+              setLastEmail(email);
+              setStartCode(!!needsCode);
               setStage('signin');
             }}
           />

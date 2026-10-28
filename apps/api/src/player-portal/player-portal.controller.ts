@@ -31,6 +31,11 @@ export class RequestCodeDto {
   email: string;
 }
 
+export class PhoneCheckDto {
+  @Matches(PHONE, { message: 'Phone number format is invalid' })
+  phone: string;
+}
+
 export class RsvpDto {
   @IsIn(['in', 'out'])
   status: 'in' | 'out';
@@ -77,14 +82,23 @@ export class SignupDto {
   @MinLength(2)
   firstName: string;
 
+  /** One letter is fine ("O."): plenty of players go by an initial. */
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   lastName: string;
 
-  /** Optional contact number — not used to sign in. */
+  /** WhatsApp number: not used to sign in, but it finds the record an organiser made for them. */
   @IsOptional()
   @Matches(PHONE, { message: 'Phone number format is invalid' })
   phone?: string;
+
+  /**
+   * Their answer to "Are you Tunde B.?" when the number found a record: 'no' gives them a new
+   * record (and tells the organiser). Unasked, a record with no email is still theirs.
+   */
+  @IsOptional()
+  @IsIn(['yes', 'no'])
+  phoneMatch?: 'yes' | 'no';
 
   @IsString()
   @MinLength(8)
@@ -135,7 +149,7 @@ export class UpdateNameDto {
   firstName: string;
 
   @IsString()
-  @MinLength(2)
+  @MinLength(1)
   lastName: string;
 
   /** What they're called on the pitch; blank clears it, left out keeps it. */
@@ -227,6 +241,30 @@ export class PlayerAuthController {
     return result;
   }
 
+  /** Sign-up, step 1: is this email new, or should they sign in (with a password, or a code)? */
+  @SkipCsrf()
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  @Post('public/sign-up/email')
+  signupEmail(@Body() dto: RequestCodeDto) {
+    return this.auth.emailStatus(dto.email);
+  }
+
+  /** Sign-up, before joining: is their WhatsApp number already on a record in this group's club? */
+  @SkipCsrf()
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  @Post('public/groups/:code/phone')
+  async groupPhone(@Param('code') code: string, @Body() dto: PhoneCheckDto) {
+    return this.auth.phoneOwner(await this.billing.clubForGroupCode(code), dto.phone);
+  }
+
+  /** The same, for the club invite link. */
+  @SkipCsrf()
+  @Throttle({ default: { ttl: 60000, limit: 20 } })
+  @Post('public/clubs/:code/phone')
+  async clubPhone(@Param('code') code: string, @Body() dto: PhoneCheckDto) {
+    return this.auth.phoneOwner((await this.auth.clubByInviteCode(code)).id, dto.phone);
+  }
+
   /** New player signing up from a group link: email, name, password, optional phone. */
   @SkipCsrf()
   @Throttle({ default: { ttl: 60000, limit: 30 } })
@@ -240,7 +278,7 @@ export class PlayerAuthController {
     // Check the link before creating anything, so a bad link doesn't leave an account behind.
     await this.billing.getPublicGroup(code);
     await this.auth.createAccount(dto);
-    const joined = await this.billing.joinGroup(code, dto, game);
+    const joined = await this.billing.joinGroup(code, dto, game, { claimByPhone: dto.phoneMatch !== 'no' });
     const token = await this.startSession(res, dto.email);
     return { ...joined, token };
   }
@@ -259,7 +297,8 @@ export class PlayerAuthController {
   async clubSignup(@Param('code') code: string, @Body() dto: SignupDto, @Res({ passthrough: true }) res: Response) {
     const club = await this.auth.clubByInviteCode(code);
     const account = await this.auth.createAccount(dto);
-    await this.auth.ensurePlayerInClub(club.id, account.personKey);
+    const { player, clash } = await this.auth.ensurePlayerInClub(club.id, account.personKey, { claimByPhone: dto.phoneMatch !== 'no' });
+    if (clash) this.billing.warnDuplicate(club.id, player, clash);
     const token = await this.startSession(res, dto.email);
     return { clubName: club.name, firstName: account.firstName, token };
   }

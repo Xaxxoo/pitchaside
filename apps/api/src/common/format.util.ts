@@ -15,6 +15,12 @@ export function emailKey(email: string) {
   return email.trim().toLowerCase();
 }
 
+/** "tunde@gmail.com" → "t•••@gmail.com": enough to recognise your own, not to read someone else's. */
+export function maskEmail(email: string) {
+  const [name, domain] = email.trim().toLowerCase().split('@');
+  return domain ? `${name.charAt(0)}•••@${domain}` : '•••';
+}
+
 export function naira(amount: number | string) {
   return `₦${Number(amount).toLocaleString('en-NG', { maximumFractionDigits: 0 })}`;
 }
