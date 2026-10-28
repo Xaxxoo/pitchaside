@@ -388,7 +388,7 @@ export interface GameLineup extends PlanInfo {
       scoreA: number;
       scoreB: number;
       seconds?: number | null;
-      goals: { team: TeamKey; scorer: string | null; scorerPhoto?: string | null; assist: string | null; assistPhoto?: string | null; mine: boolean }[];
+      goals: { team: TeamKey; scorer: string | null; scorerPhoto?: string | null; assist: string | null; assistPhoto?: string | null; ownGoal?: boolean; mine: boolean }[];
     }[];
     events: { kind: MatchEventKind; name: string | null; photoKey?: string | null; mine: boolean }[];
     table: { rows: { team: TeamKey; p: number; w: number; d: number; l: number; gf: number; ga: number; pts: number; ppg?: number }[]; teamOfTheDay: TeamKey | null; perGame?: boolean };

@@ -57,6 +57,11 @@ export class GoalDto {
   @IsUUID()
   assistId?: string | null;
 
+  /** An own goal: it counts for `team`, scored by a player on the other side (no assist). */
+  @IsOptional()
+  @IsBoolean()
+  ownGoal?: boolean;
+
   /** Sent again unchanged when the phone retries the same tap, so it's saved once. */
   @IsOptional()
   @IsString()

@@ -47,6 +47,7 @@ export type StatSort =
   | 'goals'
   | 'assists'
   | 'contrib'
+  | 'plusMinus'
   | 'potm'
   | 'vii'
   | 'wins'
@@ -63,6 +64,7 @@ const STATS: { key: StatSort; label: string; unit: string; of: (r: Row) => numbe
   { key: 'goals', label: 'Goals', unit: 'goals', of: (r) => r.goals, perGame: true },
   { key: 'assists', label: 'Assists', unit: 'assists', of: (r) => r.assists, perGame: true },
   { key: 'contrib', label: 'Goals + assists', unit: 'G+A', of: (r) => r.goals + r.assists, perGame: true },
+  { key: 'plusMinus', label: 'Plus/minus', unit: '+/−', of: (r) => r.plusMinus ?? 0, perGame: true },
   { key: 'potm', label: 'Player of the Match', unit: 'POTM', of: (r) => r.potmWins, perGame: true },
   { key: 'vii', label: 'Best VII of the Day', unit: 'Best VII', of: (r) => r.viiOfDay, perGame: true },
   { key: 'wins', label: 'Games won', unit: 'won', of: (r) => r.record.w, perGame: true },
@@ -119,11 +121,15 @@ export function GroupStats({
   const stat = STATS.find((s) => s.key === sort) ?? STATS[0];
   const byGame = per === 'game' && stat.perGame;
   const value = (r: Row) => (byGame ? (r.games ? stat.of(r) / r.games : 0) : stat.of(r));
-  const fmt = (n: number) => (byGame ? String(Math.round(n * 100) / 100) : String(n));
+  const fmt = (n: number) => {
+    const v = byGame ? Math.round(n * 100) / 100 : n;
+    // Plus/minus reads with its sign: +3, −2, 0
+    return sort === 'plusMinus' ? (v > 0 ? `+${v}` : v < 0 ? `−${Math.abs(v)}` : '0') : String(v);
+  };
 
   const played = (table?.rows ?? []).filter((r) => r.games > 0);
   // Counting stats list only players who have one; the rest fold into a line (a 0 isn't a place).
-  const counts = sort !== 'rating' && sort !== 'games';
+  const counts = sort !== 'rating' && sort !== 'games' && sort !== 'plusMinus';
   const none = counts ? played.filter((r) => stat.of(r) === 0).length : 0;
   const rows = [...(counts ? played.filter((r) => stat.of(r) > 0) : played)].sort((a, b) => value(b) - value(a) || (b.ovr ?? 0) - (a.ovr ?? 0) || nameOf(a).localeCompare(nameOf(b)));
   const notYet = (table?.rows.length ?? 0) - played.length;

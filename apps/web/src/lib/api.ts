@@ -839,6 +839,8 @@ export interface GoalInput {
   team: TeamKey;
   scorerId: string;
   assistId?: string | null;
+  /** Put in their own net: counts for `team`, `scorerId` is the other side's player who did it. */
+  ownGoal?: boolean;
 }
 
 export interface MatchGoal extends GoalInput {
@@ -987,7 +989,7 @@ export function deleteGoal(sessionId: string, goalId: string): Promise<Lineup> {
   return http.delete(`/sessions/${sessionId}/goals/${goalId}`);
 }
 
-export type MatchEventKind = 'yellow' | 'red' | 'save';
+export type MatchEventKind = 'yellow' | 'red' | 'save' | 'pen_miss';
 export interface MatchEvent {
   id: string;
   playerId: string;
@@ -1181,6 +1183,11 @@ export interface PlayerRatings {
   yellowCards: number;
   redCards: number;
   saves: number;
+  /** Own goals put in, penalties missed (newer servers). */
+  ownGoals?: number;
+  penMisses?: number;
+  /** Goals their side scored minus goals it let in, in the games they played (newer servers). */
+  plusMinus?: number;
   /** Times someone put them in their Best VII. */
   viiPicks: number;
   /** Times they made the Best VII of the Day. */
@@ -1208,7 +1215,10 @@ export type ComparedStat =
   | 'teamOfDay'
   | 'saves'
   | 'yellowCards'
-  | 'redCards';
+  | 'redCards'
+  | 'ownGoals'
+  | 'penMisses'
+  | 'plusMinus';
 /** Per number: the club's average in total and per game, this player's rank (ties share it; 0 if not played) and out of how many. */
 export type StatCompare = Record<ComparedStat, { avg: number; avgPerGame: number; rank: number; of: number }>;
 
@@ -1284,6 +1294,8 @@ export interface MatchRatingParts {
   keeping: number;
   cleanSheets: number;
   cards: number;
+  /** Own goals and missed penalties (newer servers). */
+  mistakes?: number;
   votes: number;
 }
 
@@ -1322,8 +1334,8 @@ export interface ClassicBreakdown {
   /** Players in the club who have played: "2nd of 22". */
   of: number;
   /** In goals: what a save adds and a card costs. */
-  worth: { save: number; yellow: number; red: number };
-  stats: { score: number; place: number | null; games: number; goals: number; assists: number; saves: number; yellowCards: number; redCards: number };
+  worth: { save: number; yellow: number; red: number; ownGoal?: number; penMiss?: number };
+  stats: { score: number; place: number | null; games: number; goals: number; assists: number; saves: number; yellowCards: number; redCards: number; ownGoals?: number; penMisses?: number };
   votes: { score: number; place: number | null; ballots: number; potmVotes: number; potmWins: number; viiPicks: number; awards: { key: string; share: number }[] };
   results: { score: number; place: number | null; record: { w: number; d: number; l: number }; skill: number };
 }

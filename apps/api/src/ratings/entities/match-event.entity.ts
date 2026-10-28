@@ -1,12 +1,12 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Index } from 'typeorm';
 import { Session } from '../../sessions/entities/session.entity';
 
-export const MATCH_EVENT_KINDS = ['yellow', 'red', 'save'] as const;
+export const MATCH_EVENT_KINDS = ['yellow', 'red', 'save', 'pen_miss'] as const;
 export type MatchEventKind = (typeof MATCH_EVENT_KINDS)[number];
 
 /**
- * Something one player got or did on match day that isn't a goal: a yellow card, a red card, or
- * a save. One row each. `recordedBy` is who wrote it down, like goals.
+ * Something one player got or did on match day that isn't a goal: a yellow card, a red card, a
+ * save, or a missed penalty. One row each. `recordedBy` is who wrote it down, like goals.
  */
 @Entity('match_events')
 @Index(['sessionId'])

@@ -192,3 +192,15 @@ describe('how much of the day they played, and days missed', () => {
     expect(back.drift).toBe(0);
   });
 });
+
+describe('own goals and missed penalties', () => {
+  it('cost a little, apart from cards, and never count as goals', () => {
+    const day = { games: [{ sideA: ['ada'], sideB: ['bisi'], scoreA: 0, scoreB: 1 }], goals: [], ownGoals: ['ada'], penMisses: { ada: 1 } };
+    const l = dayLines(day).get('ada')!;
+    expect(l.goals).toBe(0);
+    expect(l.ownGoals).toBe(1);
+    const mr = matchRating(l, 1)!;
+    expect(mr.parts.mistakes).toBe(-1);
+    expect(mr.parts.cards).toBeCloseTo(0);
+  });
+});

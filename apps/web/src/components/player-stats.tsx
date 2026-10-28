@@ -48,13 +48,15 @@ const TRACKED: { key: ComparedStat; label: string }[] = [
   { key: 'saves', label: 'Saves' },
   { key: 'yellowCards', label: 'Yellow cards' },
   { key: 'redCards', label: 'Red cards' },
+  { key: 'ownGoals', label: 'Own goals' },
+  { key: 'penMisses', label: 'Penalties missed' },
 ];
 
 /** Numbers where more is worse: ranked "most", never shown in green. */
-const WORSE = new Set<ComparedStat>(['yellowCards', 'redCards']);
+const WORSE = new Set<ComparedStat>(['yellowCards', 'redCards', 'ownGoals', 'penMisses']);
 
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
-const valueOf = (r: PlayerRatings, k: ComparedStat) => (k === 'wins' ? r.record.w : r[k]);
+const valueOf = (r: PlayerRatings, k: ComparedStat) => (k === 'wins' ? r.record.w : (r[k] ?? 0));
 
 /**
  * Each number beside the club's: a bar for theirs with a tick at the club average, and where
@@ -63,7 +65,8 @@ const valueOf = (r: PlayerRatings, k: ComparedStat) => (k === 'wins' ? r.record.
 function Tracker({ r, compare, you }: { r: PlayerRatings; compare: StatCompare; you: boolean }) {
   const [per, setPer] = useState<'total' | 'game'>('total');
   const [sort, setSort] = useState<'usual' | 'rank'>('usual');
-  const rows = TRACKED.map(({ key, label }) => {
+  // Older servers don't send the newer numbers: leave those out rather than show a blank
+  const rows = TRACKED.filter(({ key }) => compare[key]).map(({ key, label }) => {
     const c = compare[key];
     const raw = valueOf(r, key);
     const mine = per === 'game' ? (r.games ? raw / r.games : 0) : raw;

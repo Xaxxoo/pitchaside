@@ -56,6 +56,8 @@ export interface GoalInput {
   team: string;
   scorerId: string;
   assistId?: string | null;
+  /** Put in by the other side: counts for `team`, never as `scorerId`'s goal. */
+  ownGoal?: boolean;
 }
 
 /** What a player's abilities are made of, as votes describe them (GK is its own structure). */
@@ -191,6 +193,11 @@ export interface PlayerRatings {
   yellowCards: number;
   redCards: number;
   saves: number;
+  /** Own goals put in, and penalties missed. */
+  ownGoals: number;
+  penMisses: number;
+  /** Goals their side scored minus goals it let in, in the games they played. */
+  plusMinus: number;
   /** Times someone put them in their Best VII (starter or sub). */
   viiPicks: number;
   /** Times they made the Best VII of the Day. */
@@ -216,7 +223,7 @@ export function emptyVotes(): Record<VoteCategory, number> {
  * Each part is where the player stands in the club on one measure (a percentile), pulled toward
  * the middle while there's little evidence, then put on the card's 40–99 scale:
  * - stats: goals plus three quarters of an assist, per game, with a little for each save and a
- *   little off for each card (Matt, 20 Oct: cards cost a small amount);
+ *   little off for each card (Matt, 20 Oct: cards cost a small amount), own goal and missed penalty;
  * - votes: how often the ballots they could be on named them Player of the Match (40%) or put
  *   them in a Best VII (40%), plus their average share of the awards with enough evidence (20%).
  *   Shares, not raw counts, so a big group's votes don't outweigh a small one's;
@@ -228,6 +235,9 @@ export const TRIAL_WEIGHTS = { stats: 0.4, votes: 0.4, results: 0.2 } as const;
 export const SAVE_WORTH = 0.1;
 export const YELLOW_COST = 0.25;
 export const RED_COST = 1;
+/** An own goal costs half a goal; a missed penalty a quarter. */
+export const OWN_GOAL_COST = 0.5;
+export const PEN_MISS_COST = 0.25;
 /** How much evidence it takes before a part can move far from the middle: half way at this many. */
 const TRIAL_PRIOR = { stats: 3, votes: 6, results: 3 } as const;
 
@@ -244,7 +254,9 @@ export function trialRatings(rows: (PlayerRatings & { player: { id: string } })[
   };
   const measure = {
     stats: (r: PlayerRatings) =>
-      r.games ? (r.goals + 0.75 * r.assists + SAVE_WORTH * (r.saves ?? 0) - YELLOW_COST * (r.yellowCards ?? 0) - RED_COST * (r.redCards ?? 0)) / r.games : null,
+      r.games
+        ? (r.goals + 0.75 * r.assists + SAVE_WORTH * (r.saves ?? 0) - YELLOW_COST * (r.yellowCards ?? 0) - RED_COST * (r.redCards ?? 0) - OWN_GOAL_COST * (r.ownGoals ?? 0) - PEN_MISS_COST * (r.penMisses ?? 0)) / r.games
+        : null,
     votes: (r: PlayerRatings) =>
       r.ballotsSeen ? 0.4 * (r.votes.potm ?? 0) / r.ballotsSeen + 0.4 * Math.min(1, r.viiPicks / r.ballotsSeen) + 0.2 * awardShare(r) : null,
     results: (r: PlayerRatings) => (r.games ? r.skill : null),
@@ -271,7 +283,7 @@ export function trialRatings(rows: (PlayerRatings & { player: { id: string } })[
 }
 
 /** The numbers a player's stats compare with everyone else's. */
-export const COMPARED = ['goals', 'assists', 'potmWins', 'viiOfDay', 'wins', 'points', 'games', 'bestOnTeam', 'teamOfDay', 'saves', 'yellowCards', 'redCards'] as const;
+export const COMPARED = ['goals', 'assists', 'potmWins', 'viiOfDay', 'wins', 'points', 'games', 'bestOnTeam', 'teamOfDay', 'saves', 'yellowCards', 'redCards', 'ownGoals', 'penMisses', 'plusMinus'] as const;
 export type ComparedStat = (typeof COMPARED)[number];
 /** Per number: the average in total and per game, this player's rank (ties share it; 0 if not played) and out of how many. */
 export type StatCompare = Record<ComparedStat, { avg: number; avgPerGame: number; rank: number; of: number }>;
@@ -318,6 +330,9 @@ export function blankRatings(): PlayerRatings {
     goals: 0,
     assists: 0,
     yellowCards: 0,
+    ownGoals: 0,
+    penMisses: 0,
+    plusMinus: 0,
     redCards: 0,
     saves: 0,
     viiPicks: 0,
@@ -832,7 +847,7 @@ export class RatingsService {
         photoKey: p.player.photoKey ?? null,
         team: p.team ?? null,
         ovr: ratings ? (ratings.ovr.get(p.player.id) ?? cardRating(ratings.skills.get(p.player.id)?.rating ?? DEFAULT_START)) : null,
-        goals: count(goals, (g) => g.scorerId, p.player.id),
+        goals: count(goals, (g) => (g.ownGoal ? null : g.scorerId), p.player.id),
         assists: count(goals, (g) => g.assistId, p.player.id),
         saves: count(events, (e) => (e.kind === 'save' ? e.playerId : null), p.player.id),
         yellow: count(events, (e) => (e.kind === 'yellow' ? e.playerId : null), p.player.id),
@@ -941,7 +956,7 @@ export class RatingsService {
         recordedBy: g.recordedBy ?? null,
         goals: goals
           .filter((x) => x.gameId === g.id)
-          .map((x) => ({ id: x.id, team: x.team, scorerId: x.scorerId, assistId: x.assistId, recordedBy: x.recordedBy })),
+          .map((x) => ({ id: x.id, team: x.team, scorerId: x.scorerId, assistId: x.assistId, ownGoal: !!x.ownGoal, recordedBy: x.recordedBy })),
       })),
       /** Cards and saves recorded today, oldest first. */
       events: events.map((e) => ({ id: e.id, playerId: e.playerId, kind: e.kind, recordedBy: e.recordedBy })),
@@ -1440,7 +1455,9 @@ export class RatingsService {
               scorerPhoto: photoOf(x.scorerId),
               assist: nameOf(x.assistId),
               assistPhoto: photoOf(x.assistId),
-              mine: playerIds.includes(x.scorerId),
+              // An own goal: put in by the other side's player, and never "your goal"
+              ownGoal: !!x.ownGoal,
+              mine: !x.ownGoal && playerIds.includes(x.scorerId),
             })),
         })),
         events: events.map((e) => ({ kind: e.kind, name: nameOf(e.playerId), photoKey: photoOf(e.playerId), mine: playerIds.includes(e.playerId) })),
@@ -1594,7 +1611,7 @@ export class RatingsService {
       this.gamesRepo.manager.transaction(async (tx) => {
         const saved = await tx.save(game);
         if (goals.length) {
-          await tx.save(goals.map((g) => this.goalsRepo.create({ team: g.team, scorerId: g.scorerId, assistId: g.assistId ?? null, sessionId: session.id, gameId: saved.id, recordedBy: recordedBy ?? null })));
+          await tx.save(goals.map((g) => this.goalsRepo.create({ team: g.team, scorerId: g.scorerId, assistId: g.ownGoal ? null : (g.assistId ?? null), ownGoal: !!g.ownGoal, sessionId: session.id, gameId: saved.id, recordedBy: recordedBy ?? null })));
         }
       }),
     );
@@ -1622,7 +1639,7 @@ export class RatingsService {
         if (!game) throw new NotFoundException('Game not found');
         const existing = await tx.find(MatchGoal, { where: { gameId } });
         this.checkGoals(session, game, existing, [goal]);
-        await tx.save(this.goalsRepo.create({ ...goal, assistId: goal.assistId ?? null, sessionId, gameId, recordedBy: recordedBy ?? null, clientKey: clientKey ?? null }));
+        await tx.save(this.goalsRepo.create({ ...goal, assistId: goal.ownGoal ? null : (goal.assistId ?? null), ownGoal: !!goal.ownGoal, sessionId, gameId, recordedBy: recordedBy ?? null, clientKey: clientKey ?? null }));
       }),
     );
     return this.getLineup(sessionId, organizationId);
@@ -1662,6 +1679,13 @@ export class RatingsService {
     const sideOf = new Map((session.payments ?? []).filter((p) => p.attendance !== 'no_show').map((p) => [p.playerId, this.teamOf(session, p.team)]));
     for (const g of added) {
       if (g.team !== game.teamA && g.team !== game.teamB) throw new BadRequestException("That team isn't in this game");
+      if (g.ownGoal) {
+        // Put in by someone on the other side of this game, and nobody set it up
+        const other = g.team === game.teamA ? game.teamB : game.teamA;
+        if (sideOf.get(g.scorerId) !== other) throw new BadRequestException('An own goal is put in by someone on the other team');
+        if (g.assistId) throw new BadRequestException('An own goal has no assist');
+        continue;
+      }
       if (sideOf.get(g.scorerId) !== g.team) throw new BadRequestException("The scorer isn't on that team");
       if (g.assistId && (g.assistId === g.scorerId || sideOf.get(g.assistId) !== g.team)) {
         throw new BadRequestException('The assist has to come from a teammate');
@@ -1914,7 +1938,9 @@ export class RatingsService {
     return {
       groupId: session.groupId,
       games: games.map((x) => ({ sideA: side(x.teamA, x), sideB: side(x.teamB, x), scoreA: x.scoreA, scoreB: x.scoreB, keeperA: x.keeperA, keeperB: x.keeperB, positions: today })),
-      goals: goals.map((x) => ({ scorerId: x.scorerId, assistId: x.assistId })),
+      goals: goals.filter((x) => !x.ownGoal).map((x) => ({ scorerId: x.scorerId, assistId: x.assistId })),
+      ownGoals: goals.filter((x) => x.ownGoal).map((x) => x.scorerId),
+      penMisses: count('pen_miss'),
       saves: count('save'),
       yellow: count('yellow'),
       red: count('red'),
@@ -2050,6 +2076,9 @@ export class RatingsService {
             goals: 0,
             assists: 0,
             yellowCards: 0,
+            ownGoals: 0,
+            penMisses: 0,
+            plusMinus: 0,
             redCards: 0,
             saves: 0,
             viiPicks: 0,
@@ -2066,13 +2095,15 @@ export class RatingsService {
           if (side && mateTop.get(side) && mate.get(member.id) === mateTop.get(side)) s.bestOnTeam += 1;
           s.viiPicks += sv.filter((v) => v.nomineeId === member.id && (v.category === VoteCategory.VII || v.category === VoteCategory.VII_SUB || v.category === VoteCategory.VII_GK)).length;
           if (viiOfDay.has(member.id)) s.viiOfDay += 1;
-          s.goals += sessionGoals.filter((g) => g.scorerId === member.id).length;
+          s.goals += sessionGoals.filter((g) => g.scorerId === member.id && !g.ownGoal).length;
+          s.ownGoals += sessionGoals.filter((g) => g.scorerId === member.id && g.ownGoal).length;
           s.assists += sessionGoals.filter((g) => g.assistId === member.id).length;
           for (const e of eventsBySession.get(session.id) ?? []) {
             if (e.playerId !== member.id) continue;
             if (e.kind === 'yellow') s.yellowCards += 1;
             else if (e.kind === 'red') s.redCards += 1;
             else if (e.kind === 'save') s.saves += 1;
+            else if (e.kind === 'pen_miss') s.penMisses += 1;
           }
 
           // Award evidence, split evenly across what each award says about them.
@@ -2113,6 +2144,7 @@ export class RatingsService {
               if ((g.teamA !== side && g.teamB !== side) || !this.played(session, pay, g)) continue;
               const mine = g.teamA === side ? g.scoreA : g.scoreB;
               const theirs = g.teamA === side ? g.scoreB : g.scoreA;
+              s.plusMinus += mine - theirs;
               if (mine > theirs) s.record.w += 1;
               else if (mine === theirs) s.record.d += 1;
               else s.record.l += 1;
@@ -2412,7 +2444,7 @@ export class RatingsService {
       rating: t.trial,
       weights: TRIAL_WEIGHTS,
       of: played.length,
-      worth: { save: SAVE_WORTH, yellow: YELLOW_COST, red: RED_COST },
+      worth: { save: SAVE_WORTH, yellow: YELLOW_COST, red: RED_COST, ownGoal: OWN_GOAL_COST, penMiss: PEN_MISS_COST },
       stats: {
         score: t.parts.stats,
         place: placeOn('stats'),
@@ -2422,6 +2454,8 @@ export class RatingsService {
         saves: me.saves,
         yellowCards: me.yellowCards,
         redCards: me.redCards,
+        ownGoals: me.ownGoals,
+        penMisses: me.penMisses,
       },
       votes: {
         score: t.parts.votes,

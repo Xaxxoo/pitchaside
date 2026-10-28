@@ -146,9 +146,10 @@ const PART_LABELS: [keyof MatchRatingParts, string][] = [
   ['keeping', 'In goal'],
   ['cleanSheets', 'Clean sheets'],
   ['cards', 'Cards'],
+  ['mistakes', 'Own goals & misses'],
   ['votes', 'Votes'],
 ];
-const signed = (n: number) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)}`;
+const signed = (n: number | undefined = 0) => `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(1)}`;
 const dayLabel = (iso: string) => {
   const [y, m, d] = iso.split('-').map(Number);
   return new Date(y, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }).replace(',', '');
@@ -202,7 +203,7 @@ function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
           <p className="text-[12px] text-gray-500">Each starts on 6.0. Fewer of the day’s games played, the less it moves the card.</p>
           <ol className="mt-2 space-y-2">
             {data.recent.map((d) => {
-              const made = PART_LABELS.filter(([k]) => d.parts[k] !== 0);
+              const made = PART_LABELS.filter(([k]) => (d.parts[k] ?? 0) !== 0);
               return (
                 <li key={d.date} className="rounded-3xl bg-white border border-gray-100 shadow-card px-3.5 py-3">
                   <div className="flex items-center gap-3">
