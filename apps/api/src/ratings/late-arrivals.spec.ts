@@ -59,4 +59,16 @@ describe('which games count for a late arrival', () => {
     expect(playedIn({ joinedSideAt: null }, { createdAt: at('19:05:00') })).toBe(true);
     expect(playedIn(undefined, { createdAt: at('19:05:00') })).toBe(true);
   });
+
+  it('not a game they sat out', () => {
+    const game = { createdAt: at('19:05:00'), satOut: ['sub'] };
+    expect(playedIn({ playerId: 'sub' }, game)).toBe(false);
+    expect(playedIn({ playerId: 'ada' }, game)).toBe(true);
+  });
+
+  it('not a game that started after they left', () => {
+    const leftAt = at('19:30:00').getTime();
+    expect(playedIn({ playerId: 'ada' }, { createdAt: at('19:40:00') }, { leftAt, startedAt: at('19:28:00').getTime() })).toBe(true);
+    expect(playedIn({ playerId: 'ada' }, { createdAt: at('19:45:00') }, { leftAt, startedAt: at('19:33:00').getTime() })).toBe(false);
+  });
 });

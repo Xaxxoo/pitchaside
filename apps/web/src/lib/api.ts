@@ -862,6 +862,8 @@ export interface MatchGame {
   /** Who was in goal for each side (anyone playing that day; a borrowed keeper too). Null: not recorded. */
   keeperA?: string | null;
   keeperB?: string | null;
+  /** Players on either side who sat this whole game out; empty or null: everyone played. */
+  satOut?: string[] | null;
 }
 
 export interface TeamStanding {
@@ -971,7 +973,7 @@ export function balanceLineup(sessionId: string, teamCount?: number): Promise<Li
 
 export function addMatchGame(
   sessionId: string,
-  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
 ): Promise<Lineup> {
   return http.post(`/sessions/${sessionId}/games`, game);
 }
@@ -1007,7 +1009,7 @@ export function deleteMatchEvent(sessionId: string, eventId: string): Promise<Li
 export function updateMatchGame(
   sessionId: string,
   gameId: string,
-  score: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null },
+  score: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
 ): Promise<Lineup> {
   return http.patch(`/sessions/${sessionId}/games/${gameId}`, score);
 }
@@ -1111,7 +1113,8 @@ export interface VoteResults {
     title: string;
     /** For "Best on your team": whose team this result is for. */
     team?: TeamKey | null;
-    standings: { playerId: string; count: number; player: SquadMember }[];
+    /** `played`/`of` only when they played under half their side's games: their POTM and best-on-team votes count half. */
+    standings: { playerId: string; count: number; player: SquadMember; played?: number; of?: number }[];
     /** Awards: how many different voters nominated anyone. */
     voters?: number;
     /** Awards: too few voters to name a winner. */
@@ -1148,7 +1151,8 @@ export interface Ballot {
   awards: { key: VoteCategory; title: string; hint: string }[];
   maxAwards: number;
   /** Who played, each with their side (null when teams weren't set). */
-  squad: (SquadMember & { team: TeamKey | null; position?: Position | null })[];
+  /** `played` of `of`: games they played of the games their side played (newer servers). */
+  squad: (SquadMember & { team: TeamKey | null; position?: Position | null; played?: number; of?: number })[];
   teamCount: number;
   captains: Partial<Record<TeamKey, string>>;
   /** Each side's bib colour and name for this game (its own, else the group's). */

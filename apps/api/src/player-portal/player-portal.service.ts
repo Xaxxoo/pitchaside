@@ -507,7 +507,7 @@ export class PlayerPortalService {
     return this.ratings.playerTimer(sessionId, this.ids(person));
   }
 
-  addMatchGame(person: Person, sessionId: string, input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; keeperA?: string | null; keeperB?: string | null }) {
+  addMatchGame(person: Person, sessionId: string, input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; keeperA?: string | null; keeperB?: string | null; satOut?: string[] }) {
     return this.ratings.captainAddGame(sessionId, this.ids(person), input);
   }
 
