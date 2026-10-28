@@ -97,6 +97,8 @@ export class PlayersService {
     const player = await this.findOne(id, organizationId);
     Object.assign(player, dto);
     if (dto.nickname !== undefined) player.nickname = cleanNickname(dto.nickname);
+    // A keeper is happy in goal: the day plan's swaps put them there first
+    if (dto.position === 'GK' && !dto.keeper) player.keeper = 'happy';
     if (dto.phone) await this.phoneFree(player.phone, organizationId, player.id);
     return this.saveOrSayWhoHasThePhone(player);
   }

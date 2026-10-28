@@ -9,7 +9,8 @@ import { Player, Ball, palette, skins } from '@/components/illustrations';
 import { useToast } from '@/components/toast';
 import { addMember, createPlayer, getGroups, type IGroupWithMembers } from '@/lib/api';
 import { PlayerLevelPicker } from '@/components/player-level';
-import type { PlayerLevel } from '@pitchaside/shared';
+import { PositionPicker } from '@/components/position-picker';
+import type { PlayerLevel, Position } from '@pitchaside/shared';
 
 type Errors = Record<string, string>;
 
@@ -42,6 +43,7 @@ export default function NewPlayerPage() {
   const [groups, setGroups] = useState<IGroupWithMembers[]>([]);
   const [groupIds, setGroupIds] = useState<string[]>([]);
   const [level, setLevel] = useState<PlayerLevel>('average');
+  const [position, setPosition] = useState<Position | null>(null);
 
   useEffect(() => {
     getGroups()
@@ -76,6 +78,7 @@ export default function NewPlayerPage() {
         email: (form.get('email') as string).trim() || undefined,
         phone: (form.get('phone') as string).trim() || undefined,
         level,
+        ...(position ? { position } : {}),
       });
       // Registering adds them to the club; groups are separate memberships.
       const added = await Promise.allSettled(groupIds.map((groupId) => addMember(groupId, { playerId: player.id })));
@@ -186,6 +189,7 @@ export default function NewPlayerPage() {
         </div>
 
         <PlayerLevelPicker value={level} onChange={setLevel} />
+        <PositionPicker value={position} onChange={setPosition} />
 
         {groups.length > 0 && (
           <fieldset>

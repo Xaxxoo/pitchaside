@@ -14,6 +14,7 @@
  */
 
 export type Position = 'GK' | 'DEF' | 'MID' | 'ATT';
+export const POSITIONS: Position[] = ['GK', 'DEF', 'MID', 'ATT'];
 
 export interface DayGame {
   sideA: string[];

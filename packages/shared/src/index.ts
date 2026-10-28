@@ -77,6 +77,8 @@ export interface IPlayer {
   level?: PlayerLevel | null;
   /** Happy in goal, or would rather not, for the match day plan's swaps; null: doesn't mind. */
   keeper?: KeeperPref;
+  /** Where they usually play; null: not said. */
+  position?: Position | null;
   createdAt: string;
 }
 
@@ -376,6 +378,9 @@ export interface GameTimer {
 
 /** Whether a player wants to go in goal when the swaps come round. Null: they don't mind. */
 export type KeeperPref = 'happy' | 'rather_not' | null;
+
+/** Where someone plays: keeper, defence, midfield, attack. */
+export type Position = 'GK' | 'DEF' | 'MID' | 'ATT';
 
 /**
  * How the day is played. `schedule`: everyone plays everyone, games and times fixed in advance.

@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import { IsString, IsOptional, IsEmail, IsIn, IsNotEmpty, MinLength, MaxLength, Matches } from 'class-validator';
 import { PLAYER_LEVELS, type PlayerLevel } from '../../ratings/skill';
 import { KEEPER_PREFS } from '../../ratings/plan';
+import { POSITIONS, type Position } from '../../ratings/match-rating';
 import type { KeeperPref } from '@pitchaside/shared';
 import { tidyPhone } from '../../common/phone';
 
@@ -78,4 +79,9 @@ export class UpdatePlayerDto {
   @IsOptional()
   @IsIn(KEEPER_PREFS)
   keeper?: KeeperPref;
+
+  /** Where they usually play; null clears it. */
+  @IsOptional()
+  @IsIn(POSITIONS)
+  position?: Position | null;
 }

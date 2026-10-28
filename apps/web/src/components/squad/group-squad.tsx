@@ -33,6 +33,7 @@ import { InfoTip } from '@/components/info-tip';
 import { FilterBar, FilterMenu } from '@/components/filter-menu';
 import { Avatar } from '@/components/ratings';
 import { ratingWords } from '@/lib/rating-words';
+import { positionShort } from '@/lib/positions';
 
 /**
  * A group's squad, about the players: how many, who's coming to the next game, how it's made up
@@ -536,6 +537,7 @@ export function GroupSquad({
                 const st = m.stat;
                 const level = m.player.level ? LEVEL[m.player.level] : null;
                 const detail = [
+                  positionShort(m.player.position),
                   st?.ovr != null ? `Rating ${st.ovr}${st.provisional ? ' (settling)' : ''}` : null,
                   st ? `${st.games} game${st.games === 1 ? '' : 's'}` : null,
                   // The level they started at, until they have a rating (it stays on their card)

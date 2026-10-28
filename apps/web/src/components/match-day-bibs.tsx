@@ -11,6 +11,7 @@ import { getGameLineup, getGameTimer, pickBib, type GameLineup, type GamePaid } 
 import { GameTimer, type TimerApi } from '@/components/game-timer';
 import { Avatar } from '@/components/ratings';
 import { Collapse } from '@/components/collapse';
+import { positionOrder, positionShort } from '@/lib/positions';
 
 const WATCH: TimerApi = { load: getGameTimer };
 
@@ -80,7 +81,9 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
     }
   }
 
-  const byTeam = (t: TeamKey | null) => lineup.squad.filter((p) => p.team === t);
+  // You first, then keeper to attack, like a team sheet
+  const byTeam = (t: TeamKey | null) =>
+    lineup.squad.filter((p) => p.team === t).sort((a, b) => Number(b.me) - Number(a.me) || positionOrder(a.position) - positionOrder(b.position));
   const sidesNow = teams.filter((t) => byTeam(t).length);
   const noBib = byTeam(null);
 
@@ -189,6 +192,7 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
                       <span className={`text-xs ${p.me ? 'font-extrabold text-volt-300' : 'font-semibold text-white'}`}>{p.me ? 'You' : p.name}</span>
                       {p.captain && <span className="text-[10px] font-extrabold text-volt-300">(C)</span>}
                       {p.vice && <span className="text-[10px] font-extrabold text-volt-300">(VC)</span>}
+                      {p.position && <span className="text-[10px] font-bold text-white/50">{positionShort(p.position)}</span>}
                       <PaidTag paid={p.paid} />
                     </span>
                   ))}

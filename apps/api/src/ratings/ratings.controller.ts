@@ -31,6 +31,11 @@ export class LineupDto {
   @IsOptional()
   @IsObject()
   vices?: Record<string, string | null>;
+
+  /** playerId → 'GK' | 'DEF' | 'MID' | 'ATT' | null: where they play today (null: their usual position). */
+  @IsOptional()
+  @IsObject()
+  positions?: Record<string, string | null>;
 }
 
 export class BalanceDto {
