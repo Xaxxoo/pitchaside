@@ -10,6 +10,7 @@ import { ContributionsVisibilityPicker } from '@/components/contributions-visibi
 import { prettyTime } from '@/components/player-ui';
 import { frequencyOptions } from '@/lib/billing';
 import { MatchDayFields } from '@/components/group/match-day-fields';
+import { SECTION_ICONS, SEEN, SettingsSection, SettingsSections } from '@/components/group/settings-sections';
 
 export interface GroupEditData {
   name: string;
@@ -160,6 +161,9 @@ export function GroupEditSheet({
   const times = d.kickoffTime && !TIMES.includes(d.kickoffTime.slice(0, 5)) ? [d.kickoffTime.slice(0, 5), ...TIMES] : TIMES;
   const valid = d.name.trim().length > 0 && d.targetPlayers >= 2 && d.feePerPlayer >= 0 && d.gameMinutes >= 1 && d.gameMinutes <= 60;
   const freq = frequencyOptions.find((o) => o.value === d.paymentType);
+  // Which settings section is open: one at a time, all closed to start
+  const [open, setOpen] = useState<'money' | 'when' | 'day' | null>(null);
+  const toggle = (k: 'money' | 'when' | 'day') => setOpen((o) => (o === k ? null : k));
 
   function pickDay(v: string) {
     setDay(v);
@@ -181,106 +185,12 @@ export function GroupEditSheet({
       <SheetTitle id={titleId} title="Edit group" sub="Players see the name, pitch, day and fee." onClose={onClose} />
 
       <div className="mt-5 space-y-5">
-        {/* The group */}
+        {/* What players see first: the name and the fee, always in view */}
         <div>
           <label htmlFor="g-name" className={label}>
             Group name
           </label>
           <input id="g-name" value={d.name} onChange={(e) => set({ name: e.target.value })} placeholder="e.g. Saturday Ballers" className={field} />
-        </div>
-        <div>
-          <label htmlFor="g-desc" className={label}>
-            Description <span className="font-semibold text-gray-500">(optional)</span>
-          </label>
-          <textarea
-            id="g-desc"
-            rows={2}
-            value={d.description}
-            onChange={(e) => set({ description: e.target.value })}
-            placeholder="e.g. Friendly 5-a-side, all levels welcome"
-            className={`${field} py-3 leading-snug resize-none`}
-          />
-        </div>
-        <div>
-          <label htmlFor="g-pitch" className={label}>
-            Pitch
-          </label>
-          <input
-            id="g-pitch"
-            value={d.location}
-            onChange={(e) => set({ location: e.target.value })}
-            placeholder="e.g. Teslim Balogun Stadium, Surulere"
-            className={field}
-          />
-        </div>
-
-        {/* When */}
-        <fieldset>
-          <legend className={label}>Game day</legend>
-          <div className="flex flex-wrap gap-2">
-            {DAYS.map((x) => (
-              <button key={x} type="button" aria-pressed={day === x} onClick={() => pickDay(x)} className={chip(day === x)}>
-                {x.slice(0, 3)}
-              </button>
-            ))}
-            <button type="button" aria-pressed={day === 'other'} onClick={() => pickDay('other')} className={chip(day === 'other')}>
-              Other
-            </button>
-          </div>
-          {day === 'other' && (
-            <input
-              aria-label="Schedule"
-              value={d.schedule}
-              onChange={(e) => set({ schedule: e.target.value })}
-              placeholder="e.g. Every other Sunday"
-              className={`${field} mt-2`}
-            />
-          )}
-        </fieldset>
-        <div>
-          <label htmlFor="g-time" className={label}>
-            Kick-off
-          </label>
-          <Select id="g-time" value={d.kickoffTime.slice(0, 5)} onChange={(v) => set({ kickoffTime: v })}>
-            <option value="">Not set</option>
-            {times.map((t) => (
-              <option key={t} value={t}>
-                {prettyTime(t)}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        {/* Match day */}
-        <MatchDayFields value={d} onChange={set} />
-
-        {/* Scope (read-only) */}
-        {d.scope && (
-          <div>
-            <span className={label}>Payment region</span>
-            <div className="flex h-12 items-center px-3.5 rounded-xl border border-gray-200 bg-chalk text-[15px] text-gray-500">
-              {d.scope === 'international' ? 'International (USDT/USDC)' : 'Nigeria (bank transfer)'}
-            </div>
-            <p className="mt-1.5 text-xs text-gray-500">Set when the group was created.</p>
-          </div>
-        )}
-
-        {/* Players and money */}
-        <div>
-          <span className={label} id="g-players-label">
-            Players per game
-          </span>
-          <Stepper
-            id="g-players"
-            labelledBy="g-players-label"
-            value={d.targetPlayers}
-            onChange={(v) => set({ targetPlayers: v })}
-            step={1}
-            min={2}
-            less="One fewer player"
-            more="One more player"
-          />
-          <p className="mt-1.5 text-xs text-gray-500">The squad can be bigger; this is how many play each game.</p>
         </div>
         <div>
           <span id="g-fee-label" className={label}>
@@ -318,30 +228,144 @@ export function GroupEditSheet({
             </>
           )}
         </div>
-        <fieldset>
-          <legend className={label}>How players pay</legend>
-          <div className="flex flex-wrap gap-2">
-            {frequencyOptions.map((o) => (
-              <button
-                key={o.value}
-                type="button"
-                aria-pressed={d.paymentType === o.value}
-                onClick={() => set({ paymentType: o.value })}
-                className={chip(d.paymentType === o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-          {freq && <p className="mt-1.5 text-xs text-gray-500">{freq.hint}</p>}
-        </fieldset>
 
-        {/* How games and money show to players */}
-        <RsvpToggle checked={d.requireRsvp} onChange={(v) => set({ requireRsvp: v })} />
-        <ContributionsVisibilityPicker value={d.contributionsVisibility} onChange={(v) => set({ contributionsVisibility: v })} />
+        {/* The rest in the same three sections as making a group, money first */}
+        <SettingsSections inset="sheet">
+          <SettingsSection
+            id="g-money"
+            icon={SECTION_ICONS.money}
+            title="Money"
+            summary={[d.scope === 'international' ? '$' : '₦', (freq?.label ?? 'Per game').toLowerCase(), SEEN[d.contributionsVisibility] ?? SEEN.private].join(' · ')}
+            open={open === 'money'}
+            onToggle={() => toggle('money')}
+          >
+            {d.scope && (
+              <p className="text-xs text-gray-500">
+                <b className="font-bold text-ink">{d.scope === 'international' ? 'International' : 'Nigeria'}</b> ·{' '}
+                {d.scope === 'international' ? 'USDT or USDC in $' : 'bank transfer in ₦'} · set when made
+              </p>
+            )}
+            <fieldset>
+              <legend className={label}>How often do players pay?</legend>
+              <div className="flex flex-wrap gap-2">
+                {frequencyOptions.map((o) => (
+                  <button
+                    key={o.value}
+                    type="button"
+                    aria-pressed={d.paymentType === o.value}
+                    onClick={() => set({ paymentType: o.value })}
+                    className={chip(d.paymentType === o.value)}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {freq && <p className="mt-1.5 text-xs text-gray-500">{freq.hint}</p>}
+            </fieldset>
+            <ContributionsVisibilityPicker value={d.contributionsVisibility} onChange={(v) => set({ contributionsVisibility: v })} />
+          </SettingsSection>
+
+          <SettingsSection
+            id="g-when"
+            icon={SECTION_ICONS.when}
+            title="When and where"
+            summary={[`${d.targetPlayers} a game`, day && day !== 'other' ? `${day}s` : d.schedule.trim(), prettyTime(d.kickoffTime.slice(0, 5))].filter(Boolean).join(' · ')}
+            open={open === 'when'}
+            onToggle={() => toggle('when')}
+          >
+            <div>
+              <span className={label} id="g-players-label">
+                Players per game
+              </span>
+              <Stepper
+                id="g-players"
+                labelledBy="g-players-label"
+                value={d.targetPlayers}
+                onChange={(v) => set({ targetPlayers: v })}
+                step={1}
+                min={2}
+                less="One fewer player"
+                more="One more player"
+              />
+              <p className="mt-1.5 text-xs text-gray-500">How many play each game; the squad can be bigger.</p>
+            </div>
+            <fieldset>
+              <legend className={label}>Game day</legend>
+              <div className="flex flex-wrap gap-2">
+                {DAYS.map((x) => (
+                  <button key={x} type="button" aria-pressed={day === x} onClick={() => pickDay(x)} className={chip(day === x)}>
+                    {x.slice(0, 3)}
+                  </button>
+                ))}
+                <button type="button" aria-pressed={day === 'other'} onClick={() => pickDay('other')} className={chip(day === 'other')}>
+                  Other
+                </button>
+              </div>
+              {day === 'other' && (
+                <input
+                  aria-label="Schedule"
+                  value={d.schedule}
+                  onChange={(e) => set({ schedule: e.target.value })}
+                  placeholder="e.g. Every other Sunday"
+                  className={`${field} mt-2`}
+                />
+              )}
+            </fieldset>
+            <div>
+              <label htmlFor="g-time" className={label}>
+                Kick-off
+              </label>
+              <Select id="g-time" value={d.kickoffTime.slice(0, 5)} onChange={(v) => set({ kickoffTime: v })}>
+                <option value="">Not set</option>
+                {times.map((t) => (
+                  <option key={t} value={t}>
+                    {prettyTime(t)}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <label htmlFor="g-pitch" className={label}>
+                Pitch
+              </label>
+              <input
+                id="g-pitch"
+                value={d.location}
+                onChange={(e) => set({ location: e.target.value })}
+                placeholder="e.g. Teslim Balogun, Surulere"
+                className={field}
+              />
+            </div>
+            <div>
+              <label htmlFor="g-desc" className={label}>
+                Description <span className="font-semibold text-gray-500">(optional)</span>
+              </label>
+              <textarea
+                id="g-desc"
+                rows={2}
+                value={d.description}
+                onChange={(e) => set({ description: e.target.value })}
+                placeholder="e.g. Friendly 5-a-side, all levels welcome"
+                className={`${field} py-3 leading-snug resize-none`}
+              />
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            id="g-day"
+            icon={SECTION_ICONS.day}
+            title="Match day"
+            summary={[d.timerOn ? `${d.gameMinutes}-min games` : 'No timer', d.requireRsvp ? 'players confirm' : 'no confirming'].join(' · ')}
+            open={open === 'day'}
+            onToggle={() => toggle('day')}
+          >
+            <RsvpToggle checked={d.requireRsvp} onChange={(v) => set({ requireRsvp: v })} />
+            <MatchDayFields value={d} onChange={set} />
+          </SettingsSection>
+        </SettingsSections>
 
         {onDelete && (
-          <div className="pt-4 border-t border-gray-100">
+          <div className="pt-1">
             <button onClick={onDelete} className="press -mx-2 w-[calc(100%+1rem)] flex items-center min-h-12 px-2 rounded-xl text-[15px] font-semibold text-kit-600 hover:bg-kit-500/10">
               Delete group
             </button>
