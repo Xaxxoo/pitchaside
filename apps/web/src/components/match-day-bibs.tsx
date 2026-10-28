@@ -1,13 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
+import { Sheet } from '@/components/sheet';
+import { SheetTitle } from '@/components/home/sheet-title';
 import { TEAMS, bibFill, bibOf, bibTint, teamName } from '@/lib/teams';
 import { BallSpinner } from '@/components/skeleton';
 import { useToast } from '@/components/toast';
 import { ConfirmDialog } from '@/components/confirm-dialog';
 import { LiveDot } from '@/components/motion';
 import type { TeamKey } from '@/lib/api';
-import { getGameLineup, getGameTimer, pickBib, type GameLineup, type GamePaid } from '@/lib/player';
+import { getGameLineup, getGameTimer, moveGamePlayer, pickBib, type GameLineup, type GamePaid } from '@/lib/player';
 import { GameTimer, type TimerApi } from '@/components/game-timer';
 import { Avatar } from '@/components/ratings';
 import { Collapse } from '@/components/collapse';
@@ -36,6 +38,10 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   const [teamsOpen, setTeamsOpen] = useState(false);
   // A captain switching sides is asked first: the armband stays with the side they leave.
   const [switching, setSwitching] = useState<TeamKey | null>(null);
+  // A captain moving someone: who, and which side is saving
+  const [moving, setMoving] = useState<GameLineup['squad'][number] | null>(null);
+  const [moveBusy, setMoveBusy] = useState<string | null>(null);
+  const moveTitle = useId();
 
   useEffect(() => {
     const load = () => getGameLineup(sessionId).then(setLineup).catch(() => undefined);
@@ -86,6 +92,34 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
     lineup.squad.filter((p) => p.team === t).sort((a, b) => Number(b.me) - Number(a.me) || positionOrder(a.position) - positionOrder(b.position));
   const sidesNow = teams.filter((t) => byTeam(t).length);
   const noBib = byTeam(null);
+
+  /*
+   * Captains and vice-captains sort the teams out between them: on match day they can move anyone
+   * but another captain or vice. Once scores are in, only someone not on a side yet (came late).
+   */
+  const locked = !!lineup.live?.games.length;
+  const canMove = amCaptain && !!lineup.canKeepScore && !lineup.bibsClosed;
+  const movable = (p: GameLineup['squad'][number]) => canMove && !!p.id && !p.me && !p.captain && !p.vice && (!locked || !p.team);
+  async function moveTo(p: GameLineup['squad'][number], team: TeamKey | null) {
+    setMoveBusy(team ?? 'off');
+    try {
+      setLineup(await moveGamePlayer(sessionId, p.id!, team));
+      toast.success(team ? `${p.short ?? p.name} moved to ${teamName(team, lineup!.captains, lineup!.bibs)}` : `${p.short ?? p.name} taken off the teams`);
+      setMoving(null);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'That didn’t save. Try again.');
+    } finally {
+      setMoveBusy(null);
+    }
+  }
+  const Chip = ({ p, children, className }: { p: GameLineup['squad'][number]; children: React.ReactNode; className: string }) =>
+    movable(p) ? (
+      <button type="button" onClick={() => setMoving(p)} aria-label={`Move ${p.name}`} className={`press ${className} ring-1 ring-white/25 hover:ring-volt-300`}>
+        {children}
+      </button>
+    ) : (
+      <span className={className}>{children}</span>
+    );
 
   const myTeam = lineup.myTeam;
   // Games are already saved and they aren't on a side: they came late and pick once.
@@ -177,6 +211,9 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
       {lineup.squad.some((p) => p.team) && (
         <Collapse open={teamsOpen} id={`${sessionId}-teams`}>
         <div className="space-y-2 pb-1">
+          {canMove && lineup.squad.some(movable) && (
+            <p className="text-[12px] font-semibold text-volt-300">{locked ? 'Came late? Tap them to put them on a side.' : `You’re ${what}: tap a player to move them.`}</p>
+          )}
           {teams
             .filter((t) => byTeam(t).length)
             .map((t) => (
@@ -187,14 +224,14 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {byTeam(t).map((p, i) => (
-                    <span key={`${p.name}-${i}`} className="inline-flex items-center gap-1.5 bg-white/10 rounded-full pl-0.5 pr-2.5 py-0.5">
+                    <Chip key={`${p.name}-${i}`} p={p} className="inline-flex items-center gap-1.5 bg-white/10 rounded-full pl-0.5 pr-2.5 py-0.5">
                       <Avatar name={p.name} photoKey={p.photoKey} className="w-6 h-6 text-[9px]" />
                       <span className={`text-xs ${p.me ? 'font-extrabold text-volt-300' : 'font-semibold text-white'}`}>{p.me ? 'You' : p.name}</span>
                       {p.captain && <span className="text-[10px] font-extrabold text-volt-300">(C)</span>}
                       {p.vice && <span className="text-[10px] font-extrabold text-volt-300">(VC)</span>}
                       {p.position && <span className="text-[10px] font-bold text-white/50">{positionShort(p.position)}</span>}
                       <PaidTag paid={p.paid} />
-                    </span>
+                    </Chip>
                   ))}
                 </div>
               </div>
@@ -204,16 +241,53 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
               <p className="text-[11px] font-extrabold uppercase tracking-wider text-white/60 mb-1">No team yet · {noBib.length}</p>
               <div className="flex flex-wrap gap-1.5">
                 {noBib.map((p, i) => (
-                  <span key={`${p.name}-${i}`} className="inline-flex items-center gap-1.5 bg-white/[0.06] rounded-full pl-0.5 pr-2.5 py-0.5">
+                  <Chip key={`${p.name}-${i}`} p={p} className="inline-flex items-center gap-1.5 bg-white/[0.06] rounded-full pl-0.5 pr-2.5 py-0.5">
                     <Avatar name={p.name} photoKey={p.photoKey} className="w-6 h-6 text-[9px]" />
                     <span className={`text-xs ${p.me ? 'font-extrabold text-volt-300' : 'font-semibold text-white/80'}`}>{p.me ? 'You' : p.short ?? p.name}</span>
-                  </span>
+                  </Chip>
                 ))}
               </div>
             </div>
           )}
         </div>
         </Collapse>
+      )}
+      {moving && (
+        <Sheet titleId={moveTitle} onClose={() => setMoving(null)} align="left">
+          <SheetTitle
+            id={moveTitle}
+            title={`Move ${moving.name}`}
+            sub={moving.team ? `On ${teamName(moving.team, lineup.captains, lineup.bibs)} now` : 'Not on a team yet'}
+            onClose={() => setMoving(null)}
+          />
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            {teams.map((t) => {
+              const here = moving.team === t;
+              const size = byTeam(t).length;
+              return (
+                <button
+                  key={t}
+                  onClick={() => !here && moveTo(moving, t)}
+                  disabled={!!moveBusy}
+                  aria-current={here || undefined}
+                  className={`press flex items-center gap-2.5 min-h-14 px-3 rounded-2xl border text-left ${here ? 'border-ink bg-chalk' : 'border-gray-200 hover:border-ink'}`}
+                >
+                  <span className="w-5 h-5 shrink-0 rounded-md" style={bibFill(t, lineup.bibs)} aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-bold text-ink truncate">{teamName(t, lineup.captains, lineup.bibs)}</span>
+                    <span className="block text-[12px] text-gray-500 tabular-nums">{moveBusy === t ? 'Saving…' : here ? 'On it now' : `${size} player${size === 1 ? '' : 's'}`}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          {moving.team && !locked && (
+            <button onClick={() => moveTo(moving, null)} disabled={!!moveBusy} className="press mt-3 -mx-2 w-[calc(100%+1rem)] text-left px-2 py-3 rounded-2xl hover:bg-chalk">
+              <span className="block text-[15px] font-bold text-ink">{moveBusy === 'off' ? 'Saving…' : 'Take off the teams'}</span>
+              <span className="block text-[13px] text-gray-600">They stay in the game, just not on a side yet.</span>
+            </button>
+          )}
+        </Sheet>
       )}
     </div>
   );

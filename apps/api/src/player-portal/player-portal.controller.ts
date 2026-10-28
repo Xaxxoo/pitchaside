@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Put, Query, Req, Res, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
-import { IsBoolean, IsEmail, IsIn, IsNumber, IsObject, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsEmail, IsIn, IsNumber, IsObject, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, MinLength, IsUUID } from 'class-validator';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { BillingService } from '../billing/billing.service';
@@ -45,6 +45,15 @@ export class ClaimPaymentDto {
 
 export class PickTeamDto {
   /** The bib colour's side, A–F; null to clear it. */
+  @IsIn(['A', 'B', 'C', 'D', 'E', 'F', null])
+  team: string | null;
+}
+
+export class MovePlayerDto {
+  @IsUUID()
+  playerId: string;
+
+  /** The side, A–F; null takes them off the teams. */
   @IsIn(['A', 'B', 'C', 'D', 'E', 'F', null])
   team: string | null;
 }
@@ -417,6 +426,12 @@ export class PlayerPortalController {
   @Post('games/:id/team')
   pickTeam(@Param('id') id: string, @Body() dto: PickTeamDto, @CurrentPerson() person: Person) {
     return this.portal.pickTeam(person, id, dto.team);
+  }
+
+  /** A captain or vice-captain moves a player to another side (or off the teams). */
+  @Post('games/:id/match-day/move')
+  movePlayer(@Param('id') id: string, @Body() dto: MovePlayerDto, @CurrentPerson() person: Person) {
+    return this.portal.captainMovePlayer(person, id, dto.playerId, dto.team);
   }
 
   /** "Yes, I've paid": the player says they've transferred into this group's account. */
