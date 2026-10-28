@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
+import { Callout } from '@/components/callout';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { btnPrimary } from '@/components/buttons';
@@ -177,9 +178,9 @@ export function ExtraSheet({
       <p className="text-[13px] leading-snug text-gray-600">Opens Send money with a refund to {first}’s own account ready.</p>
     ) : key === 'group' ? (
       <>
-        <p className="text-[13px] leading-snug text-gray-600">
-          {first} won’t be owed it any more: it stops showing as theirs and can’t be refunded. The money stays in the account. {first} sees the reason in their history.
-        </p>
+        <Callout tone="warn" title={`${first} won’t be owed it any more`}>
+          It can’t be refunded after this. The money stays in the account; {first} sees why in their history.
+        </Callout>
         <div role="radiogroup" aria-label="Why is the group keeping it?" className="mt-2.5 flex flex-wrap gap-2">
           {(['player_agreed', 'unreachable', 'sorted_in_person', 'other'] as const).map((r) => (
             <button

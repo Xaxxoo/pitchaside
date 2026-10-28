@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
+import { Callout } from '@/components/callout';
 import { BankPicker } from '@/components/group-payee';
 import { Sheet } from '@/components/sheet';
 import { BallSpinner } from '@/components/skeleton';
@@ -243,11 +244,11 @@ export function SendMoneyModal({
             className={input}
           />
           {tooMuch && (
-            <p className="text-xs text-kit-600 mt-1">
+            <Callout tone="warn" live className="mt-2">
               {member && heldBy(member) < available - SERVICE_FEE
                 ? `More than the ${formatCurrency(heldBy(member))} of ${member.name}'s in the account.`
                 : `More than the ${formatCurrency(Math.max(0, available - SERVICE_FEE))} available after the ${formatCurrency(SERVICE_FEE)} service fee.`}
-            </p>
+            </Callout>
           )}
           {value > 0 && !tooMuch && (
             <p className="text-xs text-gray-500 mt-1">{formatCurrency(SERVICE_FEE)} service fee applies · total debit: {formatCurrency(value + SERVICE_FEE)}</p>

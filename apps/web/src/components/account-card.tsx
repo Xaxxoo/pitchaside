@@ -5,6 +5,8 @@ import type { PaymentType } from '@pitchaside/shared';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { btnPrimary, btnSecondary } from '@/components/buttons';
+import { Callout } from '@/components/callout';
+import { Steps } from '@/components/steps';
 import { formatCurrency, type GroupAccount } from '@/lib/api';
 import { formatAccountNumber, frequencyShort } from '@/lib/billing';
 import { claimPayment, type MyClaim } from '@/lib/player';
@@ -96,15 +98,32 @@ function PaidSheet({
         <h2 id="paid-title" className="font-display text-xl font-extrabold text-ink mt-2">
           {result === 'matched' ? (owes > 0 ? `Got it: ₦${owes.toLocaleString('en-NG')} still to pay` : 'Got it, you’re all paid') : 'Thanks, your organiser can see it'}
         </h2>
-        <p className="text-sm text-gray-600 mt-2" role="status">
-          {result === 'matched'
-            ? owes > 0
-              ? 'We found your transfer and matched it to you. It counts towards what you owe.'
-              : 'We found your transfer and matched it to you.'
-            : receipt
-              ? 'Your organiser has your receipt and checks it against the account. You’ll get a message either way.'
-              : `It’s matched as soon as it lands if your payment code or name is on it. If not, your organiser checks that you sent ₦${Number(sent).toLocaleString('en-NG')}.`}
-        </p>
+        {result === 'matched' ? (
+          <p className="text-sm text-gray-600 mt-2" role="status">
+            {owes > 0 ? 'We found your transfer and matched it to you. It counts towards what you owe.' : 'We found your transfer and matched it to you.'}
+          </p>
+        ) : (
+          // Not matched yet: what happens from here, in order, with what's done ticked
+          <div role="status" className="mt-4 text-left">
+            <Steps
+              heading="What happens next"
+              steps={
+                receipt
+                  ? [
+                      { title: `You sent ₦${Number(sent).toLocaleString('en-NG')}`, done: true },
+                      { title: 'Your organiser has the receipt', done: true },
+                      { title: 'They check it against the account', sub: 'Or it’s matched by itself when it lands' },
+                      { title: 'You get a message either way' },
+                    ]
+                  : [
+                      { title: `You told your organiser: ₦${Number(sent).toLocaleString('en-NG')}`, done: true },
+                      { title: 'It’s matched when it lands', sub: 'If your payment code or name is on it' },
+                      { title: 'If not, your organiser checks it', sub: 'You get a message either way' },
+                    ]
+              }
+            />
+          </div>
+        )}
       </Sheet>
     );
   }
@@ -177,14 +196,14 @@ function PaidSheet({
         )}
       </div>
       {reference && (
-        <p className="mt-3 rounded-2xl bg-chalk px-3.5 py-2.5 text-[13px] text-gray-700">
-          Put <b className="font-mono text-ink">{reference}</b> in the description and it’s matched as soon as it lands.
-        </p>
+        <Callout tone="info" className="mt-3" title={<>Put <span className="font-mono">{reference}</span> in the description</>}>
+          It’s matched to you as soon as it lands.
+        </Callout>
       )}
       {error && (
-        <p className="text-[13px] font-semibold text-kit-600 mt-2 text-left" role="alert">
+        <Callout tone="warn" live className="mt-2">
           {error}
-        </p>
+        </Callout>
       )}
     </Sheet>
   );
@@ -213,9 +232,9 @@ export function PayIntoCard({
   const [asking, setAsking] = useState(false);
   if (!account) {
     return (
-      <div className="rounded-3xl bg-chalk border border-gray-200 p-5 text-sm text-gray-600">
-        Payment details will appear here once your organiser&apos;s group account is ready.
-      </div>
+      <Callout tone="note" title="The account isn’t ready yet">
+        Your organiser is setting it up. Where to pay shows here once it is.
+      </Callout>
     );
   }
   return (
@@ -382,9 +401,9 @@ export function SendCard({
             )}
           </>
         ) : (
-          <p className="mt-3 rounded-2xl bg-white/[0.07] px-4 py-3 text-[13px] leading-snug text-white/80">
-            Your organiser hasn’t set up this group’s account yet. Where to send it shows here as soon as it’s ready.
-          </p>
+          <Callout tone="note" onDark className="mt-3" title="The account isn’t ready yet">
+            Your organiser is setting it up. Where to pay shows here once it is.
+          </Callout>
         )}
 
         {/* 3. How much, and what it's for */}

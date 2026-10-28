@@ -1,6 +1,7 @@
 'use client';
 
 import { PhoneHint, useTouched } from '@/components/phone-hint';
+import { Callout } from '@/components/callout';
 import { useState } from 'react';
 import { BallSpinner } from '@/components/skeleton';
 import { PasswordField } from '@/components/password-sign-in';
@@ -101,9 +102,9 @@ export function PlayerSignupForm({
   );
 
   const errorBox = error && (
-    <div role="alert" className="bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">
+    <Callout tone="warn" live>
       {error}
-    </div>
+    </Callout>
   );
 
   if (step === 'match' && match) {

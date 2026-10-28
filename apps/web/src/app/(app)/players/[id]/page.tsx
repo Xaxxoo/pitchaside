@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { CalloutIcon } from '@/components/callout';
 import { levelOf } from '@/lib/rating-level';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -320,6 +321,7 @@ export default function PlayerDetailPage() {
                 ) : (
                   // Typed so WhatsApp can't open it: say so, and the way to fix it.
                   <p className="mt-2 flex items-center gap-2 text-[12px] leading-snug text-kit-400">
+                    <CalloutIcon tone="warn" />
                     <span className="min-w-0">
                       <span className="tabular-nums">{player.phone}</span> won’t open WhatsApp.
                     </span>

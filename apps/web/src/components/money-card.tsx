@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Callout } from '@/components/callout';
 import Link from 'next/link';
 import { QRCodeCanvas } from 'qrcode.react';
 import { PaymentStatus, PaymentType } from '@pitchaside/shared';
@@ -334,18 +335,22 @@ export function MoneyCard({
 
         {/* No bank account yet: say so plainly instead of showing a ₦0 balance */}
         {!hasAccount && (
-          <div className="mt-4 rounded-2xl bg-white/[0.06] p-4">
-            <p className="text-sm font-bold text-white">No bank account yet</p>
-            <p className="mt-1 text-[13px] text-white/70 leading-snug">
-              Set one up so players can pay by transfer and see their payments matched automatically.
-            </p>
-            <Link
+          <Callout
+            tone="note"
+            onDark
+            className="mt-4"
+            title="No bank account yet"
+            action={
+              <Link
               href={moneyHref(group.id)}
-              className="press mt-3 inline-flex items-center justify-center h-11 px-4 rounded-xl bg-volt-400 text-sm font-bold text-ink hover:bg-volt-300 transition-colors"
+              className="press inline-flex items-center justify-center h-11 px-4 rounded-xl bg-volt-400 text-sm font-bold text-ink hover:bg-volt-300 transition-colors"
             >
               Set up account
             </Link>
-          </div>
+            }
+          >
+            Set one up so players can pay by transfer and get matched automatically.
+          </Callout>
         )}
 
         {/* Folded: the figure that matters, and anything that needs them */}

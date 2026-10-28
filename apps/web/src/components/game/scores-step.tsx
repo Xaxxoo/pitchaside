@@ -1,6 +1,7 @@
 'use client';
 
 import { retryKeys } from '@/lib/retry-keys';
+import { Callout } from '@/components/callout';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
@@ -451,7 +452,11 @@ export function ScoresStep({
           {busy === 'save' && <BallSpinner className="w-4 h-4" />}
           Save game: {name(draft.teamA)} {draft.scoreA}–{draft.scoreB} {name(draft.teamB)}
         </button>
-        {!lineup.locked && <p className="mt-2 text-center text-[12px] text-white/60">Saving the first score locks the teams.</p>}
+        {!lineup.locked && (
+          <Callout tone="note" onDark className="mt-2">
+            Saving the first score locks the teams.
+          </Callout>
+        )}
       </div>
 
     </>

@@ -1,6 +1,7 @@
 'use client';
 
 import { btnPrimary } from '@/components/buttons';
+import { Steps } from '@/components/steps';
 import { SessionVotingCard } from '@/components/ratings';
 import type { Lineup } from '@/lib/api';
 import type { GamePhase } from '@/lib/game-player';
@@ -67,10 +68,14 @@ export function FullTimeStep({
       {!ended && (
         <div className="rounded-3xl bg-white border border-gray-100 shadow-card p-5">
           <h3 className="font-display text-lg font-extrabold text-ink leading-tight">Full time</h3>
-          <p className="mt-1 text-[14px] leading-snug text-gray-600">
-            Tick who came. Anyone who didn’t owes nothing, and the vote link goes to the players who came.
-            {phase === 'before' ? ' You can end it early if it’s already been played.' : ''}
-          </p>
+          <Steps
+            className="mt-3"
+            steps={[
+              { title: 'Tick who came', sub: 'Anyone who didn’t owes nothing' },
+              { title: 'End the game', sub: phase === 'before' ? 'Early is fine if it’s been played' : undefined },
+              { title: 'The vote link goes out', sub: 'To the players who came' },
+            ]}
+          />
           <button onClick={onEnd} className={`${btnPrimary} w-full mt-4`}>
             End game &amp; send vote link
           </button>

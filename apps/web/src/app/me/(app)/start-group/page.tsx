@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Callout } from '@/components/callout';
 import { useRouter } from 'next/navigation';
 import { FormHero, FormShell, formCardClass } from '@/components/form-hero';
 import { KitLine } from '@/components/illustrations';
@@ -47,7 +48,7 @@ export default function StartGroupPage() {
         art={<KitLine className="w-full h-auto" />}
       />
       <form onSubmit={submit} className={formCardClass}>
-        {error && <div className="bg-kit-400/10 border border-kit-400/40 text-kit-600 text-sm rounded-xl px-4 py-3">{error}</div>}
+        {error && <Callout tone="warn" live>{error}</Callout>}
         <div>
           <label htmlFor="clubName" className="block text-xs font-bold text-gray-700 mb-1.5">
             Your organiser name

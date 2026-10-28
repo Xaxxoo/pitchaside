@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useId, useRef, useState } from 'react';
+import { Callout } from '@/components/callout';
+import { Steps } from '@/components/steps';
 import { IdentityForm } from '@/components/identity-form';
 import { useRouter } from 'next/navigation';
 import { QRCodeCanvas } from 'qrcode.react';
@@ -328,13 +330,27 @@ export function GroupAccountCard({
             </>
           ) : (
             <div className="mt-5">
-              <p className="text-sm text-white/70">
-                {!canOpen
-                  ? 'The group’s bank account isn’t open yet. Ask your club admin to open it: it’s in their name, with their BVN and NIN.'
-                  : hasId
-                    ? 'The group’s account isn’t open yet: the bank didn’t answer when the group was made. Try again.'
-                    : 'Add your BVN and NIN to open the group’s bank account. Players pay into it, and it’s in your name as the organiser.'}
-              </p>
+              {!canOpen ? (
+                <Callout tone="note" onDark title="The bank account isn’t open yet">
+                  Ask your club admin to open it: it’s in their name, with their BVN and NIN.
+                </Callout>
+              ) : hasId ? (
+                <Callout tone="warn" onDark title="The bank didn’t answer">
+                  The group’s account wasn’t opened when the group was made. Try again.
+                </Callout>
+              ) : (
+                // What it takes to get paid by transfer, in order
+                <Steps
+                  onDark
+                  heading="Get paid by transfer"
+                  note="3 steps"
+                  steps={[
+                    { title: 'Add your BVN and NIN', sub: 'The bank needs them to open an account in your name' },
+                    { title: 'The bank opens the group’s account', sub: 'In your name as the organiser' },
+                    { title: 'Players pay into it', sub: 'Each with their own code, so it’s matched to them' },
+                  ]}
+                />
+              )}
               {!canOpen ? null : showIdPrompt ? (
                 <div className="mt-4 bg-white rounded-2xl p-4">
                   <p className="text-xs text-gray-500 mb-3">The bank opens the account in your name. Your number isn’t shown to players.</p>

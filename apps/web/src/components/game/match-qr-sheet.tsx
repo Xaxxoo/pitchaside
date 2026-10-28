@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
+import { Steps } from '@/components/steps';
 import { QRCodeCanvas } from 'qrcode.react';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
@@ -59,10 +60,10 @@ export function MatchQrSheet({
       () => toast.error('Could not copy. Press and hold the link to copy it instead.'),
     );
 
-  const lines = [
-    `Players in ${groupName} go straight to this game.`,
-    `Anyone new signs up, joins ${groupName}, and lands on this game.`,
-    takesReplies ? 'On the game they tap “I’m in” and see what to pay.' : 'New players are put on this game and see what to pay.',
+  const steps = [
+    { title: 'They scan the code', sub: `Anyone in ${groupName} goes straight to this game` },
+    { title: `New players sign up and join`, sub: `${groupName}, then on to this game` },
+    takesReplies ? { title: 'They tap “I’m in”', sub: 'And see what to pay' } : { title: 'They’re on the game', sub: 'And see what to pay' },
   ];
 
   return (
@@ -99,14 +100,7 @@ export function MatchQrSheet({
               <QRCodeCanvas value={url} size={208} level="M" role="img" aria-label={`QR code for this ${groupName} game`} />
             </div>
           </div>
-          <ul className="mt-5 space-y-2 text-[14px] leading-snug text-gray-700">
-            {lines.map((l) => (
-              <li key={l} className="flex gap-2.5">
-                <span className="mt-1.5 w-1.5 h-1.5 shrink-0 rounded-full bg-volt-500" aria-hidden />
-                {l}
-              </li>
-            ))}
-          </ul>
+          <Steps className="mt-5" heading="What happens when they scan" steps={steps} />
         </>
       )}
     </Sheet>

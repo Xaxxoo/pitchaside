@@ -1,6 +1,7 @@
 'use client';
 
 import { useId, useState } from 'react';
+import { Callout } from '@/components/callout';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { btnPrimary } from '@/components/buttons';
@@ -52,9 +53,9 @@ export function ConfirmEmailSheet({ email, devCode, onClose, onConfirmed }: { em
           <b className="block text-ink [overflow-wrap:anywhere]">{email}</b>
         </p>
         {devCode && (
-          <p className="text-xs rounded-xl bg-sky-300/30 border border-dashed border-sky-300 px-3 py-2 text-ink">
-            Test mode — no email was sent. Your code is <span className="font-mono font-bold">{devCode}</span>
-          </p>
+          <Callout tone="info" title="Test mode: no email was sent">
+            Your code is <span className="font-mono font-bold">{devCode}</span>
+          </Callout>
         )}
         <input
           id="confirm-email-code"
@@ -71,11 +72,15 @@ export function ConfirmEmailSheet({ email, devCode, onClose, onConfirmed }: { em
           aria-describedby={error ? 'confirm-email-error' : undefined}
         />
         {error && (
-          <p id="confirm-email-error" role="alert" className="text-sm font-semibold text-kit-600">
-            {error}
-          </p>
+          <div id="confirm-email-error">
+            <Callout tone="warn" live>
+              {error}
+            </Callout>
+          </div>
         )}
-        <p className="text-xs text-gray-500">Not in your inbox? Check spam, or close this and tap Playing again in a minute for a new code.</p>
+        <Callout tone="info" title="Not in your inbox?">
+          Check spam, or close this and tap Playing again in a minute for a new code.
+        </Callout>
       </form>
     </Sheet>
   );

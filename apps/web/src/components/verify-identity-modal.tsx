@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useId, useState } from 'react';
+import { Callout } from '@/components/callout';
 import { Sheet } from '@/components/sheet';
 import { IdentityForm } from '@/components/identity-form';
 
@@ -56,9 +57,9 @@ export function VerifyIdentityModal() {
       >
         Add later
       </button>
-      <p className="text-xs text-gray-500 mt-2 text-center">
-        Until you add both, your groups can’t get a collection account. You can add them any time in Settings.
-      </p>
+      <Callout tone="note" className="mt-3" title="Needed before players can pay by transfer">
+        Without both, your groups can’t get an account. Add them any time in Settings.
+      </Callout>
     </Sheet>
   );
 }
