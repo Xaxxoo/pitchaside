@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { ConfirmSheet } from '@/components/match-day/confirm-sheet';
 import { useToast } from '@/components/toast';
 import { BallSpinner } from '@/components/skeleton';
 import {
@@ -116,7 +117,7 @@ function PayeeForm({
   }
 
   return (
-    <form onSubmit={save} className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 space-y-3">
+    <form onSubmit={save} className="p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-base font-bold text-ink">{current ? 'Change payee' : 'Who do you pay for the pitch?'}</h3>
         <button type="button" onClick={onCancel} className="text-xs text-gray-500 hover:text-ink">
@@ -202,6 +203,7 @@ export function PayeeCard({
   const [amount, setAmount] = useState('');
   const [pin, setPin] = useState('');
   const [sending, setSending] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   useEffect(() => {
     getGroupPayee(groupId)
@@ -264,7 +266,7 @@ export function PayeeCard({
     ) : (
       <button
         onClick={() => setEditing(true)}
-        className="w-full flex items-center gap-3 px-4 min-h-16 py-3 text-left bg-white rounded-3xl border border-gray-100 shadow-card hover:bg-chalk transition-colors"
+        className="press w-full flex items-center gap-3 px-4 min-h-16 py-3 text-left hover:bg-chalk transition-colors"
       >
         <span className="w-10 h-10 rounded-xl bg-volt-300 text-ink flex items-center justify-center shrink-0" aria-hidden>
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
@@ -273,7 +275,7 @@ export function PayeeCard({
         </span>
         <span className="flex-1 min-w-0">
           <span className="block text-[15px] font-bold text-ink leading-snug">Save your pitch owner</span>
-          <span className="block text-xs text-gray-500 mt-0.5">Add the pitch owner or facility manager once, then pay them in one tap.</span>
+          <span className="block text-xs text-gray-500 mt-0.5 truncate">Save them once, pay them in one tap.</span>
         </span>
         <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
@@ -284,30 +286,48 @@ export function PayeeCard({
 
   const tooMuch = Number(amount) + SERVICE_FEE > available;
 
-  return (
-    <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-[10px] font-extrabold uppercase tracking-[0.16em] text-gray-500">{payee.label}</p>
-          <p className="text-base font-extrabold text-ink truncate mt-0.5">{payee.name}</p>
-          <p className="text-xs text-gray-500">
-            {payee.bankName} · ···{payee.accountNumber.slice(-4)}
-          </p>
-        </div>
-        <button onClick={() => setEditing(true)} className="shrink-0 text-xs font-bold text-gray-500 hover:text-ink">
-          Change
-        </button>
-      </div>
+  const initials = payee.name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase();
 
-      {!paying ? (
-        <button
-          onClick={startPaying}
-          className="mt-4 w-full py-3 bg-volt-400 text-ink font-bold rounded-xl hover:bg-volt-300 transition-colors"
-        >
+  return (
+    <div className="px-4 py-3.5">
+      <ConfirmSheet
+        open={confirmRemove}
+        title={`Remove ${payee.name}?`}
+        message={`They come off this group’s ${payee.label.toLowerCase()}. Money already sent to them isn’t affected.`}
+        confirmLabel="Remove"
+        cancelLabel="Keep them"
+        danger
+        onConfirm={() => {
+          setConfirmRemove(false);
+          void remove();
+        }}
+        onCancel={() => setConfirmRemove(false)}
+      />
+      {/* Who, then the one tap to pay them: the button on its own line so the details never get cut */}
+      <div className="flex items-center gap-3">
+        <span className="w-10 h-10 shrink-0 rounded-full bg-volt-300 text-ink flex items-center justify-center font-display text-[14px] font-extrabold" aria-hidden>
+          {initials}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-bold text-ink truncate">{payee.name}</span>
+          <span className="block text-[12px] text-gray-500 truncate">
+            {payee.label} · {payee.bankName} ···{payee.accountNumber.slice(-4)}
+          </span>
+        </span>
+      </div>
+      {!paying && (
+        <button onClick={startPaying} className="press mt-3 w-full min-h-12 rounded-2xl bg-volt-400 text-ink text-[15px] font-bold tabular-nums hover:bg-volt-300 transition-colors">
           Pay {payee.amount ? formatCurrency(payee.amount) : payee.name.split(' ')[0]}
         </button>
-      ) : (
-        <form onSubmit={pay} className="mt-4 space-y-2.5">
+      )}
+
+      {paying ? (
+        <form onSubmit={pay} className="mt-3 space-y-2.5">
           <div>
             <label className="text-xs font-semibold text-gray-600 mb-1 block">Amount (₦)</label>
             <input type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className={input} autoFocus />
@@ -335,12 +355,16 @@ export function PayeeCard({
             </button>
           </div>
         </form>
-      )}
-
-      {!paying && (
-        <button onClick={remove} className="mt-2 w-full text-[11px] font-semibold text-gray-500 hover:text-kit-600">
-          Remove {payee.label.toLowerCase()}
-        </button>
+      ) : (
+        // Looking after the saved details: quiet, out of the way of paying
+        <div className="mt-1 flex items-center justify-center gap-5">
+          <button onClick={() => setEditing(true)} className="min-h-9 text-[12px] font-bold text-pitch-700 hover:text-ink">
+            Change details
+          </button>
+          <button onClick={() => setConfirmRemove(true)} className="min-h-9 text-[12px] font-bold text-gray-500 hover:text-kit-600">
+            Remove
+          </button>
+        </div>
       )}
     </div>
   );
