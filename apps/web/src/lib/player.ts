@@ -443,7 +443,7 @@ export function getMatchDay(sessionId: string) {
 
 export function addCaptainGame(
   sessionId: string,
-  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+  game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
 ) {
   return request<Lineup>('POST', `/me/games/${sessionId}/match-day/games`, game);
 }

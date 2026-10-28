@@ -40,6 +40,13 @@ export class SessionGame {
   @Column({ name: 'keeper_b', type: 'uuid', nullable: true })
   keeperB: string | null;
 
+  /**
+   * Players on either side who sat this whole game out (a side with more players than the pitch
+   * takes). Null or empty: everyone on both sides played it.
+   */
+  @Column({ name: 'sat_out', type: 'jsonb', nullable: true })
+  satOut: string[] | null;
+
   /** "Tunde (organiser)", "Ada (captain)": who saved the score. */
   @Column({ name: 'recorded_by', type: 'varchar', nullable: true })
   recordedBy: string | null;

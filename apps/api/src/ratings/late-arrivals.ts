@@ -23,7 +23,17 @@ export function lateArrivals(
   return placed;
 }
 
-/** Whether a game counts for a player: always, unless they joined their side after it was saved. */
-export function playedIn(payment: { joinedSideAt?: Date | null } | null | undefined, game: { createdAt: Date }) {
-  return !payment?.joinedSideAt || new Date(game.createdAt).getTime() >= new Date(payment.joinedSideAt).getTime();
+/**
+ * Whether a game counts for a player: unless they joined their side after it was saved, were
+ * marked as sitting it out, or had left before it started (`leftAt`, from "left early").
+ * `startedAt`: when the game kicked off (its save time less how long it lasted).
+ */
+export function playedIn(
+  payment: { playerId?: string; joinedSideAt?: Date | null } | null | undefined,
+  game: { createdAt: Date; satOut?: string[] | null },
+  left?: { leftAt: number; startedAt: number } | null,
+) {
+  if (payment?.joinedSideAt && new Date(game.createdAt).getTime() < new Date(payment.joinedSideAt).getTime()) return false;
+  if (payment?.playerId && game.satOut?.includes(payment.playerId)) return false;
+  return !left || left.startedAt < left.leftAt;
 }

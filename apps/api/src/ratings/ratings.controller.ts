@@ -143,6 +143,13 @@ export class ScoreDto {
   @IsOptional()
   @IsUUID()
   keeperB?: string | null;
+
+  /** Players who sat this whole game out (anyone on either side; the keeper can't). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(60)
+  @IsUUID('all', { each: true })
+  satOut?: string[];
 }
 
 export class GameDto {
@@ -191,6 +198,13 @@ export class GameDto {
   @IsOptional()
   @IsUUID()
   keeperB?: string | null;
+
+  /** Players who sat this whole game out (anyone on either side; the keeper can't). */
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(60)
+  @IsUUID('all', { each: true })
+  satOut?: string[];
 }
 
 class RatingModeDto {

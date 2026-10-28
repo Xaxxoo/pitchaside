@@ -168,6 +168,12 @@ export function BallotSteps({
       >
         {face(p)}
         <span className="w-full truncate text-[13px] font-bold text-ink leading-tight">{short(p)}</span>
+        {/* Missed some of their side's games: voters see it before they pick */}
+        {p.of != null && p.of > 0 && p.played != null && p.played < p.of && (
+          <span className="w-full truncate text-[11px] font-semibold text-gray-500 leading-tight tabular-nums">
+            Played {p.played} of {p.of}
+          </span>
+        )}
         {selected && (
           <span className="absolute top-1.5 right-1.5 min-w-6 h-6 px-1.5 rounded-full bg-ink text-volt-300 text-[11px] font-extrabold leading-6 text-center animate-pop-in" aria-hidden>
             {mark ?? '✓'}

@@ -275,6 +275,31 @@ describe('best on your team', () => {
   });
 });
 
+describe('who played each game', () => {
+  // Ada, Seyi and Tolu on A; Bisi and Kemi on B. Four games; Tolu sat out three of them.
+  const day = () => game({ payments: [pay('ada', { team: 'A' }), pay('seyi', { team: 'A' }), pay('tolu', { team: 'A' }), pay('bisi', { team: 'B' }), pay('kemi', { team: 'B' })] });
+  const four = [0, 1, 2, 3].map((i) => ({ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0, satOut: i < 3 ? ['tolu'] : null, createdAt: new Date(Date.now() - (4 - i) * HOUR) }));
+
+  it('the ballot says how many games each player played', async () => {
+    const b = await setup(day(), { games: four as never }).service.getBallot('tok');
+    expect(b.squad.find((p) => p.id === 'tolu')).toMatchObject({ played: 1, of: 4 });
+    expect(b.squad.find((p) => p.id === 'ada')).toMatchObject({ played: 4, of: 4 });
+  });
+
+  it('a vote for someone who played under half the games counts half', async () => {
+    const closed = { ...day(), voteOpensAt: new Date(Date.now() - 100 * HOUR) };
+    // Tolu gets 3 POTM votes but played 1 of 4 (1.5); Ada gets 2 and played them all (2)
+    const votes = [
+      ...['seyi', 'bisi', 'kemi'].map((voterId) => ({ voterId, nomineeId: 'tolu', category: VoteCategory.POTM })),
+      ...['tolu', 'x'].map((voterId) => ({ voterId, nomineeId: 'ada', category: VoteCategory.POTM })),
+    ];
+    const r = await setup(closed as never, { votes, games: four as never }).service.getPublicResults('tok');
+    const potm = r.categories.find((c) => c.key === VoteCategory.POTM)!;
+    expect(potm.standings[0].playerId).toBe('ada');
+    expect(potm.standings.find((x) => x.playerId === 'tolu')).toMatchObject({ count: 3, played: 1, of: 4 });
+  });
+});
+
 describe('the new ballot', () => {
   // Ten played: Ada and four teammates on A, five on B.
   const ten = () =>

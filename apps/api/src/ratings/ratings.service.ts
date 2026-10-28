@@ -21,7 +21,7 @@ import { SessionGame } from './entities/session-game.entity';
 import { MatchGoal } from './entities/match-goal.entity';
 import { MatchEvent, type MatchEventKind } from './entities/match-event.entity';
 import { GamePaid, paidForGames } from '../payments/game-dues';
-import { localDate } from '../common/time.util';
+import { localDate, zonedInstant } from '../common/time.util';
 import { shortDate } from '../common/format.util';
 import { NotificationsService } from '../notifications/notifications.service';
 import { clockRunning, timerChange, timerOf } from './timer';
@@ -105,6 +105,12 @@ export const VII_MIN_OTHER_TEAMS = 2;
 export const AWARD_MIN_VOTERS = 3;
 
 const titleOf = (key: VoteCategory) => CATEGORIES.find((c) => c.key === key)?.title ?? key;
+
+/**
+ * A Player of the Match or Best on your team vote for someone who played under half their side's
+ * games (a sub who came on once) counts half: the vote still counts, it just can't carry them alone.
+ */
+export const VOTE_LIGHT = 0.5;
 
 /** Ratings need a few games of votes before they reach the extremes. */
 const RATING_PRIOR = 6;
@@ -459,9 +465,13 @@ export class RatingsService {
    */
   private async results(session: Session) {
     const hidden = this.window(session).open;
-    const votes = await this.votesRepo.find({ where: { sessionId: session.id } });
+    const [votes, games] = await Promise.all([
+      this.votesRepo.find({ where: { sessionId: session.id } }),
+      this.gamesRepo.find({ where: { sessionId: session.id } }),
+    ]);
     const squad = this.squad(session);
     const byId = new Map(squad.map((p) => [p.id, p]));
+    const inv = this.involvement(session, games);
     const ballots = new Set(votes.map((v) => v.voterId)).size;
     const sideOf = (id: string) => this.teamOf(session, session.payments?.find((p) => p.playerId === id)?.team ?? null);
 
@@ -470,8 +480,10 @@ export class RatingsService {
       const counts = new Map<string, number>();
       const score = new Map<string, number>();
       for (const v of votes) {
-        const weight = v.category === category ? 1 : category === VoteCategory.VII && v.category === VoteCategory.VII_SUB ? 0.5 : 0;
-        if (!weight) continue;
+        const base = v.category === category ? 1 : category === VoteCategory.VII && v.category === VoteCategory.VII_SUB ? 0.5 : 0;
+        if (!base) continue;
+        // Played under half their side's games: a POTM or best-on-team vote counts half
+        const weight = category === VoteCategory.POTM || category === VoteCategory.TEAMMATE ? base * this.voteWeight(inv, v.nomineeId) : base;
         counts.set(v.nomineeId, (counts.get(v.nomineeId) ?? 0) + 1);
         score.set(v.nomineeId, (score.get(v.nomineeId) ?? 0) + weight);
       }
@@ -479,7 +491,11 @@ export class RatingsService {
         .map(([playerId, count]) => ({ player: byId.get(playerId) ?? null, playerId, count, score: score.get(playerId) ?? 0 }))
         .filter((s) => s.player && (!team || sideOf(s.playerId) === team))
         .sort((x, y) => y.score - x.score || y.count - x.count)
-        .map(({ score: _score, ...rest }) => rest);
+        .map(({ score: _score, ...rest }) => {
+          // How much of the day they played, when it was under half: the results say why their votes count half
+          const x = inv.get(rest.playerId);
+          return x && this.voteWeight(inv, rest.playerId) < 1 ? { ...rest, played: x.played, of: x.of } : rest;
+        });
     };
     const votersIn = (category: VoteCategory) => new Set(votes.filter((v) => v.category === category).map((v) => v.voterId)).size;
 
@@ -582,6 +598,7 @@ export class RatingsService {
     const w = this.window(session);
     const r = await this.results(session);
     const keepers = this.viiAsked(session) ? await this.keepersToday(session) : null;
+    const inv = this.involvement(session, await this.gamesRepo.find({ where: { sessionId: session.id } }));
     return {
       groupName: session.group?.name,
       date: session.date,
@@ -601,7 +618,9 @@ export class RatingsService {
       squad: this.squad(session).map((p) => {
         const pay = session.payments?.find((x) => x.playerId === p.id);
         // Where they played today (else usually), so the Best VII can list them by line
-        return { ...p, team: this.teamOf(session, pay?.team ?? null), position: pay?.position ?? pay?.player?.position ?? null };
+        // Games they played of their side's, so voters can see who was on the pitch most
+        const x = inv.get(p.id);
+        return { ...p, team: this.teamOf(session, pay?.team ?? null), position: pay?.position ?? pay?.player?.position ?? null, played: x?.played ?? 0, of: x?.of ?? 0 };
       }),
       teamCount: session.teamCount,
       captains: this.captainsOf(session),
@@ -918,6 +937,7 @@ export class RatingsService {
         seconds: g.seconds ?? null,
         keeperA: g.keeperA ?? null,
         keeperB: g.keeperB ?? null,
+        satOut: g.satOut ?? null,
         recordedBy: g.recordedBy ?? null,
         goals: goals
           .filter((x) => x.gameId === g.id)
@@ -1298,7 +1318,7 @@ export class RatingsService {
   async captainAddGame(
     sessionId: string,
     playerIds: string[],
-    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
   ) {
     const { organizationId, signedAs, team } = await this.captainToday(sessionId, playerIds);
     if (input.teamA !== team && input.teamB !== team) throw new BadRequestException('You can only add games your team played');
@@ -1544,7 +1564,7 @@ export class RatingsService {
   async addGame(
     sessionId: string,
     organizationId: string,
-    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+    input: { teamA: string; teamB: string; scoreA: number; scoreB: number; goals?: GoalInput[]; clientKey?: string; seconds?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
     recordedBy?: string,
   ) {
     const session = await this.loadSession(sessionId, organizationId);
@@ -1567,6 +1587,7 @@ export class RatingsService {
       clientKey: input.clientKey ?? null,
       seconds: input.seconds != null ? Math.max(0, Math.min(7200, Math.round(input.seconds))) : null,
     });
+    game.satOut = this.satOutFor(session, game, input.satOut);
     const goals = input.goals ?? [];
     this.checkGoals(session, game, [], goals);
     await this.onceByKey(this.gamesRepo, session.id, input.clientKey, () =>
@@ -1660,7 +1681,7 @@ export class RatingsService {
     sessionId: string,
     gameId: string,
     organizationId: string,
-    input: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null },
+    input: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
   ) {
     const session = await this.loadSession(sessionId, organizationId);
     if (session.status === SessionStatus.CANCELLED) throw new BadRequestException('This game was called off');
@@ -1675,6 +1696,9 @@ export class RatingsService {
         scoreB: input.scoreB === undefined ? game.scoreB : clean(input.scoreB),
         ...this.keepersFor(session, { keeperA: input.keeperA, keeperB: input.keeperB }, game),
       };
+      // Who sat it out: left out stays as it is; checked against the keepers it will have
+      const satOut = input.satOut === undefined ? game.satOut : this.satOutFor(session, { ...game, ...next }, input.satOut);
+      if (satOut?.some((id) => id === next.keeperA || id === next.keeperB)) throw new BadRequestException('The keeper played this game: they can’t sit it out');
       for (const [team, score] of [[game.teamA, next.scoreA], [game.teamB, next.scoreB]] as const) {
         const named = goals.filter((g) => g.team === team).length;
         if (named > score) {
@@ -1683,9 +1707,63 @@ export class RatingsService {
           );
         }
       }
-      await tx.update(SessionGame, { id: game.id }, next);
+      await tx.update(SessionGame, { id: game.id }, { ...next, satOut });
     });
     return this.getLineup(sessionId, organizationId);
+  }
+
+  /**
+   * Whether a game counts for a player (late-arrivals.ts playedIn): not if they came after it, sat
+   * it out, or had left before it started ("left early" in the day's plan: minutes after kick-off).
+   */
+  private played(session: Session, pay: { playerId?: string; joinedSideAt?: Date | null } | null | undefined, game: SessionGame) {
+    const away = pay?.playerId != null ? session.plan?.away?.[pay.playerId] : undefined;
+    const kickoff = kickoffFor(session);
+    let left: { leftAt: number; startedAt: number } | null = null;
+    if (away != null && kickoff) {
+      const leftAt = zonedInstant(String(session.date).slice(0, 10), kickoff).getTime() + away * 60_000;
+      // When it kicked off: its save time less how long it lasted (else the plan's game length)
+      const lasted = game.seconds ?? (session.plan?.gameMinutes ?? 0) * 60;
+      left = { leftAt, startedAt: new Date(game.createdAt).getTime() - lasted * 1000 };
+    }
+    return playedIn(pay, game, left);
+  }
+
+  /**
+   * How much of the day each player played: games they played of the games their side played.
+   * A vote for someone who played under half of them counts half (see VOTE_LIGHT).
+   */
+  private involvement(session: Session, games: SessionGame[]) {
+    const out = new Map<string, { played: number; of: number }>();
+    for (const pay of session.payments ?? []) {
+      if (!pay.player || pay.attendance === 'no_show') continue;
+      const side = this.teamOf(session, pay.team);
+      const mine = side ? games.filter((g) => g.teamA === side || g.teamB === side) : [];
+      out.set(pay.playerId, { played: mine.filter((g) => this.played(session, pay, g)).length, of: mine.length });
+    }
+    return out;
+  }
+
+  /** A Player of the Match or Best on your team vote for someone who played under half their side's games counts this much. */
+  private voteWeight(inv: Map<string, { played: number; of: number }>, id: string) {
+    const x = inv.get(id);
+    return x && x.of > 0 && x.played * 2 < x.of ? VOTE_LIGHT : 1;
+  }
+
+  /**
+   * Who sat a game out, checked: players on one of its two sides, never its keepers, each once.
+   * Empty means everyone played (stored as null).
+   */
+  private satOutFor(session: Session, game: Pick<SessionGame, 'teamA' | 'teamB' | 'keeperA' | 'keeperB'>, ids: string[] | undefined | null) {
+    if (!ids?.length) return null;
+    const sides = new Set([game.teamA, game.teamB]);
+    const unique = [...new Set(ids)];
+    for (const id of unique) {
+      const pay = (session.payments ?? []).find((p) => p.playerId === id && p.attendance !== 'no_show');
+      if (!pay || !sides.has(this.teamOf(session, pay.team) ?? '')) throw new BadRequestException('Only players on the two teams in this game can sit it out');
+      if (id === game.keeperA || id === game.keeperB) throw new BadRequestException('The keeper played this game: they can’t sit it out');
+    }
+    return unique;
   }
 
   /** Who was in goal, checked: anyone playing today, for either side, never both (see keepers.ts). */
@@ -1805,16 +1883,18 @@ export class RatingsService {
   /** One match day as match-rating.ts reads it. Late arrivals count only from the game they joined. */
   private steadyDay(session: Session, games: SessionGame[], goals: MatchGoal[], events: MatchEvent[], votes: Vote[]): DayInput {
     const pays = (session.payments ?? []).filter((p) => p.player && p.attendance !== 'no_show');
-    const side = (team: string, game: SessionGame) => pays.filter((p) => this.teamOf(session, p.team) === team && playedIn(p, game)).map((p) => p.playerId);
+    const side = (team: string, game: SessionGame) => pays.filter((p) => this.teamOf(session, p.team) === team && this.played(session, p, game)).map((p) => p.playerId);
     const count = (kind: string) => {
       const m: Record<string, number> = {};
       for (const e of events) if (e.kind === kind) m[e.playerId] = (m[e.playerId] ?? 0) + 1;
       return m;
     };
     const sv = this.window(session).open ? [] : votes;
-    const tally = (cats: VoteCategory[], half?: VoteCategory) => {
+    // Votes for someone who played under half their side's games count half (VOTE_LIGHT)
+    const inv = this.involvement(session, games);
+    const tally = (cats: VoteCategory[]) => {
       const m = new Map<string, number>();
-      for (const v of sv) if (cats.includes(v.category)) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + (v.category === half ? 0.5 : 1));
+      for (const v of sv) if (cats.includes(v.category)) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + this.voteWeight(inv, v.nomineeId));
       return m;
     };
     const potm = tally([VoteCategory.POTM]);
@@ -1864,7 +1944,7 @@ export class RatingsService {
     for (const session of sessions) {
       // Who was on a side for this game: someone who came late only from when they joined it.
       const side = (team: string, g: SessionGame) =>
-        (session.payments ?? []).filter((p) => p.player && this.teamOf(session, p.team) === team && playedIn(p, g)).map((p) => p.playerId);
+        (session.payments ?? []).filter((p) => p.player && this.teamOf(session, p.team) === team && this.played(session, p, g)).map((p) => p.playerId);
       for (const g of bySession.get(session.id) ?? []) {
         replay.push({ sideA: side(g.teamA, g), sideB: side(g.teamB, g), scoreA: g.scoreA, scoreB: g.scoreB });
       }
@@ -1923,9 +2003,11 @@ export class RatingsService {
         const squad = this.squad(session);
         const sideOf = (id: string) => this.teamOf(session, session.payments?.find((p) => p.playerId === id)?.team ?? null);
 
+        // Votes for someone who played under half their side's games count half (VOTE_LIGHT)
+        const inv = this.involvement(session, gamesBySession.get(session.id) ?? []);
         const countsIn = (category: VoteCategory) => {
           const m = new Map<string, number>();
-          for (const v of sv) if (v.category === category) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + 1);
+          for (const v of sv) if (v.category === category) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + this.voteWeight(inv, v.nomineeId));
           return m;
         };
         // Player of the Match = most POTM votes (ties share it).
@@ -2025,7 +2107,7 @@ export class RatingsService {
           if (side) {
             const pay = session.payments?.find((p) => p.playerId === member.id);
             for (const g of gamesBySession.get(session.id) ?? []) {
-              if ((g.teamA !== side && g.teamB !== side) || !playedIn(pay, g)) continue;
+              if ((g.teamA !== side && g.teamB !== side) || !this.played(session, pay, g)) continue;
               const mine = g.teamA === side ? g.scoreA : g.scoreB;
               const theirs = g.teamA === side ? g.scoreB : g.scoreA;
               if (mine > theirs) s.record.w += 1;
@@ -2091,7 +2173,7 @@ export class RatingsService {
         const dayGames = games.filter((g) => g.sessionId === s.id);
         const record = { w: 0, d: 0, l: 0 };
         for (const g of dayGames) {
-          if (!myTeam || (g.teamA !== myTeam && g.teamB !== myTeam) || !playedIn(pay, g)) continue;
+          if (!myTeam || (g.teamA !== myTeam && g.teamB !== myTeam) || !this.played(s, pay, g)) continue;
           const mine = g.teamA === myTeam ? g.scoreA : g.scoreB;
           const theirs = g.teamA === myTeam ? g.scoreB : g.scoreA;
           if (mine > theirs) record.w++;

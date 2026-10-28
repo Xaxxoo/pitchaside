@@ -26,11 +26,11 @@ const KEYS = Object.keys(TEAMS) as TeamKey[];
 export interface ScoresApi {
   addGame: (
     sessionId: string,
-    game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null },
+    game: { teamA: TeamKey; teamB: TeamKey; scoreA: number; scoreB: number; goals?: GoalInput[]; seconds?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] },
   ) => Promise<Lineup>;
   deleteGame: (sessionId: string, gameId: string) => Promise<Lineup>;
   /** Correct a saved game's score: the organiser's only. */
-  updateGame?: (sessionId: string, gameId: string, change: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null }) => Promise<Lineup>;
+  updateGame?: (sessionId: string, gameId: string, change: { scoreA?: number; scoreB?: number; keeperA?: string | null; keeperB?: string | null; satOut?: string[] }) => Promise<Lineup>;
   addGoal: (sessionId: string, gameId: string, goal: GoalInput) => Promise<Lineup>;
   deleteGoal: (sessionId: string, goalId: string) => Promise<Lineup>;
   addEvent: (sessionId: string, event: { playerId: string; kind: MatchEventKind }) => Promise<Lineup>;
@@ -105,6 +105,8 @@ export function ScoresStep({
     scoreB: 0,
     goals: [] as GoalInput[],
     keepers: {} as Partial<Record<TeamKey, string | null>>,
+    // Who sat this game out on each side (empty: everyone played). Starts empty each game: subs rotate.
+    out: {} as Partial<Record<TeamKey, string[]>>,
   });
   // The game being played is kept on this phone until it's saved: a refresh, a lost signal or
   // leaving the page doesn't wipe a score that was never sent.
@@ -113,7 +115,7 @@ export function ScoresStep({
   useEffect(() => {
     try {
       const kept = JSON.parse(localStorage.getItem(draftKey) ?? 'null');
-      if (kept && typeof kept.scoreA === 'number' && typeof kept.scoreB === 'number' && Array.isArray(kept.goals)) setDraft({ keepers: {}, ...kept });
+      if (kept && typeof kept.scoreA === 'number' && typeof kept.scoreB === 'number' && Array.isArray(kept.goals)) setDraft({ keepers: {}, out: {}, ...kept });
     } catch {
       // Nothing kept: start from 0–0.
     }
@@ -171,6 +173,8 @@ export function ScoresStep({
   const [choosing, setChoosing] = useState<'teamA' | 'teamB' | null>(null);
   // Picking who's in goal: for a side of the game being played, or of a game already saved.
   const [keeperFor, setKeeperFor] = useState<{ team: TeamKey; side: 'teamA' | 'teamB'; gameId?: string } | null>(null);
+  // "Who played this game?": a side of the game being played, or of a saved one
+  const [playedFor, setPlayedFor] = useState<{ team: TeamKey; gameId?: string } | null>(null);
   const keeperTitle = useId();
   const [busy, setBusy] = useState<string | null>(null);
   const [removing, setRemoving] = useState<MatchGame | null>(null);
@@ -242,6 +246,15 @@ export function ScoresStep({
     // Taken off the game since: not recorded, rather than a name nobody can find
     return id && lineup.squad.some((m) => m.id === id) ? id : null;
   };
+  /** Everyone on a team today. */
+  const members = (t: TeamKey) => lineup.squad.filter((m) => m.team === t);
+  /** Who's sitting the game being played out for a team: on it, and not its keeper. */
+  const outOf = (t: TeamKey) => (draft.out?.[t] ?? []).filter((id) => members(t).some((m) => m.id === id) && id !== keeperOf(t));
+  /** A saved game's line for one side: "All 7 played" or "2 sat out". */
+  const playedLine = (t: TeamKey, out: string[]) => {
+    const mine = out.filter((id) => members(t).some((m) => m.id === id)).length;
+    return mine ? `${mine} sat out` : `All ${members(t).length} played`;
+  };
   /** A keeper from another team (or none): borrowed. */
   const borrowedBy = (id: string | null | undefined, t: TeamKey) => !!id && lineup.squad.find((m) => m.id === id)?.team !== t;
 
@@ -264,10 +277,11 @@ export function ScoresStep({
     setBusy('save');
     try {
       const { teamA, teamB, scoreA, scoreB, goals } = draft;
-      onLineup(await api.addGame(sessionId, { teamA, teamB, scoreA, scoreB, goals, seconds: playedSeconds(), keeperA: keeperOf(draft.teamA), keeperB: keeperOf(draft.teamB) }));
+      const satOut = [...outOf(teamA), ...outOf(teamB)];
+      onLineup(await api.addGame(sessionId, { teamA, teamB, scoreA, scoreB, goals, seconds: playedSeconds(), keeperA: keeperOf(draft.teamA), keeperB: keeperOf(draft.teamB), ...(satOut.length ? { satOut } : {}) }));
       buzz([12, 40, 18]);
       // Who's in goal carries on to the next game (the same team usually keeps the same keeper)
-      setDraft((d) => ({ ...d, scoreA: 0, scoreB: 0, goals: [], keepers: { ...d.keepers, [d.teamA]: keeperOf(d.teamA), [d.teamB]: keeperOf(d.teamB) } }));
+      setDraft((d) => ({ ...d, scoreA: 0, scoreB: 0, goals: [], out: {}, keepers: { ...d.keepers, [d.teamA]: keeperOf(d.teamA), [d.teamB]: keeperOf(d.teamB) } }));
     } catch (err) {
       onError(err instanceof Error ? err.message : 'The score didn’t save. Try again.');
     } finally {
@@ -378,6 +392,16 @@ export function ScoresStep({
           onClick={() => setKeeperFor({ team: t, side })}
           label={`In goal for ${name(t)}`}
         />
+        {/* Who played: everyone unless marked; a sub who sat this one out counts for less */}
+        {members(t).length > 1 && (
+          <button
+            onClick={() => setPlayedFor({ team: t })}
+            aria-label={`Who played for ${name(t)}: ${outOf(t).length ? `${outOf(t).length} sat out` : 'everyone'}. Change`}
+            className={`press max-w-full min-h-11 px-3 rounded-full text-[12px] font-bold hover:bg-white/10 ${outOf(t).length ? 'text-volt-300' : 'text-white/70'}`}
+          >
+            {outOf(t).length ? `${outOf(t).length} sat out` : `All ${members(t).length} played`}
+          </button>
+        )}
         {sideGoals.length > 0 && (
           <ul className="max-w-full flex flex-col items-center gap-1 text-[12px] leading-snug font-semibold text-white/80">
             {sideGoals.map((g, n) => (
@@ -832,10 +856,66 @@ export function ScoresStep({
                       </div>
                     );
                   })()}
+                  {members(t).length > 1 && (() => {
+                    // Who played it: everyone unless someone was marked as sitting it out
+                    return (
+                      <div className="flex items-center gap-2 min-h-11 text-[13px] text-gray-500">
+                        <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z" />
+                        </svg>
+                        <span className="flex-1 min-w-0 truncate">{playedLine(t, g.satOut ?? [])}</span>
+                        {api.updateGame && (
+                          <button
+                            onClick={() => setPlayedFor({ team: t, gameId: g.id })}
+                            disabled={!!busy}
+                            className="press shrink-0 min-h-11 px-2 -mr-2 text-[13px] font-bold text-pitch-700"
+                          >
+                            {busy === `played-${g.id}` ? 'Saving…' : 'Change'}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
           </Sheet>
+        );
+      })()}
+
+      {playedFor && (() => {
+        const t = playedFor.team;
+        const saved = playedFor.gameId ? lineup.games.find((x) => x.id === playedFor.gameId) : null;
+        const keeper = saved ? (saved.teamA === t ? saved.keeperA : saved.keeperB) ?? null : keeperOf(t);
+        const out = saved ? (saved.satOut ?? []).filter((id) => members(t).some((m) => m.id === id)) : outOf(t);
+        const close = () => setPlayedFor(null);
+        return (
+          <WhoPlayedSheet
+            title={`Who played for ${name(t)}?`}
+            players={members(t).map((m) => ({ id: m.id, name: shortName(m), face: face(m.id, 'w-9 h-9 text-[11px]') }))}
+            keeper={keeper}
+            out={out}
+            busy={!!saved && busy === `played-${saved.id}`}
+            onClose={close}
+            onDone={async (next) => {
+              if (!saved) {
+                setDraft((d) => ({ ...d, out: { ...d.out, [t]: next } }));
+                return close();
+              }
+              if (!api.updateGame) return close();
+              // The other side's sat-out players stay as they were
+              const other = (saved.satOut ?? []).filter((id) => !members(t).some((m) => m.id === id));
+              setBusy(`played-${saved.id}`);
+              try {
+                onLineup(await api.updateGame(sessionId, saved.id, { satOut: [...other, ...next] }));
+                close();
+              } catch (err) {
+                onError(err instanceof Error ? err.message : 'That didn’t save. Try again.');
+              } finally {
+                setBusy(null);
+              }
+            }}
+          />
         );
       })()}
 
@@ -1020,5 +1100,68 @@ function KeeperChip({
         {keeper && borrowed && <span className="block text-[10px] font-extrabold uppercase tracking-wide text-volt-300">Borrowed</span>}
       </span>
     </button>
+  );
+}
+
+/**
+ * Who played a game for one side: everyone ticked to start, tap anyone who sat the whole game out.
+ * The keeper played it, so they can't be untick. Done saves it (for a saved game, straight away).
+ */
+function WhoPlayedSheet({
+  title,
+  players,
+  keeper,
+  out: initial,
+  busy,
+  onClose,
+  onDone,
+}: {
+  title: string;
+  players: { id: string; name: string; face: React.ReactNode }[];
+  keeper: string | null;
+  out: string[];
+  busy: boolean;
+  onClose: () => void;
+  onDone: (out: string[]) => void;
+}) {
+  const titleId = useId();
+  const [out, setOut] = useState<string[]>(initial);
+  const playing = players.length - out.length;
+  return (
+    <Sheet
+      titleId={titleId}
+      onClose={onClose}
+      align="left"
+      footer={
+        <button onClick={() => onDone(out)} disabled={busy} className={`${btnPrimary} w-full`}>
+          {busy ? 'Saving…' : `Done · ${playing} of ${players.length} played`}
+        </button>
+      }
+    >
+      <SheetTitle id={titleId} title={title} sub="Tap anyone who sat this whole game out." onClose={onClose} />
+      <ul className="mt-4 space-y-1.5">
+        {players.map((p) => {
+          const played = !out.includes(p.id);
+          const inGoal = p.id === keeper;
+          return (
+            <li key={p.id}>
+              <button
+                onClick={() => {
+                  buzz(6);
+                  setOut((o) => (played ? [...o, p.id] : o.filter((x) => x !== p.id)));
+                }}
+                disabled={inGoal || busy}
+                aria-pressed={played}
+                className={`press w-full flex items-center gap-3 min-h-14 px-3 py-2 rounded-2xl border text-left ${played ? 'border-gray-100 bg-white hover:border-ink' : 'border-dashed border-gray-300 bg-chalk'} disabled:cursor-default`}
+              >
+                <span className={played ? '' : 'opacity-40'}>{p.face}</span>
+                <span className={`flex-1 min-w-0 truncate text-[15px] font-bold ${played ? 'text-ink' : 'text-gray-500 line-through decoration-gray-400'}`}>{p.name}</span>
+                <span className={`shrink-0 text-[12px] font-extrabold ${inGoal ? 'text-pitch-700' : played ? 'text-pitch-700' : 'text-gray-500'}`}>{inGoal ? 'In goal' : played ? 'Played' : 'Sat out'}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Sheet>
   );
 }
