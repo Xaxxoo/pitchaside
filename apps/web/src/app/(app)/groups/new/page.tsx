@@ -228,13 +228,61 @@ export default function NewGroupPage() {
 
 
         {/* Everything else already has a good default. Three short sections, like things together,
-            each saying what's set; one opens at a time so the form never runs on. */}
+            each saying what's set; one opens at a time so the form never runs on. Money first,
+            straight under the fee it belongs with. */}
         <div>
           <p className="mb-1.5 text-xs font-bold text-gray-700">
             Settings <span className="font-medium text-gray-500">· set already, change any time</span>
           </p>
           {/* Edge to edge across the card, lines between: one less box around boxes */}
           <div className="-mx-5 sm:-mx-7 border-y border-gray-200 divide-y divide-gray-200">
+            <Section
+              id="new-group-money"
+              icon={ICONS.money}
+              title="Money"
+              summary={[currencySymbol(scope), (frequencyOptions.find((o) => o.value === snap.paymentType)?.label ?? 'Per game').toLowerCase(), SEEN[snap.contributionsVisibility] ?? SEEN.private].join(' · ')}
+              open={open === 'money'}
+              onToggle={() => toggle('money')}
+            >
+              <fieldset>
+                <legend className="block text-xs font-bold text-gray-700 mb-1.5">Where are your players?</legend>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'local' as const, label: 'Nigeria', hint: 'Bank transfer in ₦' },
+                    { value: 'international' as const, label: 'International', hint: 'USDT or USDC in $' },
+                  ]).map((o) => (
+                    <label key={o.value} className="block cursor-pointer">
+                      <input type="radio" name="scope" value={o.value} checked={scope === o.value} onChange={() => setScope(o.value)} className="peer sr-only" />
+                      <span className={OPTION}>
+                        <span className="text-sm font-bold text-ink">{o.label}</span>
+                        <span className="text-[11px] text-gray-500 leading-tight mt-0.5">{o.hint}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                {/* What really happens: the account isn't opened here, it's opened from home with BVN and NIN */}
+                {scope === 'local' && <p className="mt-1.5 text-xs text-gray-500">You’ll open its bank account from home.</p>}
+              </fieldset>
+              {/* Five choices as one row of chips; what the picked one means sits on one line under them */}
+              <fieldset>
+                <legend className="block text-xs font-bold text-gray-700 mb-1.5">How often do players pay?</legend>
+                <div className="flex flex-wrap gap-2">
+                  {frequencyOptions.map((o) => (
+                    <label key={o.value} className="block cursor-pointer">
+                      <input type="radio" name="paymentType" value={o.value} defaultChecked={o.value === PaymentType.PER_SESSION} className="peer sr-only" />
+                      <span className="flex items-center min-h-11 px-3.5 rounded-full border-2 border-gray-200 bg-white text-[13px] font-bold text-ink transition-colors peer-checked:border-ink peer-checked:bg-volt-300 peer-focus-visible:ring-4 peer-focus-visible:ring-volt-300/70 hover:border-gray-300">
+                        {o.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500" aria-live="polite">
+                  {frequencyOptions.find((o) => o.value === (snap.paymentType ?? PaymentType.PER_SESSION))?.hint}
+                </p>
+              </fieldset>
+              <ContributionsVisibilityPicker name="contributionsVisibility" />
+            </Section>
+
             <Section
               id="new-group-when"
               icon={ICONS.when}
@@ -293,52 +341,6 @@ export default function NewGroupPage() {
               <MatchDayFields value={matchDay} onChange={(patch) => setMatchDay((m) => ({ ...m, ...patch }))} idPrefix="new" isNew />
             </Section>
 
-            <Section
-              id="new-group-money"
-              icon={ICONS.money}
-              title="Money"
-              summary={[currencySymbol(scope), (frequencyOptions.find((o) => o.value === snap.paymentType)?.label ?? 'Per game').toLowerCase(), SEEN[snap.contributionsVisibility] ?? SEEN.private].join(' · ')}
-              open={open === 'money'}
-              onToggle={() => toggle('money')}
-            >
-              <fieldset>
-                <legend className="block text-xs font-bold text-gray-700 mb-1.5">Where are your players?</legend>
-                <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { value: 'local' as const, label: 'Nigeria', hint: 'Bank transfer in ₦' },
-                    { value: 'international' as const, label: 'International', hint: 'USDT or USDC in $' },
-                  ]).map((o) => (
-                    <label key={o.value} className="block cursor-pointer">
-                      <input type="radio" name="scope" value={o.value} checked={scope === o.value} onChange={() => setScope(o.value)} className="peer sr-only" />
-                      <span className={OPTION}>
-                        <span className="text-sm font-bold text-ink">{o.label}</span>
-                        <span className="text-[11px] text-gray-500 leading-tight mt-0.5">{o.hint}</span>
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                {/* What really happens: the account isn't opened here, it's opened from home with BVN and NIN */}
-                {scope === 'local' && <p className="mt-1.5 text-xs text-gray-500">You’ll open its bank account from home.</p>}
-              </fieldset>
-              {/* Five choices as one row of chips; what the picked one means sits on one line under them */}
-              <fieldset>
-                <legend className="block text-xs font-bold text-gray-700 mb-1.5">How often do players pay?</legend>
-                <div className="flex flex-wrap gap-2">
-                  {frequencyOptions.map((o) => (
-                    <label key={o.value} className="block cursor-pointer">
-                      <input type="radio" name="paymentType" value={o.value} defaultChecked={o.value === PaymentType.PER_SESSION} className="peer sr-only" />
-                      <span className="flex items-center min-h-11 px-3.5 rounded-full border-2 border-gray-200 bg-white text-[13px] font-bold text-ink transition-colors peer-checked:border-ink peer-checked:bg-volt-300 peer-focus-visible:ring-4 peer-focus-visible:ring-volt-300/70 hover:border-gray-300">
-                        {o.label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-                <p className="mt-1.5 text-xs text-gray-500" aria-live="polite">
-                  {frequencyOptions.find((o) => o.value === (snap.paymentType ?? PaymentType.PER_SESSION))?.hint}
-                </p>
-              </fieldset>
-              <ContributionsVisibilityPicker name="contributionsVisibility" />
-            </Section>
           </div>
         </div>
 
