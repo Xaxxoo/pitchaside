@@ -20,6 +20,8 @@ import {
   getGroup,
   getGroupTable,
   getPlayers,
+  getAppStatus,
+  type AppStatus,
   type LeagueTable,
   removeMember,
   getLeavingPreview,
@@ -35,6 +37,7 @@ import { FilterBar, FilterMenu } from '@/components/filter-menu';
 import { Avatar } from '@/components/ratings';
 import { ratingWords } from '@/lib/rating-words';
 import { positionShort } from '@/lib/positions';
+import { SignInLinkButton } from '@/components/sign-in-link-button';
 
 /**
  * A group's squad, about the players: how many, who's coming to the next game, how it's made up
@@ -62,7 +65,13 @@ export function GroupSquad({
   const { user } = useAuth();
   const id = group.id;
   const [query, setQuery] = useState('');
-  const [memberFilter, setMemberFilter] = useState<'all' | 'in' | 'out' | 'new' | 'fix' | 'none'>('all');
+  const [memberFilter, setMemberFilter] = useState<'all' | 'in' | 'out' | 'new' | 'fix' | 'none' | 'app'>('all');
+  // Who's using the app (organisers only): players not in it yet get a sign-in link from here
+  const [app, setApp] = useState<Record<string, AppStatus> | null>(null);
+  const loadApp = () => {
+    if (canManage) getAppStatus(group.id).then(setApp, () => setApp(null));
+  };
+  useEffect(loadApp, [group.id, canManage, group.memberships?.length]);
   const [sort, setSort] = useState<'name' | 'rating' | 'games'>('name');
   // Ratings and games played, from the season table: how the squad is made up.
   const [table, setTable] = useState<LeagueTable | null>(null);
@@ -230,6 +239,8 @@ export function GroupSquad({
   const noNumber = (m: (typeof members)[number]) => !m.player.phone?.trim();
   const fixCount = members.filter(badNumber).length;
   const noneCount = members.filter(noNumber).length;
+  const notInApp = (m: (typeof members)[number]) => !!app && app[m.player.id] !== undefined && app[m.player.id] !== 'in';
+  const appCount = members.filter(notInApp).length;
   const filterOptions = (
     [
       { value: 'all', label: `Everyone · ${memberCount}`, show: true },
@@ -238,11 +249,13 @@ export function GroupSquad({
       { value: 'new', label: `New · ${newCount}`, show: newCount > 0 },
       { value: 'fix', label: `Number to fix · ${fixCount}`, show: fixCount > 0 },
       { value: 'none', label: `No number · ${noneCount}`, show: noneCount > 0 && noneCount < memberCount },
+      { value: 'app', label: `Not in the app · ${appCount}`, show: appCount > 0 },
     ] as { value: typeof memberFilter; label: string; show: boolean }[]
   ).filter((f) => f.show);
   const filterSays = { all: '', in: `${inCount} coming to ${nextLabel}`, out: `${outCount} not in yet for ${nextLabel}`, new: `${newCount} added in the last ${NEW_DAYS} days`,
     fix: `${fixCount} with a number WhatsApp can’t open`,
     none: `${noneCount} with no number`,
+    app: `${appCount} not in the app yet`,
   }[memberFilter];
   const sentence = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
   const LEVEL: Record<string, string> = { beginner: 'Beginner', average: 'Average', good: 'Good', strong: 'Strong' };
@@ -261,7 +274,9 @@ export function GroupSquad({
               ? badNumber(m)
               : memberFilter === 'none'
                 ? noNumber(m)
-                : true,
+                : memberFilter === 'app'
+                  ? notInApp(m)
+                  : true,
     )
     .filter((m) => !q || `${m.player.firstName} ${m.player.lastName} ${m.player.nickname ?? ''}`.toLowerCase().includes(q))
     .sort((a, b) =>
@@ -290,6 +305,7 @@ export function GroupSquad({
         <PlayerSheet
           key={opened.player.id}
           player={opened.player}
+          appStatus={app?.[opened.player.id]}
           membership={{ joinedAt: opened.joinedAt, credit: Number(opened.credit ?? 0), extra: Number(opened.extra ?? 0), waiting: Number(opened.waiting ?? 0), paymentCode: opened.paymentRef, due: opened.due }}
           canEdit={canManage}
           onClose={() => setOpenMember(null)}
@@ -337,7 +353,7 @@ export function GroupSquad({
 
       {showAddMember && (
         <div className="mt-2 bg-white rounded-3xl border border-gray-100 shadow-card p-4 animate-fade-in-up space-y-4">
-          <QuickAddPlayers groupId={id} onAdded={reloadGroup} />
+          <QuickAddPlayers groupId={id} groupName={group.name} onAdded={reloadGroup} />
           {availablePlayers.length > 0 && (
             <div className="pt-3 border-t border-gray-100">
               <p className="text-[13px] font-bold text-ink mb-2">Already one of your players</p>
@@ -490,6 +506,18 @@ export function GroupSquad({
               </button>
             </p>
           )}
+          {/* Not in the app yet: one quiet line, a tap away from sending them a link */}
+          {memberFilter === 'all' && appCount > 0 && (
+            <p className="mt-1 px-1 flex items-center justify-between gap-3 text-[13px] text-gray-600 animate-rise" role="status">
+              <span className="min-w-0 flex items-center gap-1.5 font-semibold text-ink">
+                <CalloutIcon tone="info" />
+                {appCount === 1 ? '1 player isn’t in the app yet' : `${appCount} players aren’t in the app yet`}
+              </span>
+              <button onClick={() => setMemberFilter('app')} className="shrink-0 min-h-11 px-1 font-bold text-pitch-700 hover:text-ink">
+                Send links
+              </button>
+            </p>
+          )}
           {memberFilter !== 'all' && (
             <p className="mt-2 px-1 flex items-center justify-between gap-3 text-[13px] text-gray-600" role="status">
               <span className="min-w-0">
@@ -511,7 +539,9 @@ export function GroupSquad({
                     ? `Everyone’s coming to ${nextLabel}.`
                     : memberFilter === 'fix'
                       ? 'Every number opens WhatsApp now.'
-                      : 'No one here.'}
+                      : memberFilter === 'app'
+                        ? 'Everyone’s in the app.'
+                        : 'No one here.'}
             </p>
           ) : (
             <ul className="mt-2 bg-white rounded-3xl border border-gray-100 shadow-card divide-y divide-gray-100 overflow-hidden">
@@ -547,11 +577,12 @@ export function GroupSquad({
                   st?.ovr == null ? level : null,
                   m.role !== 'player' && sentence(m.role),
                 ].filter(Boolean) as string[];
+                const sending = memberFilter === 'app';
                 return (
-                  <li key={m.id}>
+                  <li key={m.id} className={sending ? 'flex items-center pr-3' : undefined}>
                     <button
                       onClick={() => setOpenMember(m.player.id)}
-                      className="w-full flex items-center gap-3 px-4 min-h-16 py-3 text-left hover:bg-chalk transition-colors"
+                      className={`${sending ? 'flex-1 min-w-0' : 'w-full'} flex items-center gap-3 px-4 min-h-16 py-3 text-left hover:bg-chalk transition-colors`}
                     >
                       {m.player.photoKey ? (
                         <Avatar name={name} photoKey={m.player.photoKey} className="w-10 h-10" />
@@ -563,25 +594,34 @@ export function GroupSquad({
                       <span className="flex-1 min-w-0">
                         <span className="flex items-center gap-1.5 min-w-0">
                           <span className="text-[15px] font-bold text-ink leading-snug truncate">{name}</span>
-                          {m.fresh && <span className="shrink-0 animate-pop-in text-[10px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-volt-300 text-ink" title={`Added in the last ${NEW_DAYS} days`}>New</span>}
+                          {m.fresh && !sending && <span className="shrink-0 animate-pop-in text-[10px] font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded-md bg-volt-300 text-ink" title={`Added in the last ${NEW_DAYS} days`}>New</span>}
                         </span>
-                        <span className="block text-xs text-gray-500 mt-0.5 truncate">
-                          {m.player.nickname ? `“${m.player.nickname}”${detail.length ? ' · ' : ''}` : ''}
-                          {detail.join(' · ')}
-                        </span>
+                        {sending ? (
+                          <span className="block text-xs text-gray-500 mt-0.5 truncate">
+                            {app?.[m.player.id] === 'invited' ? 'Link sent' : m.player.phone ? 'Not in yet' : 'No number yet'}
+                          </span>
+                        ) : (
+                          <span className="block text-xs text-gray-500 mt-0.5 truncate">
+                            {m.player.nickname ? `“${m.player.nickname}”${detail.length ? ' · ' : ''}` : ''}
+                            {detail.join(' · ')}
+                          </span>
+                        )}
                       </span>
                       {/* Coming to the next game: said in words, not just colour */}
-                      {m.coming !== null && (
+                      {m.coming !== null && !sending && (
                         <span
                           className={`shrink-0 text-[11px] font-extrabold px-2 py-1 rounded-full ${m.coming ? 'bg-volt-300 text-ink' : 'bg-chalk text-gray-600'}`}
                         >
                           {m.coming ? 'Coming' : 'Not in yet'}
                         </span>
                       )}
-                      <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
-                      </svg>
+                      {!sending && (
+                        <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+                        </svg>
+                      )}
                     </button>
+                    {sending && <SignInLinkButton player={m.player} variant="chip" again={app?.[m.player.id] === 'invited'} groupName={group.name} onSent={loadApp} />}
                   </li>
                 );
               })}

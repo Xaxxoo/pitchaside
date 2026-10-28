@@ -269,6 +269,14 @@ export class PlayerAuthController {
     return { ...rest, link: `${this.configService.get('APP_URL', 'http://localhost:3000')}/s/${token}` };
   }
 
+  /** Organiser's squad list: who's in the app, who has a link out, who isn't yet. */
+  @UseGuards(JwtAuthGuard)
+  @AllowTreasurer()
+  @Get('groups/:id/app-status')
+  appStatus(@CurrentUser() user: User, @Param('id', ParseUUIDPipe) id: string) {
+    return this.links.appStatus(user.organizationId, id);
+  }
+
   /** The link page: who it's for, and whether they need to add an email. Doesn't use the link. */
   @Throttle({ default: { ttl: 60000, limit: 30 } })
   @Get('public/sign-in/:token')
