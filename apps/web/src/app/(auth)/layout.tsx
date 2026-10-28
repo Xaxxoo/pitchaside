@@ -16,7 +16,15 @@ export default function AuthLayout({
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace('/dashboard');
+      // Just signed up: on to step 2 (the first group), not the home page
+      let next = '/dashboard';
+      try {
+        if (sessionStorage.getItem('pa_after_signup')) next = '/groups/new?setup=1';
+        sessionStorage.removeItem('pa_after_signup');
+      } catch {
+        // Storage blocked: home, which also leads to making a group
+      }
+      router.replace(next);
     }
   }, [user, loading, router]);
 

@@ -6,23 +6,20 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
+import { Steps } from '@/components/steps';
+import { PasswordField } from '@/components/password-sign-in';
+import { btnPrimary } from '@/components/buttons';
+import { BallSpinner } from '@/components/skeleton';
+import { SETUP_STEPS } from '@/lib/setup-steps';
 
 export default function SignUpPage() {
   const router = useRouter();
   const { register } = useAuth();
   const toast = useToast();
-  const [form, setForm] = useState({
-    teamName: '',
-    firstName: '',
-    lastName: '',
-    email: '',
-    password: '',
-    country: '',
-    state: '',
-  });
+  const [form, setForm] = useState({ teamName: '', firstName: '', lastName: '', email: '', password: '' });
   const [submitting, setSubmitting] = useState(false);
 
-  function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
   }
 
@@ -30,152 +27,96 @@ export default function SignUpPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
+      try {
+        // Where to go once signed in (step 2), and no "check your inbox" in the middle of setting
+        // up: the email is sent now, the reminder waits a day like "I'll do it later".
+        sessionStorage.setItem('pa_after_signup', '1');
+        localStorage.setItem('pitchaside_verify_email_later', String(Date.now()));
+      } catch {
+        // Storage blocked: they land on home and see the reminder; nothing breaks
+      }
       await register({
-        organizationName: form.teamName,
-        firstName: form.firstName,
-        lastName: form.lastName,
-        email: form.email,
+        organizationName: form.teamName.trim(),
+        firstName: form.firstName.trim(),
+        lastName: form.lastName.trim(),
+        email: form.email.trim(),
         password: form.password,
-        country: form.country || undefined,
-        state: form.state || undefined,
       });
-      router.push('/dashboard?welcome=1');
+      // Straight on to step 2: the first group
+      router.push('/groups/new?setup=1');
     } catch (err: any) {
+      try {
+        sessionStorage.removeItem('pa_after_signup');
+        localStorage.removeItem('pitchaside_verify_email_later');
+      } catch {
+        // nothing to undo
+      }
       toast.error(err.message || 'Sign up failed');
-    } finally {
       setSubmitting(false);
     }
   }
 
-  const inputClass = "w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600";
+  const inputClass = 'w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
 
   return (
     <div className="w-full max-w-sm">
-      <div className="text-center mb-8">
+      <div className="text-center mb-6">
         <Logo />
-        <h1 className="mt-6 text-[28px] leading-tight font-extrabold text-ink">Create your account</h1>
-        <p className="mt-1 text-sm text-gray-500">Start managing your pitch</p>
+        <h1 className="mt-6 text-[28px] leading-tight font-extrabold text-ink">Run your games on PitchAside</h1>
+        <p className="mt-1 text-sm text-gray-500">Who’s in, who’s paid and the table, in one place.</p>
+      </div>
+
+      {/* What it takes, before anything is asked: three steps, this is the first */}
+      <div className="mb-5 rounded-3xl bg-white border border-gray-100 shadow-card p-4">
+        <Steps heading="Ready in about a minute" note="Step 1 of 3" steps={SETUP_STEPS} />
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="teamName" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Team / Organization *
+            Club or team name
           </label>
-          <input
-            id="teamName"
-            name="teamName"
-            type="text"
-            required
-            value={form.teamName}
-            onChange={handleChange}
-            className={inputClass}
-            placeholder="e.g. Sunday League FC"
-          />
+          <input id="teamName" name="teamName" type="text" required minLength={2} value={form.teamName} onChange={handleChange} className={inputClass} placeholder="e.g. Lekki Ballers" />
+          <p className="mt-1 text-[12px] text-gray-500">Your players see it on their invite.</p>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label htmlFor="firstName" className="block text-xs font-bold text-gray-700 mb-1.5">
-              First Name *
+              First name
             </label>
-            <input
-              id="firstName"
-              name="firstName"
-              type="text"
-              required
-              value={form.firstName}
-              onChange={handleChange}
-              className={inputClass}
-            />
+            <input id="firstName" name="firstName" type="text" required minLength={2} autoComplete="given-name" value={form.firstName} onChange={handleChange} className={inputClass} />
           </div>
           <div>
             <label htmlFor="lastName" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Last Name *
+              Last name
             </label>
-            <input
-              id="lastName"
-              name="lastName"
-              type="text"
-              required
-              value={form.lastName}
-              onChange={handleChange}
-              className={inputClass}
-            />
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="country" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Country
-            </label>
-            <input
-              id="country"
-              name="country"
-              type="text"
-              value={form.country}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="e.g. Nigeria"
-            />
-          </div>
-          <div>
-            <label htmlFor="state" className="block text-xs font-bold text-gray-700 mb-1.5">
-              State
-            </label>
-            <input
-              id="state"
-              name="state"
-              type="text"
-              value={form.state}
-              onChange={handleChange}
-              className={inputClass}
-              placeholder="e.g. Lagos"
-            />
+            <input id="lastName" name="lastName" type="text" required minLength={1} autoComplete="family-name" value={form.lastName} onChange={handleChange} className={inputClass} />
           </div>
         </div>
 
         <div>
           <label htmlFor="email" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Email *
+            Email
           </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            required
-            value={form.email}
-            onChange={handleChange}
-            className={inputClass}
-            placeholder="you@example.com"
-          />
+          <input id="email" name="email" type="email" required autoComplete="email" value={form.email} onChange={handleChange} className={inputClass} placeholder="you@example.com" />
         </div>
 
-        <div>
-          <label htmlFor="password" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Password *
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={8}
-            value={form.password}
-            onChange={handleChange}
-            className={inputClass}
-            placeholder="At least 8 characters"
-          />
-        </div>
+        <PasswordField
+          id="password"
+          label="Password"
+          value={form.password}
+          onChange={(v) => setForm({ ...form, password: v })}
+          autoComplete="new-password"
+          minLength={8}
+          hint="8 characters or more."
+        />
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full py-3 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
-        >
-          {submitting ? 'Creating account...' : 'Create Account'}
+        <button type="submit" disabled={submitting} className={`${btnPrimary} w-full`}>
+          {submitting && <BallSpinner />}
+          {submitting ? 'Creating your account…' : 'Next: your first group'}
         </button>
+        <p className="text-center text-[12px] text-gray-500">Bank details and checks come later, when you need them.</p>
       </form>
 
       <p className="mt-6 text-center text-sm text-gray-500">
