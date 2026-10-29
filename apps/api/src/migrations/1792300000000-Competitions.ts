@@ -5,12 +5,12 @@ export class Competitions1792300000000 implements MigrationInterface {
 
   public async up(q: QueryRunner): Promise<void> {
     // Enum types
-    await q.query(`CREATE TYPE "public"."competitions_format_enum" AS ENUM('knockout', 'league')`);
-    await q.query(`CREATE TYPE "public"."competitions_scope_enum" AS ENUM('nationwide', 'state', 'city')`);
-    await q.query(`CREATE TYPE "public"."competitions_status_enum" AS ENUM('draft', 'registration_open', 'registration_closed', 'in_progress', 'completed', 'cancelled')`);
-    await q.query(`CREATE TYPE "public"."competitions_visibility_enum" AS ENUM('public', 'invite_only')`);
-    await q.query(`CREATE TYPE "public"."competition_teams_registration_status_enum" AS ENUM('pending_payment', 'confirmed', 'withdrawn', 'disqualified')`);
-    await q.query(`CREATE TYPE "public"."competition_matches_status_enum" AS ENUM('scheduled', 'in_progress', 'completed', 'cancelled', 'walkover')`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."competitions_format_enum" AS ENUM('knockout', 'league'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."competitions_scope_enum" AS ENUM('nationwide', 'state', 'city'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."competitions_status_enum" AS ENUM('draft', 'registration_open', 'registration_closed', 'in_progress', 'completed', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."competitions_visibility_enum" AS ENUM('public', 'invite_only'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."competition_teams_registration_status_enum" AS ENUM('pending_payment', 'confirmed', 'withdrawn', 'disqualified'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."competition_matches_status_enum" AS ENUM('scheduled', 'in_progress', 'completed', 'cancelled', 'walkover'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
 
     // competitions table
     await q.query(`CREATE TABLE IF NOT EXISTS "competitions" (

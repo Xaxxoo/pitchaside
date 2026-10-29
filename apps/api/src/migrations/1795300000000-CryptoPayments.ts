@@ -29,9 +29,7 @@ export class CryptoPayments1795300000000 implements MigrationInterface {
     await q.query(`CREATE INDEX IF NOT EXISTS "IDX_group_wallets_address" ON "group_wallets"("address")`);
 
     // ── 3. Crypto transfers (incoming) ──
-    await q.query(`
-      CREATE TYPE "crypto_transfer_status_enum" AS ENUM ('matched', 'assigned', 'unmatched', 'ignored', 'other')
-    `);
+    await q.query(`DO $$ BEGIN CREATE TYPE "crypto_transfer_status_enum" AS ENUM ('matched', 'assigned', 'unmatched', 'ignored', 'other'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
     await q.query(`
       CREATE TABLE IF NOT EXISTS "crypto_transfers" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,9 +55,7 @@ export class CryptoPayments1795300000000 implements MigrationInterface {
     `);
 
     // ── 4. Crypto outgoing transfers ──
-    await q.query(`
-      CREATE TYPE "crypto_payout_status_enum" AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled')
-    `);
+    await q.query(`DO $$ BEGIN CREATE TYPE "crypto_payout_status_enum" AS ENUM ('pending', 'processing', 'completed', 'failed', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
     await q.query(`
       CREATE TABLE IF NOT EXISTS "crypto_outgoing_transfers" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),

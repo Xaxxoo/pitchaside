@@ -4,7 +4,7 @@ export class OutgoingTransfers1791200000000 implements MigrationInterface {
   name = 'OutgoingTransfers1791200000000';
 
   public async up(q: QueryRunner): Promise<void> {
-    await q.query(`CREATE TYPE "public"."outgoing_transfers_status_enum" AS ENUM('pending', 'processing', 'completed', 'failed', 'cancelled')`);
+    await q.query(`DO $$ BEGIN CREATE TYPE "public"."outgoing_transfers_status_enum" AS ENUM('pending', 'processing', 'completed', 'failed', 'cancelled'); EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
 
     await q.query(`CREATE TABLE IF NOT EXISTS "outgoing_transfers" (
       "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
