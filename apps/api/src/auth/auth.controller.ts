@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterPitchOwnerDto } from './dto/register-pitch-owner.dto';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
@@ -32,6 +33,15 @@ export class AuthController {
   @Post('register')
   async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
     const result = await this.authService.register(dto);
+    setAuthCookies(res, this.configService, result.accessToken, result.refreshToken);
+    return { accessToken: result.accessToken, refreshToken: result.refreshToken, user: result.user };
+  }
+
+  @SkipCsrf()
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Post('register/pitch-owner')
+  async registerPitchOwner(@Body() dto: RegisterPitchOwnerDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.registerPitchOwner(dto);
     setAuthCookies(res, this.configService, result.accessToken, result.refreshToken);
     return { accessToken: result.accessToken, refreshToken: result.refreshToken, user: result.user };
   }

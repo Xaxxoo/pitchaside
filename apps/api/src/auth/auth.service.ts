@@ -25,6 +25,7 @@ import { MailService } from '../mail/mail.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { UserRole } from '../users/entities/user.entity';
 import { RegisterDto } from './dto/register.dto';
+import { RegisterPitchOwnerDto } from './dto/register-pitch-owner.dto';
 import { LoginDto } from './dto/login.dto';
 
 /** An identity number as the browser sees it: `•••••••4521`, or null. */
@@ -70,6 +71,40 @@ export class AuthService {
     } catch (err) {
       this.logger.warn(`Failed to provision crypto wallets for user ${user.id}: ${err}`);
     }
+
+    // Send verification email (non-blocking)
+    const verifyToken = await this.usersService.createEmailVerificationToken(user.id);
+    this.mailService.sendEmailVerification(user.email, user.firstName, verifyToken).catch((err) => {
+      console.error('[MAIL ERROR]', err?.message || err);
+    });
+
+    const accessToken = this.jwtService.sign({ sub: user.id });
+    const refreshToken = await this.usersService.createRefreshToken(user.id, null);
+
+    return {
+      accessToken,
+      refreshToken,
+      user: this.sanitizeUser(user, organization),
+    };
+  }
+
+  async registerPitchOwner(dto: RegisterPitchOwnerDto) {
+    const existing = await this.usersService.findByEmail(dto.email);
+    if (existing) throw new ConflictException('Email already registered');
+
+    // Pitch owners get a personal org that isn't shown in the UI.
+    const organization = await this.orgsService.create(`${dto.firstName}'s Pitches`);
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const user = await this.usersService.create({
+      firstName: dto.firstName,
+      lastName: dto.lastName,
+      email: dto.email,
+      passwordHash,
+      role: UserRole.PITCH_OWNER,
+      organizationId: organization.id,
+      phone: dto.phone?.trim() || null,
+    });
 
     // Send verification email (non-blocking)
     const verifyToken = await this.usersService.createEmailVerificationToken(user.id);
