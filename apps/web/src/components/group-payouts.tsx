@@ -6,7 +6,6 @@ import { useToast } from '@/components/toast';
 import { useAuth } from '@/lib/auth';
 import { UserRole } from '@pitchaside/shared';
 import { ConfirmDialog } from '@/components/confirm-dialog';
-import { btnPrimary } from '@/components/buttons';
 import { EmptyState } from '@/components/empty-state';
 import { PayeeCard } from '@/components/group-payee';
 import { SendMoneyModal, type RefundableMember } from '@/components/send-money-modal';
@@ -329,63 +328,81 @@ export function PayoutsPanel({
         onCancel={() => setCancelId(null)}
       />
 
-      {/* Balance card */}
+      {/* The balance: the money first, on the dark pitch card */}
       {balance && (
-        <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5">
-          <p className="text-xs font-semibold text-gray-500">Available to withdraw</p>
-          <p className="font-display text-[34px] leading-none font-extrabold text-ink tabular-nums mt-1.5">
-            {formatCurrency(balance.available)}
-          </p>
-          <p className="mt-2 text-xs text-gray-500 tabular-nums">
-            {formatCurrency(balance.totalIn)} received, {formatCurrency(balance.totalOut)} sent out
-          </p>
-          {/* What's in the balance that isn't the group's to spend yet, so nobody pays the pitch with it by mistake. */}
-          {(paidAhead > 0 || extraTotal > 0 || unsorted > 0) && (
-            <div className="mt-3 rounded-2xl bg-sun-400/15 px-3.5 py-2.5 text-[13px] leading-snug text-amber-900">
-              <p className="font-bold">
-                This includes money that isn’t the group’s to spend yet:{' '}
-                <InfoTip label="What's this money?" align="right">
-                  <b>Extra to sort:</b> players sent more than they owed (maybe for a friend), or money came back off a game. It waits on Money in until you say what it was for.
-                  <span className="block mt-1.5">
-                    <b>Kept for players:</b> part of a game they still owe, or extra you chose to keep for their next game. It pays that game, or you
-                    can send it back from Send money.
-                  </span>
-                </InfoTip>
-              </p>
-              <ul className="mt-1 space-y-0.5 tabular-nums">
-                {extraTotal > 0 && <li>{formatCurrency(extraTotal)} extra players sent, still to sort</li>}
-                {paidAhead > 0 && <li>{formatCurrency(paidAhead)} kept for players’ next games</li>}
-                {unsorted > 0 && <li>{formatCurrency(unsorted)} with no name yet</li>}
-              </ul>
-            </div>
-          )}
-          {balance.manualIn > 0 && (
-            <p className="mt-2 text-xs text-gray-500">
-              {formatCurrency(balance.manualIn)} of that was recorded by hand, so it isn’t included in what you can send.
+        <div className="relative overflow-hidden rounded-3xl bg-ink text-white p-5 shadow-lift">
+          <div className="absolute inset-0 turf-stripes" aria-hidden />
+          <div className="relative">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-volt-300">Available to withdraw</p>
+            <p className="mt-1.5 font-display text-[38px] leading-none font-extrabold tabular-nums">{formatCurrency(balance.available)}</p>
+            <p className="mt-2 text-[12px] text-white/65 tabular-nums">
+              {formatCurrency(balance.totalIn)} received · {formatCurrency(balance.totalOut)} sent out
             </p>
-          )}
-          {canSend ? (
-            <button onClick={() => setShowForm(true)} className={`${btnPrimary} mt-4 w-full`}>
-              Send money
-            </button>
-          ) : (
-            <p className="mt-4 text-[13px] text-gray-600">Only the group’s organiser can send money out. You can see every withdrawal here.</p>
-          )}
+            {/* What's in the balance that isn't the group's to spend yet, so nobody pays the pitch with it by mistake. */}
+            {(paidAhead > 0 || extraTotal > 0 || unsorted > 0) && (
+              <div className="mt-3 rounded-2xl bg-sun-400/15 border border-sun-400/30 px-3.5 py-2.5 text-[13px] leading-snug text-sun-400">
+                <p className="font-bold text-white">
+                  Not all of it is the group’s yet{' '}
+                  <InfoTip label="What's this money?" align="right">
+                    <b>Extra to sort:</b> players sent more than they owed (maybe for a friend), or money came back off a game. It waits on Money in until you say what it was for.
+                    <span className="block mt-1.5">
+                      <b>Kept for players:</b> part of a game they still owe, or extra you chose to keep for their next game. It pays that game, or you
+                      can send it back from Send money.
+                    </span>
+                  </InfoTip>
+                </p>
+                <ul className="mt-1 space-y-0.5 tabular-nums text-white/80">
+                  {extraTotal > 0 && <li>{formatCurrency(extraTotal)} extra players sent, still to sort</li>}
+                  {paidAhead > 0 && <li>{formatCurrency(paidAhead)} kept for players’ next games</li>}
+                  {unsorted > 0 && <li>{formatCurrency(unsorted)} with no name yet</li>}
+                </ul>
+              </div>
+            )}
+            {balance.manualIn > 0 && (
+              <p className="mt-2 text-[12px] text-white/65">
+                {formatCurrency(balance.manualIn)} of that was recorded by hand, so it isn’t included in what you can send.
+              </p>
+            )}
+            {!canSend && <p className="mt-3 text-[13px] text-white/80">Only the group’s organiser can send money out. You can see every withdrawal here.</p>}
+          </div>
         </div>
       )}
 
-      {/* Pitch owner / facility manager: saved once, paid in one tap */}
-      {balance && canSend && banks.length > 0 && (
-        <PayeeCard
-          groupId={groupId}
-          groupName={groupName}
-          banks={banks}
-          available={balance.available}
-          onPaid={async () => {
-            await load();
-            await onRefresh();
-          }}
-        />
+      {/* Paying out, in one place: the saved pitch owner first (the usual payment), then anyone else */}
+      {balance && canSend && (
+        <section aria-labelledby="pay-out" className="bg-white rounded-3xl border border-gray-100 shadow-card overflow-hidden">
+          <h3 id="pay-out" className="px-4 pt-4 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500">
+            Pay out
+          </h3>
+          <div className="divide-y divide-gray-100">
+            {banks.length > 0 && (
+              <PayeeCard
+                groupId={groupId}
+                groupName={groupName}
+                banks={banks}
+                available={balance.available}
+                onPaid={async () => {
+                  await load();
+                  await onRefresh();
+                }}
+              />
+            )}
+            <button onClick={() => setShowForm(true)} className="press w-full flex items-center gap-3 px-4 min-h-16 py-3 text-left hover:bg-chalk transition-colors">
+              <span className="w-10 h-10 shrink-0 rounded-full bg-chalk text-ink flex items-center justify-center" aria-hidden>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 12 3.269 3.125A59.769 59.769 0 0 1 21.485 12 59.768 59.768 0 0 1 3.27 20.875L5.999 12Zm0 0h7.5" />
+                </svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[14px] font-bold text-ink">Send money</span>
+                <span className="block text-[12px] text-gray-500 truncate">Any account, or back to a player</span>
+              </span>
+              <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+              </svg>
+            </button>
+          </div>
+        </section>
       )}
 
       {showForm && balance && (
