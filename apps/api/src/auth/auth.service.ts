@@ -19,11 +19,15 @@ import * as QRCode from 'qrcode';
 
 const otpCrypto = new NobleCryptoPlugin();
 const otpBase32 = new ScureBase32Plugin();
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { UsersService } from '../users/users.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { MailService } from '../mail/mail.service';
 import { CryptoService } from '../crypto/crypto.service';
 import { UserRole } from '../users/entities/user.entity';
+import { PlayerAccount } from '../player-portal/entities/player-account.entity';
+import { emailKey } from '../common/format.util';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterPitchOwnerDto } from './dto/register-pitch-owner.dto';
 import { LoginDto } from './dto/login.dto';
@@ -46,6 +50,7 @@ export class AuthService {
     private jwtService: JwtService,
     private mailService: MailService,
     private cryptoService: CryptoService,
+    @InjectRepository(PlayerAccount) private playerAccountsRepo: Repository<PlayerAccount>,
   ) {}
 
   async register(dto: RegisterDto) {
@@ -92,25 +97,58 @@ export class AuthService {
     const existing = await this.usersService.findByEmail(dto.email);
     if (existing) throw new ConflictException('Email already registered');
 
-    // Pitch owners get a personal org that isn't shown in the UI.
-    const organization = await this.orgsService.create(`${dto.firstName}'s Pitches`);
+    // Check if this email belongs to an existing player account.
+    const playerAccount = await this.playerAccountsRepo.findOne({
+      where: { personKey: emailKey(dto.email) },
+    });
 
-    const passwordHash = await bcrypt.hash(dto.password, 10);
+    let passwordHash: string;
+    let emailVerified = false;
+    let firstName = dto.firstName;
+    let lastName = dto.lastName;
+    let phone = dto.phone?.trim() || null;
+
+    if (playerAccount?.passwordHash) {
+      // Player account with a password: verify it matches before upgrading.
+      const passwordMatch = await bcrypt.compare(dto.password, playerAccount.passwordHash);
+      if (!passwordMatch) {
+        throw new BadRequestException(
+          'That email has a player account — use your player password',
+        );
+      }
+      // Reuse the existing hash; no need to re-hash the same password.
+      passwordHash = playerAccount.passwordHash;
+      emailVerified = true;
+      // Fall back to player account details if the dto didn't provide them.
+      firstName = dto.firstName || playerAccount.firstName;
+      lastName = dto.lastName || playerAccount.lastName;
+      phone = dto.phone?.trim() || playerAccount.phone || null;
+    } else {
+      // No player account, or player account without a password: normal flow.
+      passwordHash = await bcrypt.hash(dto.password, 10);
+    }
+
+    // Pitch owners get a personal org that isn't shown in the UI.
+    const organization = await this.orgsService.create(`${firstName}'s Pitches`);
+
     const user = await this.usersService.create({
-      firstName: dto.firstName,
-      lastName: dto.lastName,
+      firstName,
+      lastName,
       email: dto.email,
       passwordHash,
       role: UserRole.PITCH_OWNER,
       organizationId: organization.id,
-      phone: dto.phone?.trim() || null,
+      phone,
+      emailVerified,
     });
 
-    // Send verification email (non-blocking)
-    const verifyToken = await this.usersService.createEmailVerificationToken(user.id);
-    this.mailService.sendEmailVerification(user.email, user.firstName, verifyToken).catch((err) => {
-      console.error('[MAIL ERROR]', err?.message || err);
-    });
+    if (!emailVerified) {
+      // Send verification email (non-blocking)
+      const verifyToken = await this.usersService.createEmailVerificationToken(user.id);
+      this.mailService.sendEmailVerification(user.email, user.firstName, verifyToken).catch((err) => {
+        console.error('[MAIL ERROR]', err?.message || err);
+      });
+    }
 
     const accessToken = this.jwtService.sign({ sub: user.id });
     const refreshToken = await this.usersService.createRefreshToken(user.id, null);
@@ -120,6 +158,18 @@ export class AuthService {
       refreshToken,
       user: this.sanitizeUser(user, organization),
     };
+  }
+
+  async checkPitchOwnerEmail(email: string): Promise<{ status: 'new' | 'player' | 'taken' }> {
+    const existingUser = await this.usersService.findByEmail(email);
+    if (existingUser) return { status: 'taken' };
+
+    const playerAccount = await this.playerAccountsRepo.findOne({
+      where: { personKey: emailKey(email) },
+    });
+    if (playerAccount?.passwordHash) return { status: 'player' };
+
+    return { status: 'new' };
   }
 
   async login(dto: LoginDto) {
