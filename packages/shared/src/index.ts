@@ -584,6 +584,9 @@ export interface IPitch {
   bankCode?: string | null;
   bankName?: string | null;
   accountHolderName?: string | null;
+  accountNumber?: string | null;
+  accountName?: string | null;
+  virtualBankName?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -623,6 +626,7 @@ export interface IPitchBooking {
   paymentMethod: string;
   paymentStatus: string;
   outgoingTransferId?: string | null;
+  incomingTransferId?: string | null;
   notes?: string | null;
   rejectionReason?: string | null;
   confirmedAt?: string | null;
@@ -659,6 +663,9 @@ export interface IPublicPitch {
   currency: string;
   shareCode: string;
   status: string;
+  accountNumber?: string | null;
+  accountName?: string | null;
+  virtualBankName?: string | null;
 }
 
 export * from './phone';

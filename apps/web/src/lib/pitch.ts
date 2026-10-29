@@ -126,6 +126,44 @@ export function pitchNameEnquiry(pitchId: string, bankCode: string, accountNumbe
   return http.post<{ accountName: string }>(`/pitches/${pitchId}/name-enquiry`, { bankCode, accountNumber });
 }
 
+// ── Virtual account / billing ──
+
+export function createPitchAccount(pitchId: string) {
+  return http.post<IPitch>(`/pitches/${pitchId}/account`);
+}
+
+export function getPitchBilling(pitchId: string) {
+  return http.get<{
+    accountNumber: string | null;
+    accountName: string | null;
+    virtualBankName: string | null;
+    bankAccountNumber: string | null;
+    bankCode: string | null;
+    bankName: string | null;
+    accountHolderName: string | null;
+  }>(`/pitches/${pitchId}/billing`);
+}
+
+export function getPitchBalance(pitchId: string) {
+  return http.get<{ totalIn: number; totalOut: number; available: number; bankBalance: number | null }>(`/pitches/${pitchId}/balance`);
+}
+
+export function listPitchTransfers(pitchId: string) {
+  return http.get<any[]>(`/pitches/${pitchId}/transfers`);
+}
+
+export function listPitchPayouts(pitchId: string) {
+  return http.get<any[]>(`/pitches/${pitchId}/payouts`);
+}
+
+export function withdrawFromPitch(pitchId: string, data: { amount: number; pin: string; narration?: string }) {
+  return http.post<any>(`/pitches/${pitchId}/withdraw`, data);
+}
+
+export function assignPitchTransfer(pitchId: string, transferId: string, bookingId: string) {
+  return http.post<any>(`/pitches/${pitchId}/transfers/${transferId}/assign`, { bookingId });
+}
+
 // ── Public ──
 
 export function getPublicPitch(code: string) {
