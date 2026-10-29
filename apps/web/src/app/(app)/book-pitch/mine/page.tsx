@@ -106,6 +106,13 @@ export default function MyBookingsPage() {
                   </button>
                 )}
               </div>
+              {b.status === 'confirmed' && b.paymentStatus === 'unpaid' && b.pitch?.accountNumber && (
+                <div className="w-full mt-2 bg-blue-50 rounded-lg px-3 py-2">
+                  <p className="text-xs font-bold text-blue-700 mb-0.5">Pay via bank transfer</p>
+                  <p className="text-xs text-blue-900 font-mono">{b.pitch.accountNumber}</p>
+                  <p className="text-[11px] text-blue-700">{b.pitch.accountName} &middot; {b.pitch.virtualBankName}</p>
+                </div>
+              )}
             </div>
           ))}
         </div>

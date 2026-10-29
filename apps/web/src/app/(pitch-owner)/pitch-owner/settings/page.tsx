@@ -12,6 +12,8 @@ export default function PitchOwnerAccountSettings() {
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     phone: user?.phone || '',
+    bvn: user?.bvn || '',
+    nin: user?.nin || '',
   });
   const [saving, setSaving] = useState(false);
 
@@ -23,6 +25,8 @@ export default function PitchOwnerAccountSettings() {
         firstName: form.firstName,
         lastName: form.lastName,
         phone: form.phone || undefined,
+        bvn: form.bvn || undefined,
+        nin: form.nin || undefined,
       });
       await refreshUser();
       toast.success('Profile updated');
@@ -56,6 +60,19 @@ export default function PitchOwnerAccountSettings() {
         <div>
           <label className="block text-xs font-bold text-gray-700 mb-1.5">Phone</label>
           <input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className={inputClass} />
+        </div>
+        <div className="pt-4 border-t border-gray-100">
+          <p className="text-xs text-gray-500 mb-3">BVN or NIN is required to create a collection account for receiving pitch payments.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">BVN</label>
+              <input maxLength={11} value={form.bvn} onChange={(e) => setForm({ ...form, bvn: e.target.value.replace(/\D/g, '') })} className={inputClass} placeholder="11 digits" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">NIN</label>
+              <input maxLength={11} value={form.nin} onChange={(e) => setForm({ ...form, nin: e.target.value.replace(/\D/g, '') })} className={inputClass} placeholder="11 digits" />
+            </div>
+          </div>
         </div>
         <button type="submit" disabled={saving} className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50">
           {saving ? 'Saving...' : 'Save'}

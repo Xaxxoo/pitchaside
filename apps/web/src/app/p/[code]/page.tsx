@@ -78,6 +78,13 @@ export default function PublicPitchPage() {
           <p className="mt-3 text-volt-300 font-bold text-sm">
             {pitch.currency} {Number(pitch.defaultPrice).toLocaleString()} / {pitch.slotDurationMinutes} min
           </p>
+          {pitch.accountNumber && (
+            <div className="mt-4 bg-white/10 rounded-xl px-4 py-3">
+              <p className="text-xs font-bold text-white/70 mb-1">Pay via bank transfer</p>
+              <p className="text-sm font-mono text-white">{pitch.accountNumber}</p>
+              <p className="text-xs text-white/70">{pitch.accountName} &middot; {pitch.virtualBankName}</p>
+            </div>
+          )}
         </div>
       </div>
 

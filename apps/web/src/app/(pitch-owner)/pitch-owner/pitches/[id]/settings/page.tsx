@@ -5,8 +5,10 @@ import { useParams, useRouter } from 'next/navigation';
 import {
   getPitch, updatePitch, setSchedule, getSchedule, addOverride, listOverrides, removeOverride,
   saveBankDetails, pitchNameEnquiry, deactivatePitch,
+  createPitchAccount, getPitchBalance, listPitchTransfers, listPitchPayouts, withdrawFromPitch,
 } from '@/lib/pitch';
 import { useToast } from '@/components/toast';
+import { useSearchParams } from 'next/navigation';
 import type { IPitch, IPitchSchedule, IPitchSlotOverride } from '@pitchaside/shared';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -17,9 +19,13 @@ export default function PitchSettingsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
+  const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab') as any;
   const [pitch, setPitch] = useState<IPitch | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'general' | 'schedule' | 'overrides' | 'bank'>('general');
+  const [tab, setTab] = useState<'general' | 'schedule' | 'overrides' | 'bank' | 'account'>(
+    ['general', 'schedule', 'overrides', 'bank', 'account'].includes(initialTab) ? initialTab : 'general',
+  );
 
   // General form
   const [general, setGeneral] = useState({ name: '', address: '', city: '', state: '', description: '', defaultPrice: '', slotDurationMinutes: '60' });
@@ -38,6 +44,14 @@ export default function PitchSettingsPage() {
   const [bank, setBank] = useState({ bankAccountNumber: '', bankCode: '', bankName: '', accountHolderName: '' });
   const [savingBank, setSavingBank] = useState(false);
   const [lookingUp, setLookingUp] = useState(false);
+
+  // Account (virtual account)
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [balance, setBalance] = useState<{ totalIn: number; totalOut: number; available: number } | null>(null);
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [payouts, setPayouts] = useState<any[]>([]);
+  const [withdrawForm, setWithdrawForm] = useState({ amount: '', pin: '', narration: '' });
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -64,6 +78,14 @@ export default function PitchSettingsPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Load account tab data when switching to it
+  useEffect(() => {
+    if (tab !== 'account' || !pitch?.accountNumber) return;
+    getPitchBalance(id).then(setBalance).catch(() => {});
+    listPitchTransfers(id).then(setTransfers).catch(() => {});
+    listPitchPayouts(id).then(setPayouts).catch(() => {});
+  }, [tab, id, pitch?.accountNumber]);
 
   async function saveGeneral(e: React.FormEvent) {
     e.preventDefault();
@@ -155,6 +177,32 @@ export default function PitchSettingsPage() {
     } catch (err: any) { toast.error(err.message); } finally { setLookingUp(false); }
   }
 
+  async function handleCreateAccount() {
+    setCreatingAccount(true);
+    try {
+      const updated = await createPitchAccount(id);
+      setPitch(updated);
+      toast.success('Collection account created');
+    } catch (err: any) { toast.error(err.message); } finally { setCreatingAccount(false); }
+  }
+
+  async function handleWithdraw(e: React.FormEvent) {
+    e.preventDefault();
+    setWithdrawing(true);
+    try {
+      await withdrawFromPitch(id, {
+        amount: Number(withdrawForm.amount),
+        pin: withdrawForm.pin,
+        narration: withdrawForm.narration || undefined,
+      });
+      toast.success('Withdrawal initiated');
+      setWithdrawForm({ amount: '', pin: '', narration: '' });
+      // Refresh balance and payouts
+      getPitchBalance(id).then(setBalance).catch(() => {});
+      listPitchPayouts(id).then(setPayouts).catch(() => {});
+    } catch (err: any) { toast.error(err.message); } finally { setWithdrawing(false); }
+  }
+
   async function handleDeactivate() {
     if (!confirm('Deactivate this pitch? It will no longer be bookable.')) return;
     try {
@@ -174,9 +222,9 @@ export default function PitchSettingsPage() {
       <h1 className="text-2xl font-extrabold text-ink mb-1">{pitch.name} &mdash; Settings</h1>
       <p className="text-sm text-gray-500 mb-6">Manage pitch details, schedule, bank, and overrides.</p>
 
-      <div className="flex gap-1 mb-6 border-b border-gray-100">
-        {(['general', 'schedule', 'overrides', 'bank'] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium capitalize transition-colors ${tab === t ? 'text-ink border-b-2 border-ink' : 'text-gray-400 hover:text-gray-600'}`}>
+      <div className="flex gap-1 mb-6 border-b border-gray-100 overflow-x-auto">
+        {(['general', 'schedule', 'overrides', 'bank', 'account'] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium capitalize transition-colors whitespace-nowrap ${tab === t ? 'text-ink border-b-2 border-ink' : 'text-gray-400 hover:text-gray-600'}`}>
             {t}
           </button>
         ))}
@@ -311,6 +359,142 @@ export default function PitchSettingsPage() {
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      )}
+
+      {/* Account (virtual account) */}
+      {tab === 'account' && (
+        <div className="space-y-6">
+          {!pitch.accountNumber ? (
+            <div className="bg-white rounded-xl border border-gray-100 p-6 text-center">
+              <h3 className="text-sm font-bold text-ink mb-2">Collection account</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Create a virtual account so bookers can pay directly via bank transfer.
+                You&apos;ll need BVN or NIN set up in your account settings.
+              </p>
+              <button
+                onClick={handleCreateAccount}
+                disabled={creatingAccount}
+                className="px-5 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
+              >
+                {creatingAccount ? 'Creating...' : 'Create collection account'}
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Account details */}
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <h3 className="text-xs font-bold text-gray-500 mb-3">Collection account</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500">Account number</p>
+                      <p className="text-sm font-mono font-bold text-ink">{pitch.accountNumber}</p>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(pitch.accountNumber!); toast.success('Copied'); }}
+                      className="text-xs font-bold text-pitch-600 hover:text-pitch-700"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Bank</p>
+                    <p className="text-sm font-semibold text-ink">{pitch.virtualBankName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Account name</p>
+                    <p className="text-sm font-semibold text-ink">{pitch.accountName}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Balance */}
+              {balance && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
+                    <p className="text-xs text-gray-500">Total in</p>
+                    <p className="text-sm font-bold text-ink">{Number(balance.totalIn).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
+                    <p className="text-xs text-gray-500">Total out</p>
+                    <p className="text-sm font-bold text-ink">{Number(balance.totalOut).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-green-200 p-3 text-center">
+                    <p className="text-xs text-gray-500">Available</p>
+                    <p className="text-sm font-bold text-green-700">{Number(balance.available).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Withdraw */}
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <h3 className="text-xs font-bold text-gray-500 mb-3">Withdraw to your bank</h3>
+                {(!pitch.bankAccountNumber || !pitch.bankCode) ? (
+                  <p className="text-xs text-gray-500">Set your personal bank details in the Bank tab first.</p>
+                ) : (
+                  <form onSubmit={handleWithdraw} className="space-y-3">
+                    <p className="text-xs text-gray-400">
+                      To: {pitch.accountHolderName} &middot; {pitch.bankAccountNumber} &middot; {pitch.bankName}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="number" required min={1} placeholder="Amount" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value })} className={inputClass} />
+                      <input type="password" required maxLength={6} placeholder="PIN" value={withdrawForm.pin} onChange={(e) => setWithdrawForm({ ...withdrawForm, pin: e.target.value })} className={inputClass} />
+                    </div>
+                    <input placeholder="Narration (optional)" value={withdrawForm.narration} onChange={(e) => setWithdrawForm({ ...withdrawForm, narration: e.target.value })} className={inputClass} />
+                    <button type="submit" disabled={withdrawing} className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50">
+                      {withdrawing ? 'Withdrawing...' : 'Withdraw'}
+                    </button>
+                    <p className="text-[11px] text-gray-400">A service fee of NGN 350 applies per withdrawal.</p>
+                  </form>
+                )}
+              </div>
+
+              {/* Recent transfers */}
+              {transfers.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-gray-500 mb-2">Recent transfers in</h3>
+                  <div className="space-y-1.5">
+                    {transfers.slice(0, 10).map((t: any) => (
+                      <div key={t.id} className="bg-white rounded-xl border border-gray-100 px-4 py-2.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-semibold text-ink">NGN {Number(t.amount).toLocaleString()}</span>
+                          {t.senderName && <span className="text-xs text-gray-400 ml-2">{t.senderName}</span>}
+                        </div>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${t.status === 'matched' || t.status === 'assigned' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {t.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent payouts */}
+              {payouts.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-gray-500 mb-2">Recent withdrawals</h3>
+                  <div className="space-y-1.5">
+                    {payouts.slice(0, 10).map((p: any) => (
+                      <div key={p.id} className="bg-white rounded-xl border border-gray-100 px-4 py-2.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-semibold text-ink">NGN {Number(p.amount).toLocaleString()}</span>
+                          <span className="text-xs text-gray-400 ml-2">{p.beneficiaryBankName}</span>
+                        </div>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          p.status === 'completed' ? 'bg-green-100 text-green-700'
+                          : p.status === 'failed' ? 'bg-red-100 text-red-700'
+                          : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

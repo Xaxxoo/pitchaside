@@ -83,6 +83,19 @@ export default function BookPitchPage() {
         <p className="text-sm text-gray-500">
           Your booking at <strong>{pitch.name}</strong> on {selectedSlot?.date} {selectedSlot?.slot.startTime}-{selectedSlot?.slot.endTime} is pending confirmation from the pitch owner.
         </p>
+        {pitch.accountNumber && (
+          <div className="mt-6 bg-white rounded-xl border border-gray-200 p-4 text-left">
+            <p className="text-xs font-bold text-gray-700 mb-2">Payment details</p>
+            <p className="text-sm text-ink">
+              Pay <strong>{pitch.currency} {selectedSlot?.slot.price.toLocaleString()}</strong> to:
+            </p>
+            <div className="mt-2 space-y-1">
+              <p className="text-sm font-mono font-bold text-ink">{pitch.accountNumber}</p>
+              <p className="text-xs text-gray-500">{pitch.accountName}</p>
+              <p className="text-xs text-gray-500">{pitch.virtualBankName}</p>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
