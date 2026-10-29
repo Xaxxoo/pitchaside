@@ -38,6 +38,13 @@ export class AuthController {
   }
 
   @SkipCsrf()
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @Post('pitch-owner-email-check')
+  checkPitchOwnerEmail(@Body() dto: ForgotPasswordDto) {
+    return this.authService.checkPitchOwnerEmail(dto.email);
+  }
+
+  @SkipCsrf()
   @Throttle({ default: { ttl: 60000, limit: 5 } })
   @Post('register/pitch-owner')
   async registerPitchOwner(@Body() dto: RegisterPitchOwnerDto, @Res({ passthrough: true }) res: Response) {
