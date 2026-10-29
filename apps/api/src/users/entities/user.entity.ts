@@ -15,6 +15,8 @@ export enum UserRole {
   MEMBER = 'member',
   /** Can see everything but only record payments (mark paid, waive, match transfers). */
   TREASURER = 'treasurer',
+  /** Owns pitches: manages schedules, bookings, and receives payments from organisers. */
+  PITCH_OWNER = 'pitch_owner',
 }
 
 @Entity('users')

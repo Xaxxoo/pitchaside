@@ -162,6 +162,7 @@ export enum UserRole {
   ORG_ADMIN = 'org_admin',
   MEMBER = 'member',
   TREASURER = 'treasurer',
+  PITCH_OWNER = 'pitch_owner',
 }
 
 export interface IOrganization {
@@ -534,5 +535,130 @@ export interface ICryptoOutgoingTransfer {
  * has voted). The API keeps its own copy: VOTE_HOURS in ratings.service.
  */
 export const VOTE_HOURS = 36;
+
+// ── Pitch Owner ──
+
+export enum PitchStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive',
+}
+
+export enum BookingStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  REJECTED = 'rejected',
+  CANCELLED = 'cancelled',
+}
+
+export enum BookingPaymentMethod {
+  ON_PLATFORM = 'on_platform',
+  OFF_PLATFORM = 'off_platform',
+}
+
+export enum BookingPaymentStatus {
+  UNPAID = 'unpaid',
+  PAID = 'paid',
+  REFUNDED = 'refunded',
+}
+
+export enum OverrideType {
+  BLOCKED = 'blocked',
+  ADDED = 'added',
+  PRICE_OVERRIDE = 'price_override',
+}
+
+export interface IPitch {
+  id: string;
+  ownerId: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  description?: string | null;
+  slotDurationMinutes: number;
+  defaultPrice: number;
+  currency: string;
+  shareCode: string;
+  status: string;
+  bankAccountNumber?: string | null;
+  bankCode?: string | null;
+  bankName?: string | null;
+  accountHolderName?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IPitchSchedule {
+  id: string;
+  pitchId: string;
+  dayOfWeek: number;
+  openTime: string;
+  closeTime: string;
+  price?: number | null;
+}
+
+export interface IPitchSlotOverride {
+  id: string;
+  pitchId: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  type: string;
+  price?: number | null;
+  reason?: string | null;
+}
+
+export interface IPitchBooking {
+  id: string;
+  pitchId: string;
+  groupId?: string | null;
+  bookedById?: string | null;
+  bookerName: string;
+  bookerPhone?: string | null;
+  date: string;
+  startTime: string;
+  endTime: string;
+  price: number;
+  status: string;
+  paymentMethod: string;
+  paymentStatus: string;
+  outgoingTransferId?: string | null;
+  notes?: string | null;
+  rejectionReason?: string | null;
+  confirmedAt?: string | null;
+  paidAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  pitch?: IPublicPitch;
+}
+
+export interface IPitchSlot {
+  startTime: string;
+  endTime: string;
+  price: number;
+  available: boolean;
+  bookingId?: string;
+  bookerName?: string;
+  bookingStatus?: string;
+}
+
+export interface IPitchDayAvailability {
+  date: string;
+  slots: IPitchSlot[];
+}
+
+export interface IPublicPitch {
+  id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  description?: string | null;
+  slotDurationMinutes: number;
+  defaultPrice: number;
+  currency: string;
+  shareCode: string;
+  status: string;
+}
 
 export * from './phone';
