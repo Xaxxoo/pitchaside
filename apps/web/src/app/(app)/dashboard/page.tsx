@@ -239,6 +239,10 @@ export default function Dashboard() {
   }
 
   const hour = new Date().getHours();
+  // An organiser without BVN and NIN can't open the account yet: the banner asks for those, and the
+  // account strip waits, so home shows one prompt for one problem, the step that comes first.
+  const needsIdentity =
+    !!user && (user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) && (!user.bvn || !user.nin) && groups.length > 0;
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
 
   // ── Needs you: only things there's something to do about ──
@@ -378,7 +382,7 @@ export default function Dashboard() {
         <UpdatesBell needs={bellNeeds} latest={bellLatest} />
       </div>
       {/* Banner: stays until BVN/NIN are saved; the reasons are in Settings and the sign-in sheet */}
-      {user && (user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) && (!user.bvn || !user.nin) && groups.length > 0 && (
+      {needsIdentity && (
         <Link
           href="/settings#identity"
           className="press mb-3 block rounded-2xl bg-sun-400/20 border border-sun-400/40 p-3.5 hover:border-sun-400 transition-colors"
@@ -422,7 +426,7 @@ export default function Dashboard() {
       {/* Today: the money in one strip, then this week's game (it changes through the week) */}
       {group && (
         <>
-          <AccountStrip group={group} money={money} canManage={canManage} />
+          <AccountStrip group={group} money={money} canManage={canManage} identityFirst={needsIdentity} />
           <GameCard
             className="mt-3"
             group={group}
