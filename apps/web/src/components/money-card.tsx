@@ -514,10 +514,13 @@ export function AccountStrip({
   group,
   money,
   canManage,
+  identityFirst = false,
 }: {
   group: IGroupWithMembers;
   money: ReturnType<typeof useGroupMoney>;
   canManage: boolean;
+  /** BVN and NIN still to add: home's banner asks for them, so no second "set up" box here. */
+  identityFirst?: boolean;
 }) {
   const [hidden, toggleHidden] = useHiddenBalance();
   const { balance, billing, transfers, balanceFailed } = money;
@@ -539,6 +542,8 @@ export function AccountStrip({
       () => toast.error('Could not copy. Press and hold the number to copy it instead.'),
     );
 
+  if (!hasAccount && identityFirst) return null;
+
   return (
     <section aria-label={`${group.name} account`} className="relative rounded-[28px] bg-ink text-white overflow-hidden shadow-lift">
       <div className="absolute inset-0 turf-stripes-soft" />
@@ -547,7 +552,7 @@ export function AccountStrip({
           <div className="flex items-center gap-3">
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-white">No bank account yet</p>
-              <p className="mt-0.5 text-[13px] leading-snug text-white/70">Set one up so players can pay by transfer.</p>
+              <p className="mt-0.5 text-[13px] leading-snug text-white/70">So players can pay by transfer.</p>
             </div>
             <Link
               href={moneyHref(group.id)}
