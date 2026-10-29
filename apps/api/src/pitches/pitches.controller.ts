@@ -18,6 +18,9 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SetScheduleDto } from './dto/set-schedule.dto';
 import { CreateOverrideDto } from './dto/create-override.dto';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+
+const PIN_RATE_LIMIT = { default: { limit: 5, ttl: 60000 } };
 
 @UseGuards(JwtAuthGuard)
 @Controller('pitches')
@@ -150,5 +153,60 @@ export class PitchesController {
   ) {
     assertPitchOwner(user);
     return this.pitchesService.nameEnquiry(id, user.id, body.bankCode, body.accountNumber);
+  }
+
+  // ── Virtual account / billing ──
+
+  @Post(':id/account')
+  createAccount(@Param('id') id: string, @CurrentUser() user: any) {
+    assertPitchOwner(user);
+    return this.pitchesService.createPitchAccount(id, user.id);
+  }
+
+  @Get(':id/billing')
+  getBilling(@Param('id') id: string, @CurrentUser() user: any) {
+    assertPitchOwner(user);
+    return this.pitchesService.getPitchBilling(id, user.id);
+  }
+
+  @Get(':id/balance')
+  getBalance(@Param('id') id: string, @CurrentUser() user: any) {
+    assertPitchOwner(user);
+    return this.pitchesService.getPitchBalance(id, user.id);
+  }
+
+  @Get(':id/transfers')
+  listTransfers(@Param('id') id: string, @CurrentUser() user: any) {
+    assertPitchOwner(user);
+    return this.pitchesService.listPitchTransfers(id, user.id);
+  }
+
+  @Get(':id/payouts')
+  listPayouts(@Param('id') id: string, @CurrentUser() user: any) {
+    assertPitchOwner(user);
+    return this.pitchesService.listPitchPayouts(id, user.id);
+  }
+
+  @Post(':id/withdraw')
+  @Throttle(PIN_RATE_LIMIT)
+  @UseGuards(ThrottlerGuard)
+  withdraw(
+    @Param('id') id: string,
+    @Body() body: { amount: number; pin: string; narration?: string },
+    @CurrentUser() user: any,
+  ) {
+    assertPitchOwner(user);
+    return this.pitchesService.withdraw(id, user.id, body);
+  }
+
+  @Post(':id/transfers/:tid/assign')
+  assignTransfer(
+    @Param('id') id: string,
+    @Param('tid') tid: string,
+    @Body('bookingId') bookingId: string,
+    @CurrentUser() user: any,
+  ) {
+    assertPitchOwner(user);
+    return this.pitchesService.assignTransfer(id, tid, bookingId, user.id);
   }
 }

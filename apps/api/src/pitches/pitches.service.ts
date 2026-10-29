@@ -285,6 +285,37 @@ export class PitchesService {
     return this.bookingRepo.save(booking);
   }
 
+  // ── Virtual account / billing delegation ──
+
+  async createPitchAccount(pitchId: string, ownerId: string) {
+    return this.billing.createPitchAccount(pitchId, ownerId);
+  }
+
+  async getPitchBilling(pitchId: string, ownerId: string) {
+    return this.billing.getPitchBilling(pitchId, ownerId);
+  }
+
+  async getPitchBalance(pitchId: string, ownerId: string) {
+    return this.billing.getPitchBalance(pitchId, ownerId);
+  }
+
+  async withdraw(pitchId: string, ownerId: string, dto: { amount: number; pin: string; narration?: string }) {
+    return this.billing.initiatePitchWithdrawal(pitchId, ownerId, dto);
+  }
+
+  async listPitchTransfers(pitchId: string, ownerId: string) {
+    return this.billing.listPitchTransfers(pitchId, ownerId);
+  }
+
+  async listPitchPayouts(pitchId: string, ownerId: string) {
+    return this.billing.listPitchPayouts(pitchId, ownerId);
+  }
+
+  async assignTransfer(pitchId: string, transferId: string, bookingId: string, ownerId: string) {
+    await this.findOne(pitchId, ownerId);
+    return this.billing.assignPitchTransfer(transferId, bookingId, ownerId);
+  }
+
   // ── Helpers ──
 
   private sanitizePitch(pitch: Pitch) {
@@ -300,6 +331,9 @@ export class PitchesService {
       currency: pitch.currency,
       shareCode: pitch.shareCode,
       status: pitch.status,
+      accountNumber: pitch.accountNumber,
+      accountName: pitch.accountName,
+      virtualBankName: pitch.virtualBankName,
     };
   }
 
