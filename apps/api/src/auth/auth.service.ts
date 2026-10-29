@@ -187,7 +187,7 @@ export class AuthService {
     return this.sanitizeUser(user, user.organization);
   }
 
-  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string }) {
+  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string; bvn?: string; nin?: string }) {
     const user = await this.usersService.updateProfile(userId, data);
     if (!user) throw new UnauthorizedException('User not found');
     return this.sanitizeUser(user, user.organization);

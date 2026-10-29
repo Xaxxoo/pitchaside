@@ -111,10 +111,12 @@ export class UsersService {
     return this.usersRepo.count({ where: { organizationId } });
   }
 
-  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string }) {
-    const { phone, ...names } = data;
+  async updateProfile(userId: string, data: { firstName: string; lastName: string; phone?: string; bvn?: string; nin?: string }) {
+    const { phone, bvn, nin, ...names } = data;
     const update: Partial<User> = { ...names };
     if (phone !== undefined) update.phone = phone.trim() || null;
+    if (bvn !== undefined) update.bvn = bvn.trim() || null;
+    if (nin !== undefined) update.nin = nin.trim() || null;
     await this.usersRepo.update(userId, update);
     return this.findById(userId);
   }

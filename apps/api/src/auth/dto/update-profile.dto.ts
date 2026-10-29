@@ -18,4 +18,14 @@ export class UpdateProfileDto {
   @Transform(({ value }) => tidyPhone(value))
   @Matches(/^$|^[+\d][\d\s\-().]{6,}$/, { message: 'Phone number format is invalid' })
   phone?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{11}$/, { message: 'BVN must be exactly 11 digits' })
+  bvn?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{11}$/, { message: 'NIN must be exactly 11 digits' })
+  nin?: string;
 }
