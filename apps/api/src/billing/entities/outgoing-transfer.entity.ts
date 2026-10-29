@@ -7,6 +7,7 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { Group } from '../../groups/entities/group.entity';
+import { Pitch } from '../../pitches/entities/pitch.entity';
 import { User } from '../../users/entities/user.entity';
 import { Player } from '../../players/entities/player.entity';
 
@@ -27,12 +28,19 @@ export class OutgoingTransfer {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @ManyToOne(() => Group, { onDelete: 'CASCADE' })
+  @ManyToOne(() => Group, { onDelete: 'CASCADE', nullable: true })
   @JoinColumn({ name: 'group_id' })
   group: Group;
 
-  @Column({ name: 'group_id' })
-  groupId: string;
+  @Column({ name: 'group_id', nullable: true })
+  groupId: string | null;
+
+  @ManyToOne(() => Pitch, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'pitch_id' })
+  pitch: Pitch;
+
+  @Column({ name: 'pitch_id', type: 'uuid', nullable: true })
+  pitchId: string | null;
 
   @Column({ type: 'decimal', precision: 12, scale: 2 })
   amount: number;

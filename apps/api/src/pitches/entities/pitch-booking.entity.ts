@@ -67,6 +67,10 @@ export class PitchBooking {
   @Column({ name: 'outgoing_transfer_id', type: 'uuid', nullable: true })
   outgoingTransferId: string | null;
 
+  /** The incoming bank transfer that paid this booking (set when matched or assigned). */
+  @Column({ name: 'incoming_transfer_id', type: 'uuid', nullable: true })
+  incomingTransferId: string | null;
+
   @Column({ type: 'text', nullable: true })
   notes: string | null;
 

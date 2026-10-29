@@ -8,6 +8,7 @@ import {
   Index,
 } from 'typeorm';
 import { Group } from '../../groups/entities/group.entity';
+import { Pitch } from '../../pitches/entities/pitch.entity';
 import { Payment } from '../../payments/entities/payment.entity';
 import { Player } from '../../players/entities/player.entity';
 
@@ -43,6 +44,14 @@ export class BankTransfer {
 
   @Column({ name: 'group_id', nullable: true })
   groupId: string;
+
+  @ManyToOne(() => Pitch, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'pitch_id' })
+  pitch: Pitch;
+
+  @Index('IDX_bank_transfers_pitch_id')
+  @Column({ name: 'pitch_id', type: 'uuid', nullable: true })
+  pitchId: string | null;
 
   @Column({ name: 'account_number' })
   accountNumber: string;

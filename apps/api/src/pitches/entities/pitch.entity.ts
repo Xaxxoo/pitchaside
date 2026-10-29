@@ -67,6 +67,24 @@ export class Pitch {
   @Column({ name: 'account_holder_name', type: 'varchar', nullable: true })
   accountHolderName: string | null;
 
+  /** Dedicated collection account provisioned with Payrep for this pitch. */
+  @Column({ name: 'account_number', nullable: true, unique: true })
+  accountNumber: string | null;
+
+  @Column({ name: 'account_name', nullable: true })
+  accountName: string | null;
+
+  @Column({
+    name: 'virtual_bank_name',
+    nullable: true,
+    transformer: { to: (v: string) => v, from: (v: string | null) => (v === 'Pulse Microfinance Bank' ? 'Payrep Microfinance Bank' : v) },
+  })
+  virtualBankName: string | null;
+
+  /** Provider-side identifier for the account (for support / reconciliation). */
+  @Column({ name: 'account_reference', nullable: true })
+  accountReference: string | null;
+
   @OneToMany(() => PitchSchedule, (s) => s.pitch)
   schedules: PitchSchedule[];
 
