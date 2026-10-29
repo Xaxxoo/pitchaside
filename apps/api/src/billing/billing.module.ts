@@ -16,6 +16,8 @@ import { GroupKeptMoney } from './entities/group-kept-money.entity';
 import { UsersModule } from '../users/users.module';
 import { Competition } from '../competitions/entities/competition.entity';
 import { CompetitionTeam } from '../competitions/entities/competition-team.entity';
+import { Pitch } from '../pitches/entities/pitch.entity';
+import { PitchBooking } from '../pitches/entities/pitch-booking.entity';
 import { BillingService } from './billing.service';
 import { BillingController, PublicBillingController } from './billing.controller';
 import { PULSE_CLIENT, PulseClient } from './pulse/pulse.client';
@@ -24,7 +26,7 @@ import { HttpPulseClient } from './pulse/http-pulse.client';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Group, GroupMembership, Session, Payment, Player, BankTransfer, OutgoingTransfer, PaymentClaim, PaymentReceipt, GroupKeptMoney, Competition, CompetitionTeam]),
+    TypeOrmModule.forFeature([Group, GroupMembership, Session, Payment, Player, BankTransfer, OutgoingTransfer, PaymentClaim, PaymentReceipt, GroupKeptMoney, Competition, CompetitionTeam, Pitch, PitchBooking]),
     PaymentsModule,
     NotificationsModule,
     UsersModule,

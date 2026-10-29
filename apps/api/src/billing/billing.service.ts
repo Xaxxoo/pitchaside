@@ -45,6 +45,8 @@ import { PERIODIC_TYPES, periodFor } from './periods';
 import { COVERED_BY_DUES, gameTarget, squadEntry } from '../payments/game-dues';
 import { Competition } from '../competitions/entities/competition.entity';
 import { CompetitionTeam, TeamRegistrationStatus } from '../competitions/entities/competition-team.entity';
+import { Pitch } from '../pitches/entities/pitch.entity';
+import { PitchBooking } from '../pitches/entities/pitch-booking.entity';
 
 export { periodFor };
 
@@ -154,6 +156,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     private config: ConfigService,
     @InjectRepository(PaymentClaim) private claimsRepo: Repository<PaymentClaim>,
     @InjectRepository(PaymentReceipt) private receiptsRepo?: Repository<PaymentReceipt>,
+    @InjectRepository(Pitch) private pitchesRepo?: Repository<Pitch>,
+    @InjectRepository(PitchBooking) private pitchBookingsRepo?: Repository<PitchBooking>,
   ) {}
 
   // ── Lifecycle: open new dues periods as time rolls over ──
@@ -688,6 +692,19 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
         note('recorded');
         if (!('duplicate' in result)) await this.confirmTeamIfPaid(comp, credit, log);
         log(`competition credit of ${credit.amount} to ${credit.accountNumber} → ${result.status}`);
+        return result;
+      }
+    }
+
+    // Money into a pitch collection account.
+    if (credit && this.pitchesRepo) {
+      const pitch = await this.pitchesRepo.createQueryBuilder('p')
+        .where('RIGHT(p.account_number, 10) = :acct', { acct: credit.accountNumber })
+        .getOne();
+      if (pitch) {
+        const result = await this.recordPitchTransfer(credit, pitch);
+        note('recorded');
+        log(`pitch credit of ${credit.amount} to ${credit.accountNumber} → ${result.status}`);
         return result;
       }
     }
@@ -2182,10 +2199,10 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * is extra to sort, not kept for their next game: nobody chose to keep it.
    */
   private async moveRefundCredit(payout: OutgoingTransfer, delta: number) {
-    if (!payout.refundPlayerId) return;
+    if (!payout.refundPlayerId || !payout.groupId) return;
     await this.membershipsRepo.manager.transaction(async (tx) => {
       const membership = await tx.findOne(GroupMembership, {
-        where: { groupId: payout.groupId, playerId: payout.refundPlayerId! },
+        where: { groupId: payout.groupId!, playerId: payout.refundPlayerId! },
         lock: { mode: 'pessimistic_write' },
       });
       if (!membership) {
@@ -2336,9 +2353,21 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  /** The group a payout came from, for its fee. */
+  /** The group or pitch a payout came from, for its fee. */
+  private async sourceOf(payout: OutgoingTransfer): Promise<Pick<Group, 'accountNumber' | 'name'> | null> {
+    if (payout.groupId) {
+      return this.groupsRepo.findOne({ where: { id: payout.groupId }, select: ['id', 'accountNumber', 'name'] });
+    }
+    if (payout.pitchId && this.pitchesRepo) {
+      const pitch = await this.pitchesRepo.findOne({ where: { id: payout.pitchId }, select: ['id', 'accountNumber', 'name'] });
+      if (pitch) return { accountNumber: pitch.accountNumber!, name: pitch.name };
+    }
+    return null;
+  }
+
+  /** @deprecated Use sourceOf instead — kept for any call sites that rely on groupOf specifically. */
   private async groupOf(payout: OutgoingTransfer) {
-    return this.groupsRepo.findOne({ where: { id: payout.groupId }, select: ['id', 'accountNumber', 'name'] });
+    return this.groupsRepo.findOne({ where: { id: payout.groupId! }, select: ['id', 'accountNumber', 'name'] });
   }
 
   /**
@@ -2359,8 +2388,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
     }
     if (/complet|success/i.test(status)) {
       if (await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.COMPLETED)) {
-        const group = await this.groupOf(payout);
-        if (group) await this.sendFee(payout, group);
+        const source = await this.sourceOf(payout);
+        if (source) await this.sendFee(payout, source);
       }
     } else if (/fail|revers/i.test(status) || status === 'not_found') {
       if (await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.FAILED, payoutFailureText(reason ?? raw, payout.beneficiaryBankName).slice(0, 200))) {
@@ -2383,8 +2412,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
           await this.handlePayoutWebhook(payout.providerReference, 'completed');
           // One the bank was slow to confirm hasn't had its fee sent yet (the -FEE reference stops a second).
           if (payout.errorMessage?.startsWith('The bank is slow to confirm')) {
-            const group = await this.groupOf(payout);
-            if (group) await this.sendFee(payout, group);
+            const source = await this.sourceOf(payout);
+            if (source) await this.sendFee(payout, source);
           }
         }
         else if (/fail|revers/i.test(bank.status)) await this.handlePayoutWebhook(payout.providerReference, 'failed', payoutFailureText(bank.errorMessage ?? bank.status, payout.beneficiaryBankName));
@@ -2443,6 +2472,280 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       .getOne();
     if (!transfer) throw new NotFoundException('Transfer not found');
     return transfer;
+  }
+
+  // ── Pitch virtual accounts ──
+
+  /** Provision a Payrep virtual account for a pitch. */
+  async provisionPitchAccount(pitch: Pitch, owner: { email?: string; phone?: string; bvn?: string | null; nin?: string | null }) {
+    const account = await this.pulse.createAccount({
+      reference: `pitch-${pitch.id}`,
+      accountName: accountNameFor(pitch.name),
+      email: owner.email,
+      phone: owner.phone,
+      bvn: owner.bvn ?? undefined,
+      nin: owner.nin ?? undefined,
+    });
+    pitch.accountNumber = account.accountNumber;
+    pitch.accountName = account.accountName;
+    pitch.virtualBankName = account.bankName;
+    pitch.accountReference = account.providerReference;
+    return this.pitchesRepo!.save(pitch);
+  }
+
+  /** Public entry point: check ownership, check BVN/NIN, provision account. */
+  async createPitchAccount(pitchId: string, ownerId: string) {
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    if (pitch.accountNumber) throw new BadRequestException('Pitch already has a collection account');
+
+    const user = await this.usersService.findById(ownerId);
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.bvn && !user.nin) throw new BadRequestException('Please add your BVN or NIN in account settings before creating a collection account');
+
+    return this.provisionPitchAccount(pitch, { email: user.email, phone: user.phone ?? undefined, bvn: user.bvn, nin: user.nin });
+  }
+
+  /** Record an incoming transfer to a pitch account (idempotent). */
+  async recordPitchTransfer(incoming: IncomingTransfer, pitch: Pitch) {
+    const seen = await this.transfersRepo.findOne({
+      where: { providerTransactionId: incoming.providerTransactionId },
+    });
+    if (seen) return { received: true, duplicate: true, status: seen.status };
+
+    const transfer = await this.transfersRepo.save(
+      this.transfersRepo.create({
+        providerTransactionId: incoming.providerTransactionId,
+        pitchId: pitch.id,
+        accountNumber: incoming.accountNumber,
+        amount: incoming.amount,
+        senderName: incoming.senderName,
+        senderAccount: incoming.senderAccount ? incoming.senderAccount.replace(/\D/g, '').slice(-10) : null,
+        narration: incoming.narration,
+        receivedAt: incoming.receivedAt,
+        raw: incoming.raw as object,
+        status: TransferStatus.UNMATCHED,
+      }),
+    );
+
+    // Try to auto-match to a confirmed, unpaid booking with a matching amount.
+    await this.matchPitchBooking(pitch.id, transfer);
+
+    this.logger.log(`Pitch ${pitch.id} (${pitch.name}): ${naira(incoming.amount)} received${incoming.senderName ? ` from ${incoming.senderName}` : ''}`);
+
+    return { received: true, status: transfer.status };
+  }
+
+  /** Try to match an incoming transfer to a confirmed, unpaid pitch booking (within ₦1). */
+  private async matchPitchBooking(pitchId: string, transfer: BankTransfer) {
+    if (!this.pitchBookingsRepo) return;
+    const booking = await this.pitchBookingsRepo
+      .createQueryBuilder('b')
+      .where('b.pitch_id = :pitchId', { pitchId })
+      .andWhere('b.status = :status', { status: 'confirmed' })
+      .andWhere('b.payment_status = :ps', { ps: 'unpaid' })
+      .andWhere('b.incoming_transfer_id IS NULL')
+      .andWhere('ABS(b.price - :amount) <= 1', { amount: Number(transfer.amount) })
+      .orderBy('b.date', 'ASC')
+      .addOrderBy('b.start_time', 'ASC')
+      .getOne();
+
+    if (booking) {
+      booking.paymentStatus = 'paid';
+      booking.paymentMethod = 'on_platform';
+      booking.paidAt = new Date();
+      booking.incomingTransferId = transfer.id;
+      await this.pitchBookingsRepo.save(booking);
+      transfer.status = TransferStatus.MATCHED;
+      await this.transfersRepo.save(transfer);
+    }
+  }
+
+  /** Get pitch billing info (account details). */
+  async getPitchBilling(pitchId: string, ownerId: string) {
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    return {
+      accountNumber: pitch.accountNumber,
+      accountName: pitch.accountName,
+      virtualBankName: pitch.virtualBankName,
+      bankAccountNumber: pitch.bankAccountNumber,
+      bankCode: pitch.bankCode,
+      bankName: pitch.bankName,
+      accountHolderName: pitch.accountHolderName,
+    };
+  }
+
+  /** Compute pitch balance: sum incoming minus sum outgoing (non-failed/cancelled). */
+  async getPitchBalance(pitchId: string, ownerId: string) {
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    if (!pitch.accountNumber) throw new BadRequestException('Pitch has no collection account');
+
+    const { totalIn } = await this.transfersRepo
+      .createQueryBuilder('t')
+      .select('COALESCE(SUM(t.amount), 0)', 'totalIn')
+      .where('t.pitchId = :pitchId', { pitchId })
+      .getRawOne();
+
+    const { totalOut } = await this.payoutsRepo
+      .createQueryBuilder('p')
+      .select('COALESCE(SUM(p.amount + p.fee), 0)', 'totalOut')
+      .where('p.pitchId = :pitchId', { pitchId })
+      .andWhere('p.status NOT IN (:...excluded)', { excluded: [PayoutStatus.FAILED, PayoutStatus.CANCELLED] })
+      .getRawOne();
+
+    // Also check with Payrep for the real balance.
+    const held = await this.pulse.getBalance(pitch.accountNumber).catch(() => null);
+
+    return {
+      totalIn: Number(totalIn),
+      totalOut: Number(totalOut),
+      available: Number(totalIn) - Number(totalOut),
+      bankBalance: held,
+    };
+  }
+
+  /** Pitch owner withdrawal to their personal bank account. */
+  async initiatePitchWithdrawal(pitchId: string, ownerId: string, dto: { amount: number; pin: string; narration?: string }) {
+    const pinValid = await this.usersService.verifyTransferPin(ownerId, dto.pin);
+    if (!pinValid) throw new BadRequestException('Incorrect transfer PIN');
+
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    if (!pitch.accountNumber) throw new BadRequestException('Pitch has no collection account');
+    if (!pitch.bankAccountNumber || !pitch.bankCode) throw new BadRequestException('Please add your personal bank details before withdrawing');
+
+    // Check Payrep balance.
+    const held = await this.pulse.getBalance(pitch.accountNumber).catch(() => null);
+    if (held !== null && dto.amount + PLATFORM_FEE > held) {
+      throw new BadRequestException(`The pitch account holds ${naira(held)}, not enough for ${naira(dto.amount)} plus the ${naira(PLATFORM_FEE)} service fee`);
+    }
+
+    const reference = `PA-P-${randomBytes(8).toString('hex').toUpperCase()}`;
+    const draft = this.payoutsRepo.create({
+      pitchId,
+      groupId: null,
+      amount: dto.amount,
+      fee: PLATFORM_FEE,
+      beneficiaryAccount: pitch.bankAccountNumber,
+      beneficiaryName: pitch.accountHolderName ?? pitch.accountName ?? 'Pitch Owner',
+      beneficiaryBankCode: pitch.bankCode,
+      beneficiaryBankName: pitch.bankName ?? 'Unknown Bank',
+      narration: dto.narration ?? `PitchAside withdrawal – ${pitch.name}`,
+      providerReference: reference,
+      initiatedById: ownerId,
+    });
+
+    const payout = await this.payoutsRepo.manager.transaction(async (tx) => {
+      await tx.findOne(Pitch, { where: { id: pitchId }, lock: { mode: 'pessimistic_write' } });
+
+      // Ledger balance check.
+      const { totalIn } = await this.transfersRepo
+        .createQueryBuilder('t')
+        .select('COALESCE(SUM(t.amount), 0)', 'totalIn')
+        .where('t.pitchId = :pitchId', { pitchId })
+        .getRawOne();
+      const { totalOut } = await this.payoutsRepo
+        .createQueryBuilder('p')
+        .select('COALESCE(SUM(p.amount + p.fee), 0)', 'totalOut')
+        .where('p.pitchId = :pitchId', { pitchId })
+        .andWhere('p.status NOT IN (:...excluded)', { excluded: [PayoutStatus.FAILED, PayoutStatus.CANCELLED] })
+        .getRawOne();
+      const available = Number(totalIn) - Number(totalOut);
+      if (dto.amount + PLATFORM_FEE > available) {
+        throw new BadRequestException(`Insufficient balance. Available: ${naira(available)} (includes ${naira(PLATFORM_FEE)} service fee)`);
+      }
+
+      // Daily limit: ₦10M per pitch.
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const { dailyTotal } = await this.payoutsRepo
+        .createQueryBuilder('p')
+        .select('COALESCE(SUM(p.amount), 0)', 'dailyTotal')
+        .where('p.pitchId = :pitchId', { pitchId })
+        .andWhere('p.status != :cancelled', { cancelled: PayoutStatus.CANCELLED })
+        .andWhere('p.createdAt >= :todayStart', { todayStart })
+        .getRawOne();
+      if (Number(dailyTotal) + dto.amount > 10_000_000) {
+        throw new BadRequestException('Daily transfer limit (₦10,000,000) exceeded for this pitch');
+      }
+
+      return tx.save(draft);
+    });
+
+    try {
+      const result = await this.pulse.transferOut({
+        debitAccountNumber: pitch.accountNumber,
+        beneficiaryAccountNumber: pitch.bankAccountNumber,
+        beneficiaryBankCode: pitch.bankCode,
+        beneficiaryBankName: pitch.bankName ?? 'Unknown Bank',
+        beneficiaryName: pitch.accountHolderName ?? 'Pitch Owner',
+        amount: dto.amount,
+        narration: dto.narration ?? `PitchAside withdrawal – ${pitch.name}`,
+        reference,
+      });
+
+      await this.movePayout(payout, PayoutStatus.PENDING, result.status === 'completed' ? PayoutStatus.COMPLETED : PayoutStatus.PROCESSING);
+      await this.sendFee(payout, { accountNumber: pitch.accountNumber, name: pitch.name });
+    } catch (err: any) {
+      const raw = String(err?.message ?? err);
+      this.logger.error(`Pitch payout ${payout.id} (${reference}) failed: ${raw}`);
+      if (unclearTransferError(raw)) {
+        await this.settleUnclearPayout(payout, raw);
+      } else {
+        await this.movePayout(payout, PayoutStatus.PENDING, PayoutStatus.FAILED, payoutFailureText(raw, pitch.bankName).slice(0, 200));
+      }
+    }
+
+    return this.payoutsRepo.findOneOrFail({ where: { id: payout.id } });
+  }
+
+  /** List incoming transfers for a pitch. */
+  async listPitchTransfers(pitchId: string, ownerId: string) {
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    return this.transfersRepo.find({
+      where: { pitchId },
+      order: { receivedAt: 'DESC' },
+      take: 50,
+    });
+  }
+
+  /** List outgoing withdrawals for a pitch. */
+  async listPitchPayouts(pitchId: string, ownerId: string) {
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    return this.payoutsRepo.find({
+      where: { pitchId },
+      order: { createdAt: 'DESC' },
+      take: 50,
+    });
+  }
+
+  /** Pitch owner manually assigns an unmatched transfer to a booking. */
+  async assignPitchTransfer(transferId: string, bookingId: string, ownerId: string) {
+    const transfer = await this.transfersRepo.findOne({ where: { id: transferId } });
+    if (!transfer || !transfer.pitchId) throw new NotFoundException('Transfer not found');
+
+    const pitch = await this.pitchesRepo!.findOne({ where: { id: transfer.pitchId, ownerId } });
+    if (!pitch) throw new NotFoundException('Pitch not found');
+    if (transfer.status !== TransferStatus.UNMATCHED) throw new BadRequestException('Transfer is already matched or assigned');
+
+    const booking = await this.pitchBookingsRepo!.findOne({ where: { id: bookingId, pitchId: pitch.id } });
+    if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.paymentStatus === 'paid') throw new BadRequestException('Booking is already paid');
+
+    booking.paymentStatus = 'paid';
+    booking.paymentMethod = 'on_platform';
+    booking.paidAt = new Date();
+    booking.incomingTransferId = transfer.id;
+    await this.pitchBookingsRepo!.save(booking);
+
+    transfer.status = TransferStatus.ASSIGNED;
+    await this.transfersRepo.save(transfer);
+
+    return { transfer, booking };
   }
 }
 
