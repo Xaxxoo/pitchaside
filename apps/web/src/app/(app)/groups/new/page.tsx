@@ -16,6 +16,7 @@ import { MatchDayFields, type MatchDay } from '@/components/group/match-day-fiel
 import { DEFAULT_GAME_MINUTES } from '@pitchaside/shared';
 import { SECTION_ICONS, SEEN, SettingsSection, SettingsSections } from '@/components/group/settings-sections';
 import { prettyTime } from '@/components/player-ui';
+import { CalloutIcon } from '@/components/callout';
 import { Stepper } from '@/components/steps';
 import { SETUP_STEPS } from '@/lib/setup-steps';
 
@@ -53,6 +54,16 @@ export default function NewGroupPage() {
   const [errors, setErrors] = useState<Errors>({});
   const [scope, setScope] = useState<GroupScope>('local');
   const [fee, setFee] = useState('');
+  // Switching between ₦ and $ empties the fee: 1500 means something very different in each.
+  const [feeCleared, setFeeCleared] = useState(false);
+  function pickScope(next: GroupScope) {
+    if (next === scope) return;
+    setScope(next);
+    if (fee) {
+      setFee('');
+      setFeeCleared(true);
+    }
+  }
   // Which settings section is open: one at a time, all closed to start
   const [open, setOpen] = useState<SectionKey | null>(null);
   const toggle = (k: SectionKey) => setOpen((o) => (o === k ? null : k));
@@ -153,12 +164,21 @@ export default function NewGroupPage() {
               inputMode="decimal"
               min={0}
               step="0.01"
-              placeholder="e.g. 1500"
+              placeholder={scope === 'local' ? 'e.g. 1500' : 'e.g. 10'}
               value={fee}
-              onChange={(e) => setFee(e.target.value)}
+              onChange={(e) => {
+                setFee(e.target.value);
+                setFeeCleared(false);
+              }}
               className={inputClass('feePerPlayer')}
             />
             {errors.feePerPlayer && <p className="text-xs text-kit-600 mt-1">{errors.feePerPlayer}</p>}
+            {feeCleared && !errors.feePerPlayer && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-kit-600" role="status">
+                <CalloutIcon tone="warn" className="w-3.5 h-3.5" />
+                Fee cleared: type it again in {currencySymbol(scope)}.
+              </p>
+            )}
           </div>
         {/* Common fees, one tap each: still the organiser's choice, never filled in for them */}
         {scope === 'local' && (
@@ -167,7 +187,10 @@ export default function NewGroupPage() {
               <button
                 key={n}
                 type="button"
-                onClick={() => setFee(String(n))}
+                onClick={() => {
+                  setFee(String(n));
+                  setFeeCleared(false);
+                }}
                 aria-pressed={Number(fee) === n}
                 className={`press min-h-11 px-3.5 rounded-full border text-[13px] font-bold tabular-nums transition-colors ${
                   Number(fee) === n ? 'border-ink bg-ink text-volt-300' : 'border-gray-200 bg-white text-ink hover:border-ink'
@@ -206,7 +229,7 @@ export default function NewGroupPage() {
                     { value: 'international' as const, label: 'International', hint: 'USDT or USDC in $' },
                   ]).map((o) => (
                     <label key={o.value} className="block cursor-pointer">
-                      <input type="radio" name="scope" value={o.value} checked={scope === o.value} onChange={() => setScope(o.value)} className="peer sr-only" />
+                      <input type="radio" name="scope" value={o.value} checked={scope === o.value} onChange={() => pickScope(o.value)} className="peer sr-only" />
                       <span className={OPTION}>
                         <span className="text-sm font-bold text-ink">{o.label}</span>
                         <span className="text-[11px] text-gray-500 leading-tight mt-0.5">{o.hint}</span>
@@ -214,6 +237,12 @@ export default function NewGroupPage() {
                     </label>
                   ))}
                 </div>
+                {feeCleared && (
+                  <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-kit-600">
+                    <CalloutIcon tone="warn" className="w-3.5 h-3.5" />
+                    The fee above was cleared: enter it in {currencySymbol(scope)}.
+                  </p>
+                )}
                 {/* Where the money goes, said as it really happens: a Nigerian group's bank account is opened
                     from home with BVN and NIN (not here); international payments go to the organiser's own
                     wallet and each one is matched by hand. */}
