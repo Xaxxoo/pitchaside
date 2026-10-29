@@ -208,6 +208,12 @@ export default function SignInPage() {
           Sign up
         </Link>
       </p>
+      <p className="mt-2 text-center text-sm text-gray-500">
+        Own a pitch?{' '}
+        <Link href="/pitch-owner/signup" className="text-pitch-600 font-semibold hover:text-pitch-700">
+          Register as pitch owner
+        </Link>
+      </p>
     </div>
   );
 }

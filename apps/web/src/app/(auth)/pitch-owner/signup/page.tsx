@@ -3,9 +3,12 @@
 import Link from 'next/link';
 import { Logo } from '@/components/brand';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
+import { http } from '@/lib/http';
+
+type EmailStatus = 'new' | 'player' | 'taken' | null;
 
 export default function PitchOwnerSignUpPage() {
   const router = useRouter();
@@ -19,9 +22,35 @@ export default function PitchOwnerSignUpPage() {
     phone: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [emailStatus, setEmailStatus] = useState<EmailStatus>(null);
+  const [checking, setChecking] = useState(false);
+  const lastCheckedEmail = useRef('');
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
     setForm({ ...form, [e.target.name]: e.target.value });
+    // Reset email status when email changes.
+    if (e.target.name === 'email' && emailStatus !== null) {
+      setEmailStatus(null);
+    }
+  }
+
+  async function checkEmail() {
+    const email = form.email.trim();
+    if (!email || !/\S+@\S+\.\S+/.test(email)) return;
+    if (email === lastCheckedEmail.current) return;
+    lastCheckedEmail.current = email;
+    setChecking(true);
+    try {
+      const res = await http.post<{ status: 'new' | 'player' | 'taken' }>(
+        '/auth/pitch-owner-email-check',
+        { email },
+      );
+      setEmailStatus(res.status);
+    } catch {
+      // Silently ignore — the server-side check will catch it on submit.
+    } finally {
+      setChecking(false);
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -43,6 +72,8 @@ export default function PitchOwnerSignUpPage() {
     }
   }
 
+  const isPlayer = emailStatus === 'player';
+
   const inputClass =
     'w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
 
@@ -51,45 +82,17 @@ export default function PitchOwnerSignUpPage() {
       <div className="text-center mb-8">
         <Logo />
         <h1 className="mt-6 text-[28px] leading-tight font-extrabold text-ink">
-          Register as a Pitch Owner
+          {isPlayer ? 'Add Pitch Owner Access' : 'Register as a Pitch Owner'}
         </h1>
         <p className="mt-1 text-sm text-gray-500">
-          List your pitches and receive bookings
+          {isPlayer
+            ? 'Your player account was found — enter your password to continue'
+            : 'List your pitches and receive bookings'}
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label htmlFor="firstName" className="block text-xs font-bold text-gray-700 mb-1.5">
-              First Name *
-            </label>
-            <input
-              id="firstName"
-              name="firstName"
-              type="text"
-              required
-              value={form.firstName}
-              onChange={handleChange}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label htmlFor="lastName" className="block text-xs font-bold text-gray-700 mb-1.5">
-              Last Name *
-            </label>
-            <input
-              id="lastName"
-              name="lastName"
-              type="text"
-              required
-              value={form.lastName}
-              onChange={handleChange}
-              className={inputClass}
-            />
-          </div>
-        </div>
-
+        {/* Email first so the blur check can adapt the rest of the form */}
         <div>
           <label htmlFor="email" className="block text-xs font-bold text-gray-700 mb-1.5">
             Email *
@@ -101,29 +104,81 @@ export default function PitchOwnerSignUpPage() {
             required
             value={form.email}
             onChange={handleChange}
+            onBlur={checkEmail}
             className={inputClass}
             placeholder="you@example.com"
           />
+          {checking && (
+            <p className="mt-1 text-xs text-gray-400">Checking...</p>
+          )}
+          {emailStatus === 'taken' && (
+            <p className="mt-1 text-xs text-red-600">
+              This email already has an account —{' '}
+              <Link href="/signin" className="font-semibold underline">
+                sign in instead
+              </Link>
+            </p>
+          )}
+          {isPlayer && (
+            <p className="mt-1.5 text-xs text-pitch-600 font-medium">
+              Welcome back! Enter your player password to add pitch owner access.
+            </p>
+          )}
         </div>
 
-        <div>
-          <label htmlFor="phone" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Phone
-          </label>
-          <input
-            id="phone"
-            name="phone"
-            type="tel"
-            value={form.phone}
-            onChange={handleChange}
-            className={inputClass}
-            placeholder="+234..."
-          />
-        </div>
+        {!isPlayer && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="firstName" className="block text-xs font-bold text-gray-700 mb-1.5">
+                  First Name *
+                </label>
+                <input
+                  id="firstName"
+                  name="firstName"
+                  type="text"
+                  required
+                  value={form.firstName}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label htmlFor="lastName" className="block text-xs font-bold text-gray-700 mb-1.5">
+                  Last Name *
+                </label>
+                <input
+                  id="lastName"
+                  name="lastName"
+                  type="text"
+                  required
+                  value={form.lastName}
+                  onChange={handleChange}
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="phone" className="block text-xs font-bold text-gray-700 mb-1.5">
+                Phone
+              </label>
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                value={form.phone}
+                onChange={handleChange}
+                className={inputClass}
+                placeholder="+234..."
+              />
+            </div>
+          </>
+        )}
 
         <div>
           <label htmlFor="password" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Password *
+            {isPlayer ? 'Player Password *' : 'Password *'}
           </label>
           <input
             id="password"
@@ -134,16 +189,22 @@ export default function PitchOwnerSignUpPage() {
             value={form.password}
             onChange={handleChange}
             className={inputClass}
-            placeholder="At least 8 characters"
+            placeholder={isPlayer ? 'Your existing player password' : 'At least 8 characters'}
           />
         </div>
 
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || emailStatus === 'taken'}
           className="w-full py-3 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
         >
-          {submitting ? 'Creating account...' : 'Create Pitch Owner Account'}
+          {submitting
+            ? isPlayer
+              ? 'Upgrading account...'
+              : 'Creating account...'
+            : isPlayer
+              ? 'Add Pitch Owner Access'
+              : 'Create Pitch Owner Account'}
         </button>
       </form>
 
