@@ -2015,6 +2015,11 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * Who owns an account, from the bank. Says plainly what went wrong instead of failing the
    * request: the bank has no such account, or the bank didn't answer (worth another try).
    */
+  /** Public wrapper so other modules (pitches) can verify a bank account name. */
+  async lookUpAccountName(bankCode: string, accountNumber: string) {
+    return { accountName: await this.lookUpName(bankCode, accountNumber) };
+  }
+
   private async lookUpName(bankCode: string, accountNumber: string) {
     const known = bankNameFor(bankCode);
     const bank = known === 'Unknown Bank' ? 'that bank' : known;

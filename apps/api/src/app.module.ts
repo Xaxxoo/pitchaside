@@ -24,6 +24,7 @@ import { PlayerPortalModule } from './player-portal/player-portal.module';
 import { RemindersModule } from './reminders/reminders.module';
 import { CompetitionsModule } from './competitions/competitions.module';
 import { CryptoModule } from './crypto/crypto.module';
+import { PitchesModule } from './pitches/pitches.module';
 import { LoggerMiddleware } from './common/middleware/logger.middleware';
 import { HealthModule } from './health/health.module';
 
@@ -65,6 +66,7 @@ import { HealthModule } from './health/health.module';
     RemindersModule,
     CompetitionsModule,
     CryptoModule,
+    PitchesModule,
   ],
   providers: [
     {
