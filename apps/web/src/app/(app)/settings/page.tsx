@@ -212,7 +212,7 @@ export default function SettingsPage() {
 
       {/* Identity: the club admin's BVN or NIN unlocks group collection accounts */}
       {(user?.role === UserRole.ORG_ADMIN || user?.role === UserRole.SUPER_ADMIN) && (
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
+      <div id="identity" className="scroll-mt-6 bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
         <h2 className="text-lg font-bold text-ink mb-1">Identity</h2>
         {user?.bvn && user?.nin ? (
           <p className="text-sm text-gray-600 mb-3 flex items-start gap-2">
@@ -229,7 +229,7 @@ export default function SettingsPage() {
           </Callout>
         ) : (
           <Callout tone="note" className="mb-4" title="Add your BVN and NIN">
-            Until you add both, your groups can’t get an account for players to pay into.
+            Players can’t pay you in the app until then.
           </Callout>
         )}
         <IdentityForm submitLabel={user?.bvn || user?.nin ? 'Save' : 'Add'} onDone={() => toast.success('Saved: your BVN and NIN are on file')} />

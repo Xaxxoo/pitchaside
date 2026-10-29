@@ -380,13 +380,22 @@ export default function Dashboard() {
       {/* Banner: stays until BVN/NIN are saved; the reasons are in Settings and the sign-in sheet */}
       {user && (user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) && (!user.bvn || !user.nin) && groups.length > 0 && (
         <Link
-          href="/settings"
-          className="mb-3 flex items-center gap-3 rounded-2xl bg-sun-400/20 border border-sun-400/40 p-3.5 hover:border-sun-400 transition-colors"
+          href="/settings#identity"
+          className="press mb-3 block rounded-2xl bg-sun-400/20 border border-sun-400/40 p-3.5 hover:border-sun-400 transition-colors"
         >
-          <span className="w-9 h-9 rounded-full bg-sun-400 text-ink flex items-center justify-center shrink-0 text-lg font-extrabold">!</span>
-          <span className="min-w-0">
-            <span className="block text-sm font-bold text-ink">Add your BVN and NIN</span>
-            <span className="block text-xs text-gray-600 mt-0.5">Players can’t pay you in the app until then.</span>
+          <span className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-full bg-sun-400 text-ink flex items-center justify-center shrink-0 text-lg font-extrabold" aria-hidden>!</span>
+            <span className="min-w-0">
+              <span className="block text-sm font-bold text-ink">Add your BVN and NIN</span>
+              <span className="block text-xs text-gray-600 mt-0.5">Players can’t pay you in the app until then.</span>
+            </span>
+          </span>
+          {/* Looks like the button it is, and says where it goes */}
+          <span className="mt-3 flex items-center justify-between gap-2 min-h-11 rounded-xl bg-white px-3.5 text-sm font-bold text-ink shadow-card">
+            Add them in Settings
+            <svg className="w-4 h-4 shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
+            </svg>
           </span>
         </Link>
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { BackButton } from '@/components/back-button';
 import { FormHero, FormShell, formCardClass } from '@/components/form-hero';
@@ -14,7 +14,8 @@ import { ContributionsVisibilityPicker } from '@/components/contributions-visibi
 import { RsvpToggle } from '@/components/rsvp-toggle';
 import { MatchDayFields, type MatchDay } from '@/components/group/match-day-fields';
 import { DEFAULT_GAME_MINUTES } from '@pitchaside/shared';
-import { Collapse } from '@/components/collapse';
+import { SECTION_ICONS, SEEN, SettingsSection, SettingsSections } from '@/components/group/settings-sections';
+import { prettyTime } from '@/components/player-ui';
 import { Stepper } from '@/components/steps';
 import { SETUP_STEPS } from '@/lib/setup-steps';
 
@@ -24,52 +25,6 @@ type SectionKey = 'when' | 'day' | 'money';
 /** A choice card, the same for every pick-one on this form. */
 const OPTION =
   'flex flex-col h-full px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white transition-colors peer-checked:border-ink peer-checked:bg-volt-300 peer-focus-visible:ring-4 peer-focus-visible:ring-volt-300/70 hover:border-gray-300';
-
-const ICONS = {
-  // A calendar
-  when: 'M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5',
-  // A stopwatch
-  day: 'M12 6v6l3.5 2M12 2.25h-2m2 0h2M12 21a8.25 8.25 0 1 0 0-16.5 8.25 8.25 0 0 0 0 16.5Z',
-  // A banknote
-  money: 'M2.25 18.75a60.07 60.07 0 0 1 15.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 0 1 3 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 0 0-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 0 1-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 0 0 3 15h-.75M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm3 0h.008v.008H18V10.5Zm-12 0h.008v.008H6V10.5Z',
-};
-
-/** Who sees the kitty, as a few words for the Money summary. */
-const SEEN: Record<string, string> = { private: 'kitty private', totals: 'totals shown', names: 'names shown' };
-
-/** "20:00" → "8pm", "19:30" → "7:30pm". */
-function formatKickoff(t?: string) {
-  const m = /^(\d{2}):(\d{2})/.exec(t ?? '');
-  if (!m) return '';
-  const h = Number(m[1]);
-  const hour = h % 12 || 12;
-  return `${hour}${m[2] === '00' ? '' : `:${m[2]}`}${h < 12 ? 'am' : 'pm'}`;
-}
-
-/** One settings section: a row saying what's set, that opens to change it. */
-function Section({ id, icon, title, summary, open, onToggle, children }: { id: string; icon: string; title: string; summary: string; open: boolean; onToggle: () => void; children: ReactNode }) {
-  return (
-    <div className={open ? 'bg-chalk/50' : undefined}>
-      <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={id} className="press w-full min-h-16 flex items-center gap-3 px-5 sm:px-7 py-3 text-left">
-        <span className={`w-9 h-9 shrink-0 rounded-full flex items-center justify-center transition-colors ${open ? 'bg-ink text-volt-300' : 'bg-chalk text-pitch-700'}`} aria-hidden>
-          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
-          </svg>
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[14px] font-bold text-ink">{title}</span>
-          <span className="block text-[12px] text-gray-500 truncate">{summary}</span>
-        </span>
-        <svg className={`w-4 h-4 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-        </svg>
-      </button>
-      <Collapse open={open} id={id}>
-        <div className="px-5 sm:px-7 pb-5 pt-1 space-y-4">{children}</div>
-      </Collapse>
-    </div>
-  );
-}
 
 function validate(form: FormData): Errors | null {
   const errors: Errors = {};
@@ -234,11 +189,10 @@ export default function NewGroupPage() {
           <p className="mb-1.5 text-xs font-bold text-gray-700">
             Settings <span className="font-medium text-gray-500">· set already, change any time</span>
           </p>
-          {/* Edge to edge across the card, lines between: one less box around boxes */}
-          <div className="-mx-5 sm:-mx-7 border-y border-gray-200 divide-y divide-gray-200">
-            <Section
+          <SettingsSections inset="card">
+            <SettingsSection
               id="new-group-money"
-              icon={ICONS.money}
+              icon={SECTION_ICONS.money}
               title="Money"
               summary={[currencySymbol(scope), (frequencyOptions.find((o) => o.value === snap.paymentType)?.label ?? 'Per game').toLowerCase(), SEEN[snap.contributionsVisibility] ?? SEEN.private].join(' · ')}
               open={open === 'money'}
@@ -260,8 +214,18 @@ export default function NewGroupPage() {
                     </label>
                   ))}
                 </div>
-                {/* What really happens: the account isn't opened here, it's opened from home with BVN and NIN */}
-                {scope === 'local' && <p className="mt-1.5 text-xs text-gray-500">You’ll open its bank account from home.</p>}
+                {/* Where the money goes, said as it really happens: a Nigerian group's bank account is opened
+                    from home with BVN and NIN (not here); international payments go to the organiser's own
+                    wallet and each one is matched by hand. */}
+                <div className="mt-2 flex items-center gap-3 rounded-2xl bg-white border border-gray-200 px-3 py-2.5">
+                  <span className="w-8 h-8 shrink-0 rounded-lg bg-ink text-volt-300 flex items-center justify-center font-display font-extrabold text-sm" aria-hidden>
+                    {currencySymbol(scope)}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-bold text-ink">{scope === 'local' ? 'Its own Payrep bank account' : 'Your USDT/USDC wallet'}</span>
+                    <span className="block text-xs text-gray-500">{scope === 'local' ? 'Open it from home with BVN and NIN.' : 'You match each payment yourself.'}</span>
+                  </span>
+                </div>
               </fieldset>
               {/* Five choices as one row of chips; what the picked one means sits on one line under them */}
               <fieldset>
@@ -281,13 +245,13 @@ export default function NewGroupPage() {
                 </p>
               </fieldset>
               <ContributionsVisibilityPicker name="contributionsVisibility" />
-            </Section>
+            </SettingsSection>
 
-            <Section
+            <SettingsSection
               id="new-group-when"
-              icon={ICONS.when}
+              icon={SECTION_ICONS.when}
               title="When and where"
-              summary={[`${snap.targetPlayers || 10} a game`, snap.schedule?.trim(), formatKickoff(snap.kickoffTime)].filter(Boolean).join(' · ')}
+              summary={[`${snap.targetPlayers || 10} a game`, snap.schedule?.trim(), prettyTime(snap.kickoffTime)].filter(Boolean).join(' · ')}
               open={open === 'when'}
               onToggle={() => toggle('when')}
             >
@@ -327,11 +291,11 @@ export default function NewGroupPage() {
                 </label>
                 <textarea id="description" name="description" rows={2} placeholder="e.g. Bring a dark and a light top" className="w-full min-w-0 px-3.5 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600 resize-none" />
               </div>
-            </Section>
+            </SettingsSection>
 
-            <Section
+            <SettingsSection
               id="new-group-day"
-              icon={ICONS.day}
+              icon={SECTION_ICONS.day}
               title="Match day"
               summary={[matchDay.timerOn ? `${matchDay.gameMinutes}-min games` : 'No timer', snap.requireRsvp === 'on' ? 'players confirm' : 'no confirming'].join(' · ')}
               open={open === 'day'}
@@ -339,9 +303,9 @@ export default function NewGroupPage() {
             >
               <RsvpToggle name="requireRsvp" checked />
               <MatchDayFields value={matchDay} onChange={(patch) => setMatchDay((m) => ({ ...m, ...patch }))} idPrefix="new" isNew />
-            </Section>
+            </SettingsSection>
 
-          </div>
+          </SettingsSections>
         </div>
 
         <button

@@ -42,6 +42,9 @@ export function GroupSettingsSheet({
     timerOn: group.timerOn !== false,
 
     bibs: group.bibs ?? null,
+    // So the sheet shows the group's own currency ($ and $5 steps for international groups)
+    scope: group.scope,
+    currency: group.currency,
   };
 
   async function save(d: GroupEditData) {
