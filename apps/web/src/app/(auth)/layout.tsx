@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { UserRole } from '@pitchaside/shared';
 import { NightStadium } from '@/components/illustrations';
 import { BallLoader } from '@/components/skeleton';
 
@@ -16,6 +17,10 @@ export default function AuthLayout({
 
   useEffect(() => {
     if (!loading && user) {
+      if (user.role === UserRole.PITCH_OWNER) {
+        router.replace('/pitch-owner/dashboard');
+        return;
+      }
       // Just signed up: on to step 2 (the first group), not the home page
       let next = '/dashboard';
       try {

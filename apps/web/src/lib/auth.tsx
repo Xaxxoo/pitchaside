@@ -26,6 +26,13 @@ interface AuthContextValue {
     country?: string;
     state?: string;
   }) => Promise<void>;
+  registerPitchOwner: (data: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    password: string;
+    phone?: string;
+  }) => Promise<void>;
   logout: () => void;
   refreshUser: () => Promise<void>;
 }
@@ -111,6 +118,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [],
   );
 
+  const registerPitchOwner = useCallback(
+    async (data: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      password: string;
+      phone?: string;
+    }) => {
+      const res = await http.post<IAuthResponse>('/auth/register/pitch-owner', data);
+      storeRefreshToken((res as any).refreshToken);
+      setUser(res.user);
+    },
+    [],
+  );
+
   const refreshUser = useCallback(async () => {
     try {
       const u = await http.get<IUser>('/auth/me');
@@ -130,7 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, validate2FA, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, login, validate2FA, register, registerPitchOwner, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
