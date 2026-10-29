@@ -6,6 +6,14 @@ import { useToast } from '@/components/toast';
 import { getMyBookings, cancelMyBooking } from '@/lib/pitch';
 import type { IPitchBooking } from '@pitchaside/shared';
 
+const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+function friendlyDate(dateStr: string) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return `${DAY_LABELS[d.getDay()]} ${d.getDate()} ${MONTH_LABELS[d.getMonth()]}`;
+}
+
 const STATUS_BADGE: Record<string, string> = {
   pending: 'bg-amber-100 text-amber-800',
   confirmed: 'bg-green-100 text-green-800',
@@ -48,7 +56,7 @@ export default function MyBookingsPage() {
   if (loading) return <div className="text-center py-20 text-gray-400">Loading...</div>;
 
   return (
-    <div>
+    <div className="max-w-2xl mx-auto px-4">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-extrabold text-ink">My pitch bookings</h1>
         <Link
@@ -74,43 +82,56 @@ export default function MyBookingsPage() {
           {bookings.map((b) => (
             <div
               key={b.id}
-              className="bg-white rounded-xl border border-gray-100 p-4 flex flex-col sm:flex-row sm:items-center gap-3"
+              className="bg-white rounded-xl border border-gray-100 p-4"
             >
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-ink truncate">
-                  {b.pitch?.name || 'Pitch'}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {b.date} &middot; {b.startTime}&ndash;{b.endTime}
-                  {b.pitch?.city && ` &middot; ${b.pitch.city}`}
-                </p>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {b.pitch?.currency || 'NGN'} {Number(b.price).toLocaleString()}
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-ink truncate">
+                    {b.pitch?.name || 'Pitch'}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {friendlyDate(b.date)} &middot; {b.startTime}–{b.endTime}
+                    {b.pitch?.city && ` &middot; ${b.pitch.city}`}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {b.pitch?.currency || 'NGN'} {Number(b.price).toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${STATUS_BADGE[b.status] || 'bg-gray-100 text-gray-500'}`}>
+                    {b.status}
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${PAYMENT_BADGE[b.paymentStatus] || 'bg-gray-100 text-gray-500'}`}>
+                    {b.paymentStatus}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${STATUS_BADGE[b.status] || 'bg-gray-100 text-gray-500'}`}>
-                  {b.status}
-                </span>
-                <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold uppercase ${PAYMENT_BADGE[b.paymentStatus] || 'bg-gray-100 text-gray-500'}`}>
-                  {b.paymentStatus}
-                </span>
-                {(b.status === 'pending' || b.status === 'confirmed') && (
-                  <button
-                    onClick={() => handleCancel(b.id)}
-                    disabled={cancelling === b.id}
-                    className="ml-1 px-2.5 py-1 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {cancelling === b.id ? 'Cancelling...' : 'Cancel'}
-                  </button>
-                )}
-              </div>
+              {/* Payment details for confirmed unpaid bookings */}
               {b.status === 'confirmed' && b.paymentStatus === 'unpaid' && b.pitch?.accountNumber && (
-                <div className="w-full mt-2 bg-blue-50 rounded-lg px-3 py-2">
+                <div className="mt-3 bg-blue-50 rounded-lg px-3 py-2">
                   <p className="text-xs font-bold text-blue-700 mb-0.5">Pay via bank transfer</p>
                   <p className="text-xs text-blue-900 font-mono">{b.pitch.accountNumber}</p>
                   <p className="text-[11px] text-blue-700">{b.pitch.accountName} &middot; {b.pitch.virtualBankName}</p>
+                </div>
+              )}
+
+              {b.paymentStatus === 'paid' && (
+                <p className="text-xs text-green-600 font-bold mt-2">
+                  Paid {b.paymentMethod === 'on_platform' ? '(on-platform)' : '(off-platform)'}
+                </p>
+              )}
+
+              {(b.status === 'pending' || b.status === 'confirmed') && (
+                <div className="mt-3 pt-3 border-t border-gray-100">
+                  <button
+                    onClick={() => handleCancel(b.id)}
+                    disabled={cancelling === b.id}
+                    className="px-3 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    {cancelling === b.id ? 'Cancelling...' : 'Cancel booking'}
+                  </button>
                 </div>
               )}
             </div>

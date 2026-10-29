@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function BookPitchEntryPage() {
   const router = useRouter();
@@ -17,7 +18,7 @@ export default function BookPitchEntryPage() {
   const inputClass = 'w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
 
   return (
-    <div className="max-w-sm mx-auto pt-20">
+    <div className="max-w-sm mx-auto pt-12 px-4">
       <h1 className="text-2xl font-extrabold text-ink text-center mb-2">Book a pitch</h1>
       <p className="text-sm text-gray-500 text-center mb-8">
         Enter the pitch share code to view availability and book a slot.
@@ -38,6 +39,12 @@ export default function BookPitchEntryPage() {
           View availability
         </button>
       </form>
+
+      <div className="mt-8 text-center">
+        <Link href="/book-pitch/mine" className="text-sm text-pitch-600 font-semibold hover:text-pitch-700">
+          View my bookings
+        </Link>
+      </div>
     </div>
   );
 }
