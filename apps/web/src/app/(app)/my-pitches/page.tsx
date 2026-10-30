@@ -9,6 +9,7 @@ import { btnPrimary } from '@/components/buttons';
 import { BallLoader } from '@/components/skeleton';
 import { EmptyState } from '@/components/empty-state';
 import { naira } from '@/components/pitch/pitch-facts';
+import { BackButton } from '@/components/back-button';
 
 /** The pitches you run: one card each (tap for its bookings), and a way to add another. */
 export default function PitchListPage() {
@@ -20,6 +21,7 @@ export default function PitchListPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <BackButton label="Home" href="/dashboard" />
       <PageHeader eyebrow="Pitches" title="Your pitches" subtitle={pitches?.length ? 'Tap one for its bookings and details.' : undefined} />
       {!pitches ? (
         <div className="flex justify-center py-20"><BallLoader /></div>

@@ -9,6 +9,7 @@ import { btnMain } from '@/components/buttons';
 import { NigerianLocationPicker } from '@/components/nigerian-location-picker';
 import { field, label, Stepper } from '@/components/group/group-edit-sheet';
 import { GameLengthPicker, gameLengthOk } from '@/components/pitch/game-length-picker';
+import { BackButton } from '@/components/back-button';
 
 
 /**
@@ -44,6 +45,7 @@ export default function NewPitchPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <BackButton label="Your pitches" href="/my-pitches" />
       <PageHeader eyebrow="Your pitches" title="Add a pitch" subtitle="Name, area and price now. Hours and photos next." />
       <form onSubmit={save} noValidate className="rounded-3xl bg-white border border-gray-100 shadow-card px-5 py-6 space-y-5">
         <div>

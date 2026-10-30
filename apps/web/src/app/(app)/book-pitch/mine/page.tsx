@@ -11,6 +11,7 @@ import { ConfirmSheet } from '@/components/match-day/confirm-sheet';
 import { prettyTime } from '@/components/player-ui';
 import { naira } from '@/components/pitch/pitch-facts';
 import { cancelMyBooking, getMyBookings, localYmd } from '@/lib/pitch';
+import { BackButton } from '@/components/back-button';
 
 /** Where a booking stands, in a word or two, and how it looks. Colour is never the only signal. */
 function stateOf(b: IPitchBooking): { word: string; tone: string } {
@@ -56,6 +57,7 @@ export default function MyBookingsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <BackButton label="Book a pitch" href="/book-pitch" />
       <PageHeader eyebrow="Pitches" title="Your bookings" />
       {!bookings ? (
         <div className="flex justify-center py-20"><BallLoader /></div>
