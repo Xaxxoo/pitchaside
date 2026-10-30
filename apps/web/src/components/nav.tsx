@@ -104,7 +104,7 @@ const clubTabs = [
     ),
   },
   {
-    label: 'Pitches',
+    label: 'Book a pitch',
     href: '/book-pitch',
     icon: (active: boolean) => (
       <svg className="w-5 h-5" fill={active ? 'currentColor' : 'none'} viewBox="0 0 24 24" strokeWidth={active ? 0 : 1.5} stroke="currentColor">
@@ -119,7 +119,7 @@ const clubTabs = [
     ),
   },
   {
-    label: 'My Pitches',
+    label: 'Your pitches',
     href: '/my-pitches',
     icon: (active: boolean) => (
       <svg className="w-5 h-5" fill={active ? 'currentColor' : 'none'} viewBox="0 0 24 24" strokeWidth={active ? 0 : 1.5} stroke="currentColor">

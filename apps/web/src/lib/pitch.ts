@@ -13,6 +13,14 @@ export function localYmd(d: Date) {
   return d.toLocaleDateString('en-CA');
 }
 
+/** The pitch code from what was pasted: the owner's whole link (…/p/CODE) or just the code. */
+export function pitchCode(text: string): string | null {
+  const t = text.trim();
+  const fromLink = t.match(/\/p\/([a-z0-9]{6,16})(?:[/?#]|$)/i);
+  if (fromLink) return fromLink[1].toLowerCase();
+  return /^[a-z0-9]{6,16}$/i.test(t) ? t.toLowerCase() : null;
+}
+
 // ── Pitch management (pitch owner) ──
 
 export function createPitch(data: {
