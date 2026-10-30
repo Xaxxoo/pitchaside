@@ -160,6 +160,25 @@ export class AuthService {
     };
   }
 
+  /**
+   * A pitch owner starting a group from the player app: the same account becomes the club's admin
+   * (its hidden "X's Pitches" club takes the group's club name) and keeps its pitches, so the
+   * person never has two organiser accounts. Their pitch account's password proves it's them.
+   */
+  async upgradePitchOwnerToOrganiser(userId: string, clubName: string, password: string) {
+    const user = await this.usersService.findById(userId);
+    if (!user || user.role !== UserRole.PITCH_OWNER) throw new BadRequestException('There’s no pitch account to add a group to.');
+    if (!(await bcrypt.compare(password, user.passwordHash))) {
+      throw new BadRequestException('That’s not the password for your pitch account. Use the one you list your pitch with.');
+    }
+    await this.orgsService.rename(user.organizationId, clubName);
+    await this.usersService.setRole(user.id, UserRole.ORG_ADMIN);
+    const fresh = (await this.usersService.findById(user.id))!;
+    const accessToken = this.jwtService.sign({ sub: fresh.id });
+    const refreshToken = await this.usersService.createRefreshToken(fresh.id, null);
+    return { accessToken, refreshToken, user: this.sanitizeUser(fresh, fresh.organization) };
+  }
+
   async checkPitchOwnerEmail(email: string): Promise<{ status: 'new' | 'player' | 'taken' }> {
     const existingUser = await this.usersService.findByEmail(email);
     if (existingUser) return { status: 'taken' };

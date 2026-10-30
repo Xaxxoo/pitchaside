@@ -18,7 +18,7 @@ import { IsNull, MoreThan, Repository } from 'typeorm';
 import { createHash, randomInt } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Player } from '../players/entities/player.entity';
-import { User } from '../users/entities/user.entity';
+import { User, UserRole } from '../users/entities/user.entity';
 import { emailKey, maskEmail } from '../common/format.util';
 import { MailService } from '../mail/mail.service';
 import { clubPlayerFor, clubPlayerMatch, playerByPhone } from '../players/club-player';
@@ -97,6 +97,11 @@ export class PlayerAuthService {
       .leftJoinAndSelect('u.organization', 'org')
       .where('lower(u.email) = :key', { key })
       .getMany();
+  }
+
+  /** Organiser accounts with this email that run a club: a pitch owner's hidden club isn't one. */
+  async findClubOrganisersByKey(key: string) {
+    return (await this.findOrganisersByKey(key)).filter((u) => u.role !== UserRole.PITCH_OWNER);
   }
 
   // ── Accounts & passwords ──

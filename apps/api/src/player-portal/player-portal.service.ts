@@ -1,3 +1,4 @@
+import { UserRole } from '../users/entities/user.entity';
 import type { MatchEventKind } from '../ratings/entities/match-event.entity';
 import { GroupKeptMoney } from '../billing/entities/group-kept-money.entity';
 import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
@@ -48,7 +49,7 @@ export class PlayerPortalService {
   }
 
   private async organiser(person: Person) {
-    const users = await this.playerAuth.findOrganisersByKey(person.key);
+    const users = await this.playerAuth.findClubOrganisersByKey(person.key);
     return users.length ? { clubName: users[0].organization?.name ?? 'Your club', email: users[0].email } : null;
   }
 
@@ -481,17 +482,20 @@ export class PlayerPortalService {
 
   async profile(person: Person) {
     const memberships = await this.memberships(person);
-    const [organiser, ratings] = await Promise.all([
+    const [organiser, ratings, accounts] = await Promise.all([
       this.organiser(person),
       // Ratings only decorate the profile: if they can't be worked out, the player app still opens.
       this.ratingsByClub(person).catch((err) => {
         this.logger.error(`Ratings for ${person.key}'s profile failed: ${err instanceof Error ? err.stack : err}`);
         return { primary: null, primaryId: null, clubs: [] as Awaited<ReturnType<PlayerPortalService['ratingsByClub']>>['clubs'] };
       }),
+      this.playerAuth.findOrganisersByKey(person.key),
     ]);
     return {
       player: this.personInfo(person),
       organiser,
+      /** They list a pitch with this email: starting a group uses that account (and its password). */
+      listsPitches: accounts.some((u) => u.role === UserRole.PITCH_OWNER),
       ratings: ratings.primary ?? emptyRatings(),
       /** Which of their player records the card's number is for (the club they've played most for). */
       ratingsPlayerId: ratings.primaryId,
@@ -624,14 +628,18 @@ export class PlayerPortalService {
     if (await this.organiser(person)) {
       throw new BadRequestException('You already organise — switch to Organising to add another group.');
     }
-    const result = await this.auth.register({
-      organizationName: input.clubName.trim(),
-      firstName: person.firstName,
-      lastName: person.lastName,
-      email: person.email,
-      password: input.password,
-      phone: person.phone ?? undefined,
-    });
+    // Lists a pitch already: the same account runs the group too, and keeps its pitches
+    const owner = (await this.playerAuth.findOrganisersByKey(person.key)).find((u) => u.role === UserRole.PITCH_OWNER);
+    const result = owner
+      ? await this.auth.upgradePitchOwnerToOrganiser(owner.id, input.clubName.trim(), input.password)
+      : await this.auth.register({
+          organizationName: input.clubName.trim(),
+          firstName: person.firstName,
+          lastName: person.lastName,
+          email: person.email,
+          password: input.password,
+          phone: person.phone ?? undefined,
+        });
     // They'll usually play in their own games too.
     await this.playersRepo.save(
       this.playersRepo.create({

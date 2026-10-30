@@ -117,7 +117,33 @@ describe('AuthService', () => {
     });
   });
 
-  describe('login', () => {
+  describe('upgradePitchOwnerToOrganiser', () => {
+    const owner = { ...mockUser, id: 'owner-1', role: UserRole.PITCH_OWNER, organizationId: 'org-p', organization: { id: 'org-p', name: "Ada's Pitches" } };
+    beforeEach(() => {
+      (orgsService as any).rename = jest.fn();
+      (usersService as any).setRole = jest.fn();
+    });
+
+    it('turns the pitch account into the club admin, renaming its hidden club, with its own password', async () => {
+      usersService.findById.mockResolvedValueOnce(owner).mockResolvedValueOnce({ ...owner, role: UserRole.ORG_ADMIN, organization: { id: 'org-p', name: 'Surulere Ballers' } });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      const res = await service.upgradePitchOwnerToOrganiser('owner-1', 'Surulere Ballers', 'pitchpass');
+      expect((orgsService as any).rename).toHaveBeenCalledWith('org-p', 'Surulere Ballers');
+      expect((usersService as any).setRole).toHaveBeenCalledWith('owner-1', UserRole.ORG_ADMIN);
+      expect(res.accessToken).toBe('jwt-token');
+    });
+
+    it('refuses a wrong password, and anyone who is not a pitch owner', async () => {
+      usersService.findById.mockResolvedValue(owner);
+      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+      await expect(service.upgradePitchOwnerToOrganiser('owner-1', 'X', 'nope')).rejects.toThrow(/password for your pitch account/);
+      usersService.findById.mockResolvedValue(mockUser);
+      await expect(service.upgradePitchOwnerToOrganiser('user-1', 'X', 'pw')).rejects.toThrow(/no pitch account/);
+      expect((usersService as any).setRole).not.toHaveBeenCalled();
+    });
+  });
+
+    describe('login', () => {
     it('should return token on valid credentials', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);

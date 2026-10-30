@@ -112,10 +112,10 @@ export default function PitchOwnerSignUpPage() {
             <p className="mt-1 text-xs text-gray-400">Checking...</p>
           )}
           {emailStatus === 'taken' && (
-            <p className="mt-1 text-xs text-red-600">
-              This email already has an account —{' '}
-              <Link href="/signin" className="font-semibold underline">
-                sign in instead
+            <p className="mt-1 text-xs text-gray-600">
+              You already have an account.{' '}
+              <Link href={`/signin?redirect=${encodeURIComponent('/my-pitches/new')}`} className="font-semibold text-pitch-700 underline">
+                Sign in to add your pitch
               </Link>
             </p>
           )}
