@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
-import { getMyPitches, listBookings } from '@/lib/pitch';
+import { getMyPitches, listBookings, localYmd } from '@/lib/pitch';
 import type { IPitch, IPitchBooking } from '@pitchaside/shared';
 
 export default function PitchOwnerDashboard() {
@@ -18,7 +18,7 @@ export default function PitchOwnerDashboard() {
         const p = await getMyPitches();
         setPitches(p);
         // Load today's bookings from all pitches
-        const today = new Date().toISOString().split('T')[0];
+        const today = localYmd(new Date());
         const allBookings: IPitchBooking[] = [];
         for (const pitch of p) {
           const bookings = await listBookings(pitch.id);

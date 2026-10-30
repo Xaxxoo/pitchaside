@@ -548,6 +548,8 @@ export enum BookingStatus {
   CONFIRMED = 'confirmed',
   REJECTED = 'rejected',
   CANCELLED = 'cancelled',
+  /** Waited 24 hours (or until kick-off) without an answer from the owner: the time is free again. */
+  EXPIRED = 'expired',
 }
 
 export enum BookingPaymentMethod {

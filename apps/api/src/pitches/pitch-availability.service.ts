@@ -1,10 +1,23 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { PitchSchedule } from './entities/pitch-schedule.entity';
 import { PitchSlotOverride } from './entities/pitch-slot-override.entity';
 import { PitchBooking } from './entities/pitch-booking.entity';
 import { Pitch } from './entities/pitch.entity';
+import { APP_TZ } from '../common/time.util';
+
+/** How long a request holds a time before the owner must answer. */
+export const PENDING_HOURS = 24;
+
+/**
+ * SQL for a request still waiting in time: made less than PENDING_HOURS ago, for a game that hasn't
+ * started yet (on the pitch's clock). Pass :tz. `alias` is the pitch_bookings alias, if any.
+ */
+export function pendingLiveSql(alias?: string) {
+  const c = alias ? `${alias}.` : '';
+  return `${c}"createdAt" > now() - interval '${PENDING_HOURS} hours' AND (${c}date + ${c}start_time::time) AT TIME ZONE :tz > now()`;
+}
 
 export interface SlotInfo {
   startTime: string;
@@ -25,12 +38,17 @@ export class PitchAvailabilityService {
     @InjectRepository(Pitch) private pitchRepo: Repository<Pitch>,
   ) {}
 
-  async getAvailableSlots(pitchId: string, date: string): Promise<SlotInfo[]> {
-    const pitch = await this.pitchRepo.findOneByOrFail({ id: pitchId });
-    const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+  /** `manager`: read inside that transaction (booking holds a lock and must not wait on another connection). */
+  async getAvailableSlots(pitchId: string, date: string, manager?: EntityManager): Promise<SlotInfo[]> {
+    const [pitchRepo, schedRepo, overrideRepo, bookingRepo] = manager
+      ? [manager.getRepository(Pitch), manager.getRepository(PitchSchedule), manager.getRepository(PitchSlotOverride), manager.getRepository(PitchBooking)]
+      : [this.pitchRepo, this.schedRepo, this.overrideRepo, this.bookingRepo];
+    const pitch = await pitchRepo.findOneByOrFail({ id: pitchId });
+    // The calendar day itself, so the server's own time zone can't shift it.
+    const dayOfWeek = new Date(date + 'T00:00:00Z').getUTCDay();
 
     // 1. Load recurring schedule for this day
-    const schedules = await this.schedRepo.find({
+    const schedules = await schedRepo.find({
       where: { pitchId, dayOfWeek },
     });
 
@@ -50,7 +68,7 @@ export class PitchAvailabilityService {
     }
 
     // 3. Apply overrides for this date
-    const overrides = await this.overrideRepo.find({
+    const overrides = await overrideRepo.find({
       where: { pitchId, date },
     });
 
@@ -80,13 +98,13 @@ export class PitchAvailabilityService {
       }
     }
 
-    // 4. Load bookings for this date (pending + confirmed)
-    const bookings = await this.bookingRepo.find({
-      where: [
-        { pitchId, date, status: 'pending' },
-        { pitchId, date, status: 'confirmed' },
-      ],
-    });
+    // 4. Load bookings for this date (confirmed, and requests still waiting)
+    // A request the owner never answered stops holding the time after PENDING_HOURS.
+    const bookings = await bookingRepo
+      .createQueryBuilder('b')
+      .where('b.pitch_id = :pitchId AND b.date = :date', { pitchId, date })
+      .andWhere(`(b.status = 'confirmed' OR (b.status = 'pending' AND ${pendingLiveSql('b')}))`, { tz: APP_TZ })
+      .getMany();
 
     for (const booking of bookings) {
       for (const [, slot] of slotMap) {

@@ -1,0 +1,97 @@
+import { BadRequestException } from '@nestjs/common';
+import { PitchesService } from './pitches.service';
+import { PitchAvailabilityService, pendingLiveSql } from './pitch-availability.service';
+
+/** A query builder whose every chain call returns itself, recording the SQL it was given. */
+function builder(result: unknown = []) {
+  const calls: string[] = [];
+  const qb: any = new Proxy(
+    {},
+    {
+      get: (_t, key: string) => {
+        if (key === 'getMany') return async () => result;
+        if (key === 'execute') return async () => ({ affected: 0 });
+        if (key === 'calls') return calls;
+        return (sql?: unknown) => {
+          if (typeof sql === 'string') calls.push(sql);
+          return qb;
+        };
+      },
+    },
+  );
+  return qb;
+}
+
+const pitch = { id: 'pitch-1', ownerId: 'owner-1', status: 'active', slotDurationMinutes: 60, defaultPrice: 30000, shareCode: 'abc' };
+
+describe('pitch bookings', () => {
+  let schedRepo: any, overrideRepo: any, bookingRepo: any, pitchRepo: any, manager: any, dataSource: any;
+  let availability: PitchAvailabilityService;
+  let service: PitchesService;
+  let bookingQb: any;
+
+  beforeEach(() => {
+    bookingQb = builder();
+    schedRepo = { find: jest.fn().mockResolvedValue([{ openTime: '06:00', closeTime: '23:00', price: null }]) };
+    overrideRepo = { find: jest.fn().mockResolvedValue([]) };
+    bookingRepo = { createQueryBuilder: jest.fn(() => bookingQb), findOne: jest.fn(), save: jest.fn(async (b) => b) };
+    pitchRepo = { findOneByOrFail: jest.fn().mockResolvedValue(pitch), findOne: jest.fn().mockResolvedValue(pitch) };
+    manager = { query: jest.fn(), create: jest.fn((_e, b) => b), save: jest.fn(async (b) => ({ id: 'new', ...b })), getRepository: jest.fn() };
+    dataSource = { transaction: jest.fn((cb) => cb(manager)) };
+    availability = new PitchAvailabilityService(schedRepo, overrideRepo, bookingRepo, pitchRepo);
+    // Inside a booking's transaction the same repos are reached through its manager.
+    const byEntity: Record<string, unknown> = { Pitch: pitchRepo, PitchSchedule: schedRepo, PitchSlotOverride: overrideRepo, PitchBooking: bookingRepo };
+    manager.getRepository.mockImplementation((e: { name: string }) => byEntity[e.name]);
+    service = new PitchesService(pitchRepo, schedRepo, overrideRepo, bookingRepo, availability, {} as any, dataSource);
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  it('reads the weekday from the calendar date, whatever the server clock', async () => {
+    await availability.getAvailableSlots('pitch-1', '2026-10-31');
+    expect(schedRepo.find).toHaveBeenCalledWith({ where: { pitchId: 'pitch-1', dayOfWeek: 6 } });
+  });
+
+  it('only counts a request as holding the time while it is still waiting in time', async () => {
+    await availability.getAvailableSlots('pitch-1', '2026-10-31');
+    const where = bookingQb.calls.join(' ');
+    expect(where).toContain(`b.status = 'pending' AND ${pendingLiveSql('b')}`);
+    expect(pendingLiveSql()).toContain("interval '24 hours'");
+    expect(pendingLiveSql()).toContain('AT TIME ZONE :tz > now()');
+  });
+
+  it('takes a lock for the pitch and day before checking the time is free', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-30T09:30:00Z') });
+    await service.createBooking({ pitchId: 'pitch-1', date: '2026-10-31', startTime: '19:00', endTime: '20:00', bookerName: 'Tunde' } as any, 'u1');
+    expect(manager.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1))', ['pitch-booking:pitch-1:2026-10-31']);
+    expect(manager.query.mock.invocationCallOrder[0]).toBeLessThan(schedRepo.find.mock.invocationCallOrder[0]);
+    // Its reads go through the transaction, not a second connection from the pool.
+    expect(manager.getRepository).toHaveBeenCalled();
+    expect(manager.save).toHaveBeenCalled();
+  });
+
+  it('judges "in the past" on the Lagos clock', async () => {
+    // 09:30 UTC is 10:30 in Lagos: the 10am hour has started there, though not in UTC.
+    jest.useFakeTimers({ now: new Date('2026-10-30T09:30:00Z') });
+    const at = (startTime: string, endTime: string) =>
+      service.createBooking({ pitchId: 'pitch-1', date: '2026-10-30', startTime, endTime, bookerName: 'Tunde' } as any, 'u1');
+    await expect(at('10:00', '11:00')).rejects.toThrow('Cannot book a slot in the past');
+    await expect(at('11:00', '12:00')).resolves.toMatchObject({ startTime: '11:00' });
+  });
+
+  it('lists 14 calendar days at most, in order, and refuses dates it cannot read', async () => {
+    pitchRepo.findOne.mockResolvedValue(pitch);
+    const res = await service.getPublicAvailability('abc', '2026-10-25', '2026-12-01');
+    expect(res.days.map((d) => d.date)).toEqual([
+      '2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28', '2026-10-29', '2026-10-30', '2026-10-31',
+      '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07',
+    ]);
+    await expect(service.getPublicAvailability('abc', 'nope', '2026-12-01')).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('ends stale requests before the owner answers, and says why', async () => {
+    bookingRepo.findOne.mockResolvedValue({ id: 'b1', pitchId: 'pitch-1', status: 'expired' });
+    await expect(service.confirmBooking('pitch-1', 'b1', 'owner-1')).rejects.toThrow('waited 24 hours without an answer');
+    expect(bookingQb.calls).toContain(`NOT (${pendingLiveSql()})`);
+  });
+});
