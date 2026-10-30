@@ -1,4 +1,4 @@
-import { IsInt, Max, IsString, IsNumber, IsEnum, IsOptional, Min, IsNotEmpty, MinLength, IsBoolean, Matches, IsIn, IsObject } from 'class-validator';
+import { IsDateString, IsInt, Max, IsString, IsNumber, IsEnum, IsOptional, Min, IsNotEmpty, MinLength, IsBoolean, Matches, IsIn, IsObject } from 'class-validator';
 import type { Bibs, GroupScope } from '@pitchaside/shared';
 import { PaymentType, CONTRIBUTIONS_VISIBILITY, type ContributionsVisibility } from '../entities/group.entity';
 
@@ -135,4 +135,10 @@ export class UpdateGroupDto {
   @IsOptional()
   @IsObject()
   bibs?: Bibs | null;
+
+  /** Match days before this date (YYYY-MM-DD) stop counting for stats and votes; null counts them all. */
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'statsFrom must be a date like 2026-10-25' })
+  @IsDateString({ strict: true })
+  statsFrom?: string | null;
 }

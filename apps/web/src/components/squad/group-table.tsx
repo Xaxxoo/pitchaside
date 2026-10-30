@@ -1,5 +1,6 @@
 'use client';
 
+import { matchDay } from '@/lib/match-words';
 import { useCallback, useEffect, useState } from 'react';
 import { LeagueTableView } from '@/components/ratings';
 import { tableQuery, type LeagueTable, type TableRange } from '@/lib/api';
@@ -112,7 +113,11 @@ export function GroupTable({
         )}
         </div>
         <p className="-mt-1 text-xs text-gray-500">
-          {table?.rankedBy === 'rating' ? 'Ranked by rating. Points break a tie.' : 'Points from results, Team of the Day and Player of the Match'}
+          {table?.statsFrom
+            ? `Ranked by rating. Counting from ${matchDay(table.statsFrom)}.`
+            : table?.rankedBy === 'rating'
+              ? 'Ranked by rating. Points break a tie.'
+              : 'Points from results, Team of the Day and Player of the Match'}
         </p>
         {/* The table as an image for WhatsApp: the season, or the last few match days, as shown */}
       </div>
