@@ -2,6 +2,7 @@
 
 import { useId, useState } from 'react';
 import { Callout } from '@/components/callout';
+import { Collapse, CollapseButton } from '@/components/collapse';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
 import { BallSpinner } from '@/components/skeleton';
@@ -64,6 +65,18 @@ export function BallotSteps({
   }));
   const byId = (id: unknown) => others.find((p) => p.id === id);
   const mates = myTeam && ballot.categories.some((c) => c.key === 'teammate') ? others.filter((p) => p.team === myTeam) : [];
+  /*
+   * Player of the Match and Best on your team: only those on the pitch long enough to judge (half
+   * their team's games, or in goal, a goal, an assist or a save). The rest aren't listed; one line
+   * says how many and who. Older servers don't say, so everyone counts.
+   */
+  const canPick = (p: Player) => p.canBePicked !== false;
+  const potmPool = others.some(canPick) ? others.filter(canPick) : others;
+  const notListed = others.filter((p) => !potmPool.includes(p));
+  const matePool = mates.filter(canPick);
+  const meLeftOut = ballot.squad.find((p) => p.id === me)?.canBePicked === false;
+  const potmPick = potmPool.some((p) => p.id === picks.potm) ? picks.potm : undefined;
+  const matePick = matePool.some((p) => p.id === picks.teammate) ? picks.teammate : undefined;
   const steps: Step[] = ['potm', ...(mates.length ? (['mate'] as const) : []), ...(ballot.vii ? (['vii'] as const) : []), 'awards'];
   const at = steps.indexOf(step);
 
@@ -154,6 +167,10 @@ export function BallotSteps({
       <BibShirt team={p.team} bibs={ballot.bibs} label={initials(p)} className={size === 'lg' ? 'w-12 h-12' : 'w-9 h-9'} />
     );
 
+  /** Their day in one positive line: in goal, else goals, saves, assists; nothing otherwise. */
+  const reason = (p: Player) =>
+    p.inGoal ? 'In goal' : p.goals ? `Scored ${p.goals}` : p.saves ? `${p.saves} save${p.saves === 1 ? '' : 's'}` : p.assists ? `Assisted ${p.assists}` : '';
+
   /** One player to tap: their face (or bib) and name. `mark` shows when picked: a tick, or their Best VII spot. */
   const chip = (p: Player, selected: boolean, onTap: () => void, mark: string | null = null, disabled = false) => (
     <li key={p.id} className="min-w-0">
@@ -169,12 +186,8 @@ export function BallotSteps({
       >
         {face(p)}
         <span className="w-full truncate text-[13px] font-bold text-ink leading-tight">{short(p)}</span>
-        {/* Missed some of their side's games: voters see it before they pick */}
-        {p.of != null && p.of > 0 && p.played != null && p.played < p.of && (
-          <span className="w-full truncate text-[11px] font-semibold text-gray-500 leading-tight tabular-nums">
-            Played {p.played} of {p.of}
-          </span>
-        )}
+        {/* What the day shows them doing, one line, always the same height so the tiles line up */}
+        <span className="w-full h-3.5 truncate text-[11px] font-semibold text-gray-500 leading-tight tabular-nums">{reason(p)}</span>
         {selected && (
           <span className="absolute top-1.5 right-1.5 min-w-6 h-6 px-1.5 rounded-full bg-ink text-volt-300 text-[11px] font-extrabold leading-6 text-center animate-pop-in" aria-hidden>
             {mark ?? '✓'}
@@ -223,14 +236,14 @@ export function BallotSteps({
   let button: { label: string; disabled: boolean; onClick: () => void };
   if (step === 'potm') {
     button = {
-      label: picks.potm ? nextLabel(steps[at + 1]) : 'Pick Player of the Match',
-      disabled: !picks.potm,
+      label: potmPick ? nextLabel(steps[at + 1]) : 'Pick Player of the Match',
+      disabled: !potmPick,
       onClick: () => setStep(steps[at + 1]),
     };
   } else if (step === 'mate') {
     button = {
-      label: picks.teammate ? nextLabel(steps[at + 1]) : 'Pick the best on your team',
-      disabled: !picks.teammate,
+      label: matePick || !matePool.length ? nextLabel(steps[at + 1]) : 'Pick the best on your team',
+      disabled: !matePick && matePool.length > 0,
       onClick: () => setStep(steps[at + 1]),
     };
   } else if (step === 'vii') {
@@ -317,9 +330,11 @@ export function BallotSteps({
           <p className="text-sm text-gray-600 mt-0.5">
             Hey <span className="font-bold text-ink">{firstName}</span>, who was best on the pitch? One pick.
           </p>
+          {meLeftOut && <p className="text-[13px] text-gray-600 mt-1">You can vote · you’re not up this time</p>}
           <div role="radiogroup" aria-label="Player of the Match">
-            {bySide((p) => chip(p, picks.potm === p.id, () => togglePotm(p.id)))}
+            {bySide((p) => chip(p, potmPick === p.id, () => togglePotm(p.id)), (p) => potmPool.includes(p))}
           </div>
+          <NotListed players={notListed} name={short} />
         </>
       )}
 
@@ -331,9 +346,25 @@ export function BallotSteps({
           <p className="text-sm text-gray-600 mt-0.5">
             Who was the best of your {teamName(myTeam, ballot.captains, ballot.bibs)} teammates? One pick, and it can’t be you.
           </p>
-          <ul className="mt-3.5 grid grid-cols-3 gap-2" role="radiogroup" aria-labelledby="best-mate">
-            {mates.map((p) => chip(p, picks.teammate === p.id, () => toggleMate(p.id)))}
-          </ul>
+          {matePool.length ? (
+            <>
+              <ul className="mt-3.5 grid grid-cols-3 gap-2" role="radiogroup" aria-labelledby="best-mate">
+                {matePool.map((p) => chip(p, matePick === p.id, () => toggleMate(p.id)))}
+              </ul>
+              <NotListed players={mates.filter((p) => !matePool.includes(p))} name={short} />
+            </>
+          ) : (
+            // Nobody on their team played enough: said in a block, and the step goes on without a pick
+            <div className="mt-3.5 flex items-center gap-3 rounded-3xl border border-gray-100 bg-white px-3.5 py-3 min-h-16">
+              <span className="w-10 h-10 shrink-0 rounded-full bg-chalk flex items-center justify-center text-ink" aria-hidden>
+                <BibShirt team={myTeam} bibs={ballot.bibs} className="w-6 h-6" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] font-bold text-ink truncate">No one on {teamName(myTeam, ballot.captains, ballot.bibs)} qualifies</span>
+                <span className="block text-[13px] text-gray-600 truncate">Nobody played half their games</span>
+              </span>
+            </div>
+          )}
         </>
       )}
 
@@ -500,3 +531,30 @@ export function BallotSteps({
     </div>
   );
 }
+
+/**
+ * Who isn't on this list, said in one quiet line, with the names behind a tap: they played under
+ * half their team's games and the day doesn't show them on the pitch.
+ */
+function NotListed({ players, name }: { players: Player[]; name: (p: Player) => string }) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  if (!players.length) return null;
+  return (
+    <div className="mt-3 rounded-2xl bg-chalk px-3.5 py-2">
+      <div className="flex items-center gap-2.5 min-h-10">
+        <svg className="w-4 h-4 shrink-0 text-gray-500" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden>
+          <path strokeLinecap="round" strokeLinejoin="round" d="m11.25 11.25.041-.02a.75.75 0 0 1 1.063.852l-.708 2.836a.75.75 0 0 0 1.063.853l.041-.021M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9-3.75h.008v.008H12V8.25Z" />
+        </svg>
+        <span className="flex-1 min-w-0 truncate text-[13px] text-gray-600">
+          {players.length} not listed · played under half
+        </span>
+        <CollapseButton open={open} onClick={() => setOpen((o) => !o)} controls={id} label="who isn’t listed" />
+      </div>
+      <Collapse open={open} id={id}>
+        <p className="pb-1.5 pl-6.5 text-[13px] text-gray-600">{players.map(name).join(', ')}</p>
+      </Collapse>
+    </div>
+  );
+}
+

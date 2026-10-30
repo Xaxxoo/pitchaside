@@ -15,7 +15,7 @@ import { ScorerSheet } from './scorer-sheet';
 import { EventsSection } from './events-section';
 import { GameTimer, type TimerApi } from '@/components/game-timer';
 import { Avatar } from '@/components/ratings';
-import { btnPrimary } from '@/components/buttons';
+import { btnPrimary, btnSecondary } from '@/components/buttons';
 import { useToast } from '@/components/toast';
 import { getTimer, setTimer } from '@/lib/api';
 import { DayPlan, type PlanClock } from '@/components/plan/day-plan';
@@ -106,7 +106,8 @@ export function ScoresStep({
     scoreB: 0,
     goals: [] as GoalInput[],
     keepers: {} as Partial<Record<TeamKey, string | null>>,
-    // Who sat this game out on each side (empty: everyone played). Starts empty each game: subs rotate.
+    // Who sat this game out on each side, as changed on this phone. A team not in it yet carries over
+    // whoever sat out its last game (subs usually sit out more than one), see outOf.
     out: {} as Partial<Record<TeamKey, string[]>>,
   });
   // The game being played is kept on this phone until it's saved: a refresh, a lost signal or
@@ -249,8 +250,29 @@ export function ScoresStep({
   };
   /** Everyone on a team today. */
   const members = (t: TeamKey) => lineup.squad.filter((m) => m.team === t);
+  /** A team's saved games, oldest first, with who sat each one out for it. */
+  const gamesOf = (t: TeamKey) => lineup.games.filter((g) => g.teamA === t || g.teamB === t).map((g) => (g.satOut ?? []).filter((id) => members(t).some((m) => m.id === id)));
+  /** Who sat out a team's last game: the starting guess for its next one, like the keeper. */
+  const lastOut = (t: TeamKey) => gamesOf(t).at(-1) ?? [];
   /** Who's sitting the game being played out for a team: on it, and not its keeper. */
-  const outOf = (t: TeamKey) => (draft.out?.[t] ?? []).filter((id) => members(t).some((m) => m.id === id) && id !== keeperOf(t));
+  const outOf = (t: TeamKey) => (draft.out?.[t] ?? lastOut(t)).filter((id) => members(t).some((m) => m.id === id) && id !== keeperOf(t));
+  /** The same players carried over from the team's last game, not picked on this phone yet. */
+  const carried = (t: TeamKey) => draft.out?.[t] === undefined && outOf(t).length > 0;
+  /**
+   * The same players have sat out the team's last 2 games and nobody has looked since: time to
+   * ask who's off now (most groups swap their subs every couple of games).
+   */
+  const swapDue = (t: TeamKey) => {
+    if (!carried(t)) return false;
+    const key = (ids: string[]) => [...ids].sort().join();
+    const past = gamesOf(t).map(key);
+    // How many games in a row ended with these same subs out: ask every second one, not every game
+    let streak = 0;
+    while (streak < past.length && past[past.length - 1 - streak] === past.at(-1)) streak++;
+    return streak >= 2 && streak % 2 === 0;
+  };
+  /** Games each player on a team has played so far today, of the team's saved games. */
+  const playedSoFar = (t: TeamKey, id: string) => gamesOf(t).filter((out) => !out.includes(id)).length;
   /** A saved game's line for one side: "All 7 played" or "2 sat out". */
   const playedLine = (t: TeamKey, out: string[]) => {
     const mine = out.filter((id) => members(t).some((m) => m.id === id)).length;
@@ -393,14 +415,20 @@ export function ScoresStep({
           onClick={() => setKeeperFor({ team: t, side })}
           label={`In goal for ${name(t)}`}
         />
-        {/* Who played: everyone unless marked; a sub who sat this one out counts for less */}
+        {/* Who played: carried over from the team's last game; after 2 games with the same subs out, it asks */}
         {members(t).length > 1 && (
           <button
             onClick={() => setPlayedFor({ team: t })}
-            aria-label={`Who played for ${name(t)}: ${outOf(t).length ? `${outOf(t).length} sat out` : 'everyone'}. Change`}
-            className={`press max-w-full min-h-11 px-3 rounded-full text-[12px] font-bold hover:bg-white/10 ${outOf(t).length ? 'text-volt-300' : 'text-white/70'}`}
+            aria-label={
+              swapDue(t)
+                ? `Who played for ${name(t)}: ${outOf(t).map(who).join(' and ')} sat out the last 2 games. Swap subs?`
+                : `Who played for ${name(t)}: ${outOf(t).length ? `${outOf(t).map(who).join(', ')} sat out` : 'everyone'}. Change`
+            }
+            className={`press max-w-full min-h-11 px-3 rounded-full text-[12px] font-bold ${
+              swapDue(t) ? 'bg-volt-300 text-ink hover:bg-volt-200' : outOf(t).length ? 'text-volt-300 hover:bg-white/10' : 'text-white/70 hover:bg-white/10'
+            }`}
           >
-            {outOf(t).length ? `${outOf(t).length} sat out` : `All ${members(t).length} played`}
+            {swapDue(t) ? 'Swap subs?' : outOf(t).length ? `${carried(t) ? 'Same ' : ''}${outOf(t).length} sat out` : `All ${members(t).length} played`}
           </button>
         )}
         {sideGoals.length > 0 && (
@@ -452,6 +480,12 @@ export function ScoresStep({
           {busy === 'save' && <BallSpinner className="w-4 h-4" />}
           Save game: {name(draft.teamA)} {draft.scoreA}–{draft.scoreB} {name(draft.teamB)}
         </button>
+        {/* Who's saved as sitting out, said where it's checked: a sub carried over by mistake shows here */}
+        {outOf(draft.teamA).length + outOf(draft.teamB).length > 0 && (
+          <p className="mt-2 text-center text-[12px] text-white/60 truncate">
+            Sat out: {[...outOf(draft.teamA), ...outOf(draft.teamB)].map(who).join(', ')}
+          </p>
+        )}
         {!lineup.locked && (
           <Callout tone="note" onDark className="mt-2">
             Saving the first score locks the teams.
@@ -908,6 +942,8 @@ export function ScoresStep({
             players={members(t).map((m) => ({ id: m.id, name: shortName(m), face: face(m.id, 'w-9 h-9 text-[11px]') }))}
             keeper={keeper}
             out={out}
+            // For the game being played: how much each has played so far, so the subs can be shared out
+            soFar={saved ? null : { of: gamesOf(t).length, played: (id: string) => playedSoFar(t, id) }}
             busy={!!saved && busy === `played-${saved.id}`}
             onClose={close}
             onDone={async (next) => {
@@ -1125,6 +1161,7 @@ function WhoPlayedSheet({
   players,
   keeper,
   out: initial,
+  soFar,
   busy,
   onClose,
   onDone,
@@ -1133,6 +1170,8 @@ function WhoPlayedSheet({
   players: { id: string; name: string; face: React.ReactNode }[];
   keeper: string | null;
   out: string[];
+  /** Games played so far today, of the team's saved games (for the game being played only). */
+  soFar?: { of: number; played: (id: string) => number } | null;
   busy: boolean;
   onClose: () => void;
   onDone: (out: string[]) => void;
@@ -1152,6 +1191,18 @@ function WhoPlayedSheet({
       }
     >
       <SheetTitle id={titleId} title={title} sub="Tap anyone who sat this whole game out." onClose={onClose} />
+      {out.length > 0 && (
+        <button
+          onClick={() => {
+            buzz(6);
+            setOut([]);
+          }}
+          disabled={busy}
+          className={`${btnSecondary} mt-3 w-full`}
+        >
+          Everyone played
+        </button>
+      )}
       <ul className="mt-4 space-y-1.5">
         {players.map((p) => {
           const played = !out.includes(p.id);
@@ -1168,7 +1219,10 @@ function WhoPlayedSheet({
                 className={`press w-full flex items-center gap-3 min-h-14 px-3 py-2 rounded-2xl border text-left ${played ? 'border-gray-100 bg-white hover:border-ink' : 'border-dashed border-gray-300 bg-chalk'} disabled:cursor-default`}
               >
                 <span className={played ? '' : 'opacity-40'}>{p.face}</span>
-                <span className={`flex-1 min-w-0 truncate text-[15px] font-bold ${played ? 'text-ink' : 'text-gray-500 line-through decoration-gray-400'}`}>{p.name}</span>
+                <span className="flex-1 min-w-0">
+                  <span className={`block truncate text-[15px] font-bold ${played ? 'text-ink' : 'text-gray-500 line-through decoration-gray-400'}`}>{p.name}</span>
+                  {soFar && soFar.of > 0 && <span className="block text-[12px] text-gray-500">Played {soFar.played(p.id)} of {soFar.of} so far</span>}
+                </span>
                 <span className={`shrink-0 text-[12px] font-extrabold ${inGoal ? 'text-pitch-700' : played ? 'text-pitch-700' : 'text-gray-500'}`}>{inGoal ? 'In goal' : played ? 'Played' : 'Sat out'}</span>
               </button>
             </li>

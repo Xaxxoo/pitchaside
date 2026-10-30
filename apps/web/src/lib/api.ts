@@ -1133,8 +1133,9 @@ export interface VoteResults {
     title: string;
     /** For "Best on your team": whose team this result is for. */
     team?: TeamKey | null;
-    /** `played`/`of` only when they played under half their side's games: their POTM and best-on-team votes count half. */
-    standings: { playerId: string; count: number; player: SquadMember; played?: number; of?: number }[];
+    standings: { playerId: string; count: number; player: SquadMember }[];
+    /** Player of the Match and Best on your team: votes for someone who played too little to be picked, which count nothing. */
+    uncounted?: number;
     /** Awards: how many different voters nominated anyone. */
     voters?: number;
     /** Awards: too few voters to name a winner. */
@@ -1173,8 +1174,22 @@ export interface Ballot {
   awards: { key: VoteCategory; title: string; hint: string }[];
   maxAwards: number;
   /** Who played, each with their side (null when teams weren't set). */
-  /** `played` of `of`: games they played of the games their side played (newer servers). */
-  squad: (SquadMember & { team: TeamKey | null; position?: Position | null; played?: number; of?: number })[];
+  /**
+   * Their day on the pitch (newer servers): `played` of `of` games (games kept for another side
+   * count in both), games in goal, goals, assists, saves, and whether they can be picked for Player
+   * of the Match and Best on your team (half their games or more, or any of those).
+   */
+  squad: (SquadMember & {
+    team: TeamKey | null;
+    position?: Position | null;
+    played?: number;
+    of?: number;
+    inGoal?: number;
+    goals?: number;
+    assists?: number;
+    saves?: number;
+    canBePicked?: boolean;
+  })[];
   teamCount: number;
   captains: Partial<Record<TeamKey, string>>;
   /** Each side's bib colour and name for this game (its own, else the group's). */

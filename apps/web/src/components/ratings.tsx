@@ -358,6 +358,7 @@ export function SessionVotingCard({
   const turnout = voting.squadSize ? Math.round((voting.ballots / voting.squadSize) * 100) : 0;
   const closes = voting.closesAt ? closeTime(voting.closesAt) : null;
 
+  const uncounted = voting ? voting.categories.reduce((n, c) => n + (c.uncounted ?? 0), 0) : 0;
   return (
     <section className="mb-6 rounded-[28px] bg-sun-400 border-2 border-ink shadow-sticker p-5 relative overflow-hidden">
       <div className="absolute inset-0 chalk-dots opacity-50 pointer-events-none" />
@@ -436,6 +437,12 @@ export function SessionVotingCard({
         {voting.ballots > 0 && !voting.hidden && (
           <div className="mt-4">
             <VoteResultsList results={voting} compact />
+            {/* For the organiser only: votes for someone who played too little to be picked (cast before a correction) */}
+            {uncounted > 0 && (
+              <p className="mt-2 text-[12px] text-gray-500">
+                {uncounted} vote{uncounted === 1 ? '' : 's'} didn’t count · under half played
+              </p>
+            )}
           </div>
         )}
       </div>
