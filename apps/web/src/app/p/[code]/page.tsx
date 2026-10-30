@@ -4,7 +4,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/brand';
-import { getPublicAvailability } from '@/lib/pitch';
+import { getPublicAvailability, localYmd } from '@/lib/pitch';
 import type { IPublicPitch, IPitchDayAvailability } from '@pitchaside/shared';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -39,8 +39,8 @@ export default function PublicPitchPage() {
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     return {
-      from: start.toISOString().split('T')[0],
-      to: end.toISOString().split('T')[0],
+      from: localYmd(start),
+      to: localYmd(end),
     };
   }, [weekOffset]);
 

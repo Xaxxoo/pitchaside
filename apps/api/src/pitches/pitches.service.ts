@@ -5,7 +5,7 @@ import {
   ForbiddenException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 import { randomBytes } from 'crypto';
 import { Pitch } from './entities/pitch.entity';
 import { PitchSchedule } from './entities/pitch-schedule.entity';
@@ -16,8 +16,11 @@ import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SetScheduleDto } from './dto/set-schedule.dto';
 import { CreateOverrideDto } from './dto/create-override.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
-import { PitchAvailabilityService } from './pitch-availability.service';
+import { PitchAvailabilityService, PENDING_HOURS, pendingLiveSql } from './pitch-availability.service';
+import { APP_TZ, zonedInstant } from '../common/time.util';
 import { BillingService } from '../billing/billing.service';
+
+const EXPIRED_MESSAGE = `This request waited ${PENDING_HOURS} hours without an answer, so the time is free again.`;
 
 @Injectable()
 export class PitchesService {
@@ -28,6 +31,7 @@ export class PitchesService {
     @InjectRepository(PitchBooking) private bookingRepo: Repository<PitchBooking>,
     private availability: PitchAvailabilityService,
     private billing: BillingService,
+    private dataSource: DataSource,
   ) {}
 
   // ── Pitch CRUD ──
@@ -118,6 +122,7 @@ export class PitchesService {
 
   async listBookings(pitchId: string, ownerId: string) {
     await this.findOne(pitchId, ownerId);
+    await this.expireStale({ pitchId });
     return this.bookingRepo.find({
       where: { pitchId },
       order: { date: 'DESC', startTime: 'ASC' },
@@ -126,8 +131,10 @@ export class PitchesService {
 
   async confirmBooking(pitchId: string, bookingId: string, ownerId: string) {
     await this.findOne(pitchId, ownerId);
+    await this.expireStale({ pitchId });
     const booking = await this.bookingRepo.findOne({ where: { id: bookingId, pitchId } });
     if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status === 'expired') throw new BadRequestException(EXPIRED_MESSAGE);
     if (booking.status !== 'pending') throw new BadRequestException('Only pending bookings can be confirmed');
     booking.status = 'confirmed';
     booking.confirmedAt = new Date();
@@ -136,8 +143,10 @@ export class PitchesService {
 
   async rejectBooking(pitchId: string, bookingId: string, ownerId: string, reason?: string) {
     await this.findOne(pitchId, ownerId);
+    await this.expireStale({ pitchId });
     const booking = await this.bookingRepo.findOne({ where: { id: bookingId, pitchId } });
     if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status === 'expired') throw new BadRequestException(EXPIRED_MESSAGE);
     if (booking.status !== 'pending') throw new BadRequestException('Only pending bookings can be rejected');
     booking.status = 'rejected';
     booking.rejectionReason = reason ?? null;
@@ -146,8 +155,10 @@ export class PitchesService {
 
   async cancelBookingOwner(pitchId: string, bookingId: string, ownerId: string) {
     await this.findOne(pitchId, ownerId);
+    await this.expireStale({ pitchId });
     const booking = await this.bookingRepo.findOne({ where: { id: bookingId, pitchId } });
     if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status === 'expired') throw new BadRequestException(EXPIRED_MESSAGE);
     if (booking.status === 'cancelled' || booking.status === 'rejected') {
       throw new BadRequestException('Booking is already cancelled or rejected');
     }
@@ -212,34 +223,38 @@ export class PitchesService {
     const pitch = await this.pitchRepo.findOne({ where: { id: dto.pitchId, status: 'active' } });
     if (!pitch) throw new NotFoundException('Pitch not found or inactive');
 
-    // Check slot availability
-    const slots = await this.availability.getAvailableSlots(pitch.id, dto.date);
-    const slot = slots.find((s) => s.startTime === dto.startTime && s.endTime === dto.endTime);
-    if (!slot) throw new BadRequestException('This slot does not exist');
-    if (!slot.available) throw new BadRequestException('This slot is already booked');
+    // One booking at a time per pitch and day: two people tapping the same time together can't both
+    // get it. The lock lasts until this transaction ends, so the second one sees the first booking.
+    return this.dataSource.transaction(async (manager) => {
+      await manager.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`pitch-booking:${pitch.id}:${dto.date}`]);
 
-    // Prevent booking in the past
-    const now = new Date();
-    const bookingDate = new Date(dto.date + 'T' + dto.startTime + ':00');
-    if (bookingDate < now) throw new BadRequestException('Cannot book a slot in the past');
+      // Check slot availability
+      const slots = await this.availability.getAvailableSlots(pitch.id, dto.date, manager);
+      const slot = slots.find((s) => s.startTime === dto.startTime && s.endTime === dto.endTime);
+      if (!slot) throw new BadRequestException('This slot does not exist');
+      if (!slot.available) throw new BadRequestException('This slot is already booked');
 
-    const booking = this.bookingRepo.create({
-      pitchId: dto.pitchId,
-      bookedById: userId,
-      bookerName: dto.bookerName,
-      bookerPhone: dto.bookerPhone ?? null,
-      groupId: dto.groupId ?? null,
-      date: dto.date,
-      startTime: dto.startTime,
-      endTime: dto.endTime,
-      price: slot.price,
-      notes: dto.notes ?? null,
+      // Prevent booking in the past (the pitch's clock, not the server's)
+      if (zonedInstant(dto.date, dto.startTime) < new Date()) throw new BadRequestException('Cannot book a slot in the past');
+
+      const booking = manager.create(PitchBooking, {
+        pitchId: dto.pitchId,
+        bookedById: userId,
+        bookerName: dto.bookerName,
+        bookerPhone: dto.bookerPhone ?? null,
+        groupId: dto.groupId ?? null,
+        date: dto.date,
+        startTime: dto.startTime,
+        endTime: dto.endTime,
+        price: slot.price,
+        notes: dto.notes ?? null,
+      });
+      return manager.save(booking);
     });
-
-    return this.bookingRepo.save(booking);
   }
 
   async myBookings(userId: string) {
+    await this.expireStale({ bookedById: userId });
     return this.bookingRepo.find({
       where: { bookedById: userId },
       relations: ['pitch'],
@@ -248,8 +263,10 @@ export class PitchesService {
   }
 
   async cancelBookingOrganiser(bookingId: string, userId: string) {
+    await this.expireStale({ bookedById: userId });
     const booking = await this.bookingRepo.findOne({ where: { id: bookingId, bookedById: userId } });
     if (!booking) throw new NotFoundException('Booking not found');
+    if (booking.status === 'expired') throw new BadRequestException(EXPIRED_MESSAGE);
     if (booking.status === 'cancelled' || booking.status === 'rejected') {
       throw new BadRequestException('Booking is already cancelled or rejected');
     }
@@ -338,17 +355,31 @@ export class PitchesService {
   }
 
   private dateRange(from: string, to: string): string[] {
+    // Calendar days counted in UTC so the server's time zone can't move them. Cap at 14 days.
     const dates: string[] = [];
-    const current = new Date(from + 'T00:00:00');
-    const end = new Date(to + 'T00:00:00');
-    // Cap at 14 days
-    const maxDays = 14;
-    let i = 0;
-    while (current <= end && i < maxDays) {
-      dates.push(current.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
-      i++;
+    const current = new Date(from + 'T00:00:00Z');
+    const end = new Date(to + 'T00:00:00Z');
+    if (isNaN(current.getTime()) || isNaN(end.getTime())) throw new BadRequestException('Dates must be YYYY-MM-DD');
+    while (current <= end && dates.length < 14) {
+      dates.push(current.toISOString().slice(0, 10));
+      current.setUTCDate(current.getUTCDate() + 1);
     }
     return dates;
+  }
+
+  /**
+   * Requests the owner never answered stop holding the time: after PENDING_HOURS, or once the game
+   * would have started. Run before anything reads or changes bookings, so no one sees a stale one.
+   */
+  private async expireStale(where: { pitchId: string } | { bookedById: string }) {
+    const qb = this.bookingRepo
+      .createQueryBuilder()
+      .update(PitchBooking)
+      .set({ status: 'expired' })
+      .where(`status = 'pending'`)
+      .andWhere(`NOT (${pendingLiveSql()})`, { tz: APP_TZ });
+    if ('pitchId' in where) qb.andWhere('pitch_id = :pitchId', { pitchId: where.pitchId });
+    else qb.andWhere('booked_by_id = :bookedById', { bookedById: where.bookedById });
+    await qb.execute();
   }
 }

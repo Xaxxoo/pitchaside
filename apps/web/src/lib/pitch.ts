@@ -8,6 +8,11 @@ import type {
   IPublicPitch,
 } from '@pitchaside/shared';
 
+/** A day on this phone's calendar as YYYY-MM-DD (toISOString would give the UTC day, a day early before 1am in Lagos). */
+export function localYmd(d: Date) {
+  return d.toLocaleDateString('en-CA');
+}
+
 // ── Pitch management (pitch owner) ──
 
 export function createPitch(data: {

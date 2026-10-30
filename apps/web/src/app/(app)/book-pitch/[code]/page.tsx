@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
-import { getPublicAvailability, createBooking } from '@/lib/pitch';
+import { getPublicAvailability, createBooking, localYmd } from '@/lib/pitch';
 import type { IPublicPitch, IPitchDayAvailability, IPitchSlot } from '@pitchaside/shared';
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -49,8 +49,8 @@ export default function BookPitchPage() {
     const end = new Date(start);
     end.setDate(end.getDate() + 6);
     return {
-      from: start.toISOString().split('T')[0],
-      to: end.toISOString().split('T')[0],
+      from: localYmd(start),
+      to: localYmd(end),
     };
   }, [weekOffset]);
 
