@@ -95,3 +95,37 @@ describe('pitch bookings', () => {
     expect(bookingQb.calls).toContain(`NOT (${pendingLiveSql()})`);
   });
 });
+
+describe('pitch details', () => {
+  it('uses the same lists as the app', () => {
+    const shared = require('@pitchaside/shared');
+    const api = require('./pitch-details');
+    expect(api.PITCH_A_SIDE).toEqual([...shared.PITCH_A_SIDE]);
+    expect(api.PITCH_SURFACES).toEqual([...shared.PITCH_SURFACES]);
+    expect(api.PITCH_FACILITIES).toEqual([...shared.PITCH_FACILITIES]);
+  });
+
+  it('takes Google and Apple Maps links only', () => {
+    const { MAP_URL } = require('./pitch-details');
+    for (const ok of ['https://maps.app.goo.gl/q8Ttd4kZr2bNLyEz8', 'https://www.google.com/maps/place/Surulere', 'https://goo.gl/maps/abc', 'https://maps.google.com/?q=6.5,3.3', 'https://maps.apple.com/?q=pitch']) {
+      expect(MAP_URL.test(ok)).toBe(true);
+    }
+    for (const bad of ['http://maps.app.goo.gl/x', 'https://example.com/maps', 'https://maps.app.goo.gl.evil.com/x', 'javascript:alert(1)', 'https://google.com.evil.io/maps']) {
+      expect(MAP_URL.test(bad)).toBe(false);
+    }
+  });
+
+  it('never sends the owner’s own bank details on the public link', async () => {
+    const pitchRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        id: 'p1', ownerId: 'owner-1', name: 'Arena', defaultPrice: '30000', status: 'active', shareCode: 'abc', slotDurationMinutes: 60, currency: 'NGN',
+        bankAccountNumber: '0123456789', bankCode: '058', bankName: 'GTBank', accountHolderName: 'Bayo Adewale', accountReference: 'ref',
+        aSide: 5, surface: 'astro', facilities: ['floodlights'], mapUrl: 'https://maps.app.goo.gl/x', directions: 'Green gate',
+      }),
+    };
+    const service = new PitchesService(pitchRepo as any, {} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
+    const pub = await service.publicPitch('abc');
+    for (const k of ['ownerId', 'bankAccountNumber', 'bankCode', 'bankName', 'accountHolderName', 'accountReference']) expect(pub).not.toHaveProperty(k);
+    expect(pub).toMatchObject({ aSide: 5, surface: 'astro', facilities: ['floodlights'], directions: 'Green gate', defaultPrice: 30000 });
+  });
+});

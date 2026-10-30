@@ -62,6 +62,8 @@ export class PitchesService {
 
   async update(id: string, dto: UpdatePitchDto, ownerId: string) {
     const pitch = await this.findOne(id, ownerId);
+    // A line left empty clears it.
+    for (const k of ['mapUrl', 'directions'] as const) if (typeof dto[k] === 'string') dto[k] = dto[k]!.trim() || null;
     Object.assign(pitch, dto);
     return this.pitchRepo.save(pitch);
   }
@@ -204,6 +206,11 @@ export class PitchesService {
     const pitch = await this.pitchRepo.findOne({ where: { shareCode: code, status: 'active' } });
     if (!pitch) throw new NotFoundException('Pitch not found');
     return pitch;
+  }
+
+  /** The pitch as anyone with its link sees it: never the owner's own bank details. */
+  async publicPitch(code: string) {
+    return this.sanitizePitch(await this.findByShareCode(code));
   }
 
   async getPublicAvailability(code: string, from: string, to: string) {
@@ -351,6 +358,13 @@ export class PitchesService {
       accountNumber: pitch.accountNumber,
       accountName: pitch.accountName,
       virtualBankName: pitch.virtualBankName,
+      mapUrl: pitch.mapUrl,
+      directions: pitch.directions,
+      aSide: pitch.aSide,
+      surface: pitch.surface,
+      lengthM: pitch.lengthM,
+      widthM: pitch.widthM,
+      facilities: pitch.facilities ?? [],
     };
   }
 

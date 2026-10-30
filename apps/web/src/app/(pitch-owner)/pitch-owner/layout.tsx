@@ -9,7 +9,7 @@ import { BallLoader } from '@/components/skeleton';
 import { Logo } from '@/components/brand';
 
 const navItems = [
-  { label: 'Dashboard', href: '/pitch-owner/dashboard' },
+  { label: 'Home', href: '/pitch-owner/dashboard' },
   { label: 'Pitches', href: '/pitch-owner/pitches' },
   { label: 'Settings', href: '/pitch-owner/settings' },
 ];
@@ -39,21 +39,25 @@ export default function PitchOwnerLayout({ children }: { children: React.ReactNo
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top nav */}
-      <nav className="bg-ink text-white">
-        <div className="max-w-6xl mx-auto px-4 flex items-center h-14 gap-6">
-          <Link href="/pitch-owner/dashboard" className="flex-shrink-0">
-            <Logo />
-          </Link>
-          <div className="flex items-center gap-1 ml-4">
+    <div className="min-h-screen bg-chalk">
+      {/* Dark bar: logo and sign out, then the three places as equal tabs (fits a 360px phone) */}
+      <nav className="bg-ink turf-stripes text-white pt-[env(safe-area-inset-top)]">
+        <div className="max-w-2xl mx-auto px-4">
+          <div className="flex items-center h-14 gap-3">
+            <Logo href="/pitch-owner/dashboard" tone="light" />
+            <button onClick={() => logout()} className="press ml-auto min-h-11 px-2 text-sm font-bold text-white/70 hover:text-white transition-colors">
+              Sign out
+            </button>
+          </div>
+          <div className="grid grid-cols-3 gap-1 pb-2">
             {navItems.map((item) => {
               const active = pathname.startsWith(item.href);
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  aria-current={active ? 'page' : undefined}
+                  className={`press min-h-11 flex items-center justify-center rounded-xl text-sm font-bold transition-colors ${
                     active ? 'bg-white/15 text-volt-300' : 'text-white/70 hover:text-white hover:bg-white/10'
                   }`}
                 >
@@ -62,19 +66,9 @@ export default function PitchOwnerLayout({ children }: { children: React.ReactNo
               );
             })}
           </div>
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-white/60">{user.firstName}</span>
-            <button
-              onClick={() => logout()}
-              className="text-sm text-white/60 hover:text-white transition-colors"
-            >
-              Sign out
-            </button>
-          </div>
         </div>
       </nav>
-
-      <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
+      <main className="max-w-2xl mx-auto px-4 py-5">{children}</main>
     </div>
   );
 }

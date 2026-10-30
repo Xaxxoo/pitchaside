@@ -589,9 +589,35 @@ export interface IPitch {
   accountNumber?: string | null;
   accountName?: string | null;
   virtualBankName?: string | null;
+  /** A Google or Apple Maps link to the pitch, pasted by the owner. */
+  mapUrl?: string | null;
+  /** One line to find it on the day ("Behind the church, gate on the left"). */
+  directions?: string | null;
+  /** Players a side it's made for (5 = 5-a-side). */
+  aSide?: number | null;
+  surface?: PitchSurface | null;
+  lengthM?: number | null;
+  widthM?: number | null;
+  facilities?: PitchFacility[];
   createdAt: string;
   updatedAt: string;
 }
+
+/** What a pitch is made for, as the owner picks it. Same lists in the API (pitches/pitch-details.ts). */
+export const PITCH_A_SIDE = [5, 6, 7, 8, 11] as const;
+export const PITCH_SURFACES = ['astro', 'grass', 'indoor', 'concrete'] as const;
+export type PitchSurface = (typeof PITCH_SURFACES)[number];
+export const PITCH_SURFACE_LABEL: Record<PitchSurface, string> = { astro: 'Astro turf', grass: 'Grass', indoor: 'Indoor', concrete: 'Concrete' };
+export const PITCH_FACILITIES = ['floodlights', 'changing', 'toilets', 'showers', 'parking', 'drinks'] as const;
+export type PitchFacility = (typeof PITCH_FACILITIES)[number];
+export const PITCH_FACILITY_LABEL: Record<PitchFacility, string> = {
+  floodlights: 'Floodlights',
+  changing: 'Changing rooms',
+  toilets: 'Toilets',
+  showers: 'Showers',
+  parking: 'Parking',
+  drinks: 'Drinks on sale',
+};
 
 export interface IPitchSchedule {
   id: string;
@@ -668,6 +694,13 @@ export interface IPublicPitch {
   accountNumber?: string | null;
   accountName?: string | null;
   virtualBankName?: string | null;
+  mapUrl?: string | null;
+  directions?: string | null;
+  aSide?: number | null;
+  surface?: PitchSurface | null;
+  lengthM?: number | null;
+  widthM?: number | null;
+  facilities?: PitchFacility[];
 }
 
 export * from './phone';
