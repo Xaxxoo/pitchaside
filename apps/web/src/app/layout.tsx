@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Bricolage_Grotesque, DM_Sans } from 'next/font/google';
 import { ToastProvider } from '@/components/toast';
+import { KeyboardWatch } from '@/components/keyboard-watch';
 import { AuthProvider } from '@/lib/auth';
 import { PwaRegister } from '@/components/pwa';
 import './globals.css';
@@ -60,6 +61,7 @@ export default function RootLayout({
     <html lang="en" className={`${heading.variable} ${body.variable}`}>
       <body className="font-sans">
         <PwaRegister />
+        <KeyboardWatch />
         <ToastProvider>
           <AuthProvider>{children}</AuthProvider>
         </ToastProvider>
