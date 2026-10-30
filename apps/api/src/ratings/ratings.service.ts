@@ -1915,8 +1915,20 @@ export class RatingsService {
     }
   }
 
+  /** When the club was moved to Steady, for the one-time note (null: always Steady, or not known). */
+  private async ratingsSwitchedAt(organizationId: string): Promise<string | null> {
+    try {
+      const org = await this.sessionsRepo.manager.findOne(Organization, { where: { id: organizationId }, select: ['id', 'ratingsSwitchedAt'] });
+      return org?.ratingsSwitchedAt ? new Date(org.ratingsSwitchedAt).toISOString() : null;
+    } catch {
+      return null;
+    }
+  }
+
   async setRatingMode(organizationId: string, mode: unknown) {
-    if (!RATING_MODES.includes(mode as RatingMode)) throw new BadRequestException('Pick classic or steady');
+    // Classic is retired: every club uses Steady
+    if (mode === 'classic') throw new BadRequestException('Classic ratings have been retired. Every club uses Steady now.');
+    if (!RATING_MODES.includes(mode as RatingMode)) throw new BadRequestException('Pick steady');
     await this.sessionsRepo.manager.update(Organization, { id: organizationId }, { ratingMode: mode as RatingMode });
     return { mode: mode as RatingMode };
   }
@@ -2355,6 +2367,8 @@ export class RatingsService {
       rankedBy: 'rating' as const,
       /** How the club's cards are worked out, so every screen explains the same number. */
       ratingMode: mode,
+      /** When the club was moved from Classic to Steady: both apps say so once. */
+      ratingsSwitchedAt: await this.ratingsSwitchedAt(group.organizationId),
       points: POINTS,
       rows: rows.map((r, i) => {
         const was = placeBefore.get(r.player.id);

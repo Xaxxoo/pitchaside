@@ -1267,6 +1267,8 @@ export interface LeagueTable {
   rankedBy?: 'rating';
   /** How the club's cards are worked out, so every screen explains the same number. Missing: classic. */
   ratingMode?: RatingMode;
+  /** When the club was moved from Classic to Steady (null: always Steady): both apps say so once. */
+  ratingsSwitchedAt?: string | null;
   points: { win: number; draw: number; teamOfDay: number; potm: number };
   rows: (PlayerRatings & {
     player: SquadMember;
@@ -1292,9 +1294,6 @@ export function getRatingMode(): Promise<{ mode: RatingMode }> {
   return http.get('/ratings/mode');
 }
 
-export function setRatingMode(mode: RatingMode): Promise<{ mode: RatingMode }> {
-  return http.put('/ratings/mode', { mode });
-}
 
 /** Each player's 40/40/20 rating and its three parts, beside the old way's number, for the organiser. */
 export interface RatingTrial {

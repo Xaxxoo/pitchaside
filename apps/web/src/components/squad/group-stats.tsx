@@ -6,8 +6,8 @@ import { Avatar } from '@/components/ratings';
 import { FilterBar, FilterMenu } from '@/components/filter-menu';
 import { stagger } from '@/components/motion';
 import { RatingBreakdownSheet } from '@/components/rating-breakdown-sheet';
-import { getGroupTable, getRatingBreakdown, getRatingTrial, setRatingMode, type LeagueTable, type RatingBreakdown, type RatingMode, type RatingTrial, type TableRange } from '@/lib/api';
-import { RatingModeRow } from '@/components/squad/rating-mode';
+import { getGroupTable, getRatingBreakdown, getRatingTrial, type LeagueTable, type RatingBreakdown, type RatingTrial, type TableRange } from '@/lib/api';
+import { SteadyNotice } from '@/components/squad/steady-notice';
 
 /**
  * Where the table and stats come from: the organiser's routes, or the player app's (which check the
@@ -19,8 +19,6 @@ export interface ClubApi {
   ratings: (groupId: string) => Promise<RatingTrial>;
   breakdown: (playerId: string) => Promise<RatingBreakdown | null>;
   playerHref: ((playerId: string) => string) | null;
-  /** Organisers only: change how the club's ratings are worked out. */
-  setMode?: (mode: RatingMode) => Promise<unknown>;
 }
 
 export const ORGANISER_CLUB: ClubApi = {
@@ -28,7 +26,6 @@ export const ORGANISER_CLUB: ClubApi = {
   ratings: getRatingTrial,
   breakdown: getRatingBreakdown,
   playerHref: (id) => `/players/${id}`,
-  setMode: setRatingMode,
 };
 
 type Row = LeagueTable['rows'][number];
@@ -141,11 +138,7 @@ export function GroupStats({
         Stats
       </h2>
       <p className="mb-2.5 text-xs text-gray-500">Every player, ranked. Pick what to rank by.</p>
-      {api.setMode && table && sort === 'rating' && (
-        <div className="-mt-1 mb-2.5">
-          <RatingModeRow mode={table.ratingMode ?? 'classic'} onChange={(m) => api.setMode!(m).then(load)} />
-        </div>
-      )}
+      {table && <SteadyNotice switchedAt={table.ratingsSwitchedAt ?? null} />}
       <FilterBar>
         <FilterMenu
           label="Rank by"
