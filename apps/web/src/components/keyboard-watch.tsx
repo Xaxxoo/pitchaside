@@ -21,15 +21,23 @@ export function KeyboardWatch() {
   useEffect(() => {
     if (!window.matchMedia('(pointer: coarse)').matches) return;
     const root = document.documentElement;
+    let back: ReturnType<typeof setTimeout> | undefined;
     const sync = () => {
+      clearTimeout(back);
       if (isTyping(document.activeElement)) root.dataset.typing = 'true';
       else delete root.dataset.typing;
     };
-    // focusout fires before focus lands on the next field, so check once it has settled.
-    const later = () => setTimeout(sync, 0);
+    // Tapping a button while typing moves focus away first. If the bar came straight back it would
+    // slide over the button mid-tap and take the tap, so it waits until the tap is done. Moving to
+    // another field cancels the wait, so the bar doesn't flicker between fields.
+    const later = () => {
+      clearTimeout(back);
+      back = setTimeout(sync, 400);
+    };
     document.addEventListener('focusin', sync);
     document.addEventListener('focusout', later);
     return () => {
+      clearTimeout(back);
       document.removeEventListener('focusin', sync);
       document.removeEventListener('focusout', later);
       delete root.dataset.typing;

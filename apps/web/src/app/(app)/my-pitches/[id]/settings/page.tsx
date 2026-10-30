@@ -21,6 +21,7 @@ import { chip, field, label, Stepper } from '@/components/group/group-edit-sheet
 import { prettyTime } from '@/components/player-ui';
 import { pitchFacts, hoursSummary, naira, PITCH_ICONS } from '@/components/pitch/pitch-facts';
 import { PitchPhotosEditor } from '@/components/pitch/pitch-photos-editor';
+import { GameLengthPicker, gameLength, gameLengthOk } from '@/components/pitch/game-length-picker';
 import {
   PITCH_A_SIDE, PITCH_FACILITIES, PITCH_FACILITY_LABEL, PITCH_SURFACES, PITCH_SURFACE_LABEL,
   type IPitch, type IPitchSchedule, type IPitchSlotOverride, type PitchFacility, type PitchSurface,
@@ -32,7 +33,6 @@ const WEEK = [1, 2, 3, 4, 5, 6, 0];
 const DAY_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 /** Opening and closing times on the half hour, through the day. */
 const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
-const GAME_LENGTHS = [60, 90, 120];
 const OVERRIDE_KINDS = [
   { value: 'blocked', label: 'Closed' },
   { value: 'added', label: 'Extra hours' },
@@ -176,11 +176,12 @@ export default function PitchDetailsPage() {
   function saveHours(e: React.FormEvent) {
     e.preventDefault();
     if (price < 1) return toast.error('Set a price for a game.');
+    if (!gameLengthOk(gameMinutes)) return toast.error('A game lasts between 15 minutes and 4 hours.');
     const days = WEEK.filter((d) => week[d].open);
     const short = days.find((d) => week[d].from >= week[d].to);
     if (short != null) return toast.error(`${DAY_NAME[short]} closes before it opens.`);
     const tooShort = days.find((d) => minutes(week[d].to) - minutes(week[d].from) < gameMinutes);
-    if (tooShort != null) return toast.error(`${DAY_NAME[tooShort]} is open for less than one ${gameMinutes}-minute game.`);
+    if (tooShort != null) return toast.error(`${DAY_NAME[tooShort]} is open for less than one game (${gameLength(gameMinutes)}).`);
     run('hours', async () => {
       await updatePitch(id, { defaultPrice: price, slotDurationMinutes: gameMinutes });
       await setSchedule(id, days.map((d) => ({
@@ -386,16 +387,7 @@ export default function PitchDetailsPage() {
                 <p id="price-label" className={label}>Price a game</p>
                 <Stepper id="price" value={price} onChange={setPrice} step={1000} min={0} prefix="₦" labelledBy="price-label" less="₦1,000 less" more="₦1,000 more" />
               </div>
-              <fieldset>
-                <legend className={label}>Each game lasts</legend>
-                <div className="flex flex-wrap gap-2">
-                  {(GAME_LENGTHS.includes(gameMinutes) ? GAME_LENGTHS : [...GAME_LENGTHS, gameMinutes].sort((a, b) => a - b)).map((m) => (
-                    <button key={m} type="button" aria-pressed={gameMinutes === m} onClick={() => setGameMinutes(m)} className={chip(gameMinutes === m)}>
-                      {gameLength(m)}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
+              <GameLengthPicker value={gameMinutes} onChange={setGameMinutes} />
 
               <fieldset>
                 <legend className={label}>Open</legend>
@@ -567,14 +559,6 @@ export default function PitchDetailsPage() {
       />
     </div>
   );
-}
-
-/** "1 hour", "1½ hours", "2 hours", "45 minutes". */
-function gameLength(m: number) {
-  if (m === 60) return '1 hour';
-  if (m % 60 === 0) return `${m / 60} hours`;
-  if (m % 60 === 30 && m > 60) return `${Math.floor(m / 60)}½ hours`;
-  return `${m} minutes`;
 }
 
 function minutes(t: string) {

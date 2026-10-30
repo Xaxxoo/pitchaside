@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { Sheet } from '@/components/sheet';
 import { SheetTitle } from '@/components/home/sheet-title';
-import { btnPrimary, btnSecondary } from '@/components/buttons';
+import { btnMain, btnPrimary, btnSecondary } from '@/components/buttons';
 import { BallLoader } from '@/components/skeleton';
 import { prettyTime } from '@/components/player-ui';
 import { field, label } from '@/components/group/group-edit-sheet';
@@ -266,7 +266,7 @@ export function PitchBooking({ code, pitch, inApp = false }: { code: string; pit
       {/* 3. What's picked, and the way on */}
       {picked.length > 0 && <div className="h-28" aria-hidden />}
       {picked.length > 0 && (
-        <div className={`fixed inset-x-3 z-40 max-w-xl mx-auto ${inApp ? 'bottom-[calc(max(env(safe-area-inset-bottom),0.75rem)+5rem)] md:bottom-4 md:pl-60' : 'bottom-[max(env(safe-area-inset-bottom),0.75rem)]'}`}>
+        <div className={`hide-while-typing fixed inset-x-3 z-40 max-w-xl mx-auto ${inApp ? 'bottom-[calc(max(env(safe-area-inset-bottom),0.75rem)+5rem)] md:bottom-4 md:pl-60' : 'bottom-[max(env(safe-area-inset-bottom),0.75rem)]'}`}>
           <div className="rounded-3xl bg-ink text-white shadow-card px-4 py-3 flex items-center gap-3 animate-pop-in" aria-live="polite">
             <div className="min-w-0 flex-1">
               <p className="font-display text-[20px] font-extrabold leading-tight tabular-nums">{naira(total)}</p>
@@ -286,7 +286,7 @@ export function PitchBooking({ code, pitch, inApp = false }: { code: string; pit
           align="left"
           footer={
             user ? (
-              <button type="submit" form="booking-form" disabled={sending} className={`w-full ${btnPrimary}`}>
+              <button type="submit" form="booking-form" disabled={sending} className={`w-full ${btnMain}`}>
                 {sending ? 'Sending…' : `Send request · ${naira(total)}`}
               </button>
             ) : undefined

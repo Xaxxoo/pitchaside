@@ -5,15 +5,11 @@ import { useRouter } from 'next/navigation';
 import { createPitch } from '@/lib/pitch';
 import { useToast } from '@/components/toast';
 import { PageHeader } from '@/components/brand';
-import { btnPrimary } from '@/components/buttons';
+import { btnMain } from '@/components/buttons';
 import { NigerianLocationPicker } from '@/components/nigerian-location-picker';
-import { chip, field, label, Stepper } from '@/components/group/group-edit-sheet';
+import { field, label, Stepper } from '@/components/group/group-edit-sheet';
+import { GameLengthPicker, gameLengthOk } from '@/components/pitch/game-length-picker';
 
-const GAME_LENGTHS = [
-  { m: 60, word: '1 hour' },
-  { m: 90, word: '1½ hours' },
-  { m: 120, word: '2 hours' },
-];
 
 /**
  * Add a pitch with only what it takes to exist: its name, where it is and what a game costs.
@@ -34,6 +30,7 @@ export default function NewPitchPage() {
     e.preventDefault();
     if (name.trim().length < 2) return toast.error('Give the pitch a name.');
     if (price < 1) return toast.error('Set what one game costs.');
+    if (!gameLengthOk(minutes)) return toast.error('A game lasts between 15 minutes and 4 hours.');
     setSaving(true);
     try {
       const pitch = await createPitch({ name: name.trim(), state: state || undefined, city: city || undefined, defaultPrice: price, slotDurationMinutes: minutes });
@@ -48,28 +45,19 @@ export default function NewPitchPage() {
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <PageHeader eyebrow="Your pitches" title="Add a pitch" subtitle="Name, area and price now. Hours and photos next." />
-      <form onSubmit={save} noValidate className="rounded-3xl bg-white border border-gray-100 shadow-card px-5 py-5 space-y-4">
+      <form onSubmit={save} noValidate className="rounded-3xl bg-white border border-gray-100 shadow-card px-5 py-6 space-y-5">
         <div>
           <label htmlFor="name" className={label}>Pitch name</label>
           <input id="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Surulere Astro Turf" className={field} />
         </div>
         {/* The picker brings its own State and City labels */}
-        <NigerianLocationPicker state={state} city={city} onStateChange={(s) => { setState(s); setCity(''); }} onCityChange={setCity} />
+        <NigerianLocationPicker required={false} state={state} city={city} onStateChange={(s) => { setState(s); setCity(''); }} onCityChange={setCity} />
         <div>
           <p id="price-label" className={label}>Price a game</p>
           <Stepper id="price" value={price} onChange={setPrice} step={1000} min={0} prefix="₦" labelledBy="price-label" less="₦1,000 less" more="₦1,000 more" />
         </div>
-        <fieldset>
-          <legend className={label}>Each game lasts</legend>
-          <div className="flex flex-wrap gap-2">
-            {GAME_LENGTHS.map((g) => (
-              <button key={g.m} type="button" aria-pressed={minutes === g.m} onClick={() => setMinutes(g.m)} className={chip(minutes === g.m)}>
-                {g.word}
-              </button>
-            ))}
-          </div>
-        </fieldset>
-        <button type="submit" disabled={saving} className={`w-full ${btnPrimary}`}>{saving ? 'Adding…' : 'Add pitch'}</button>
+        <GameLengthPicker value={minutes} onChange={setMinutes} />
+        <button type="submit" disabled={saving} className={`w-full ${btnMain}`}>{saving ? 'Adding…' : 'Add pitch'}</button>
       </form>
     </div>
   );
