@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
-import { RatingsService, blankRatings, compareStats, trialRatings } from './ratings.service';
+import { RATED_AFTER, RatingsService, blankRatings, compareStats, ratedIn, trialRatings } from './ratings.service';
 import { SessionKind, SessionStatus } from '../sessions/entities/session.entity';
 import { VoteCategory } from './entities/vote.entity';
 import { localDate } from '../common/time.util';
@@ -127,6 +127,18 @@ describe('match day teams and scores', () => {
   });
 });
 
+/** As if everyone has played 3 match days, so the card shows its number (the tests here are about the number). */
+function rated<T extends object>(service: T) {
+  const real = (service as any).clubCard.bind(service);
+  jest.spyOn(service as any, 'clubCard').mockImplementation(async (...args: unknown[]) => {
+    const c = await real(...args);
+    return { ...c, shown: (id: string) => ({ ovr: c.card.get(id) ?? null, ratedIn: 0 }) };
+  });
+  return service;
+}
+/** A mocked club card: these numbers, shown. */
+const cardOf = (card: Map<string, number>) => ({ skills: new Map(), everyone: [], trial: new Map(), card, shown: (id: string) => ({ ovr: card.get(id) ?? null, ratedIn: 0 }) });
+
 describe('the table', () => {
   // Ada (orange) beat Bisi (blue) 2–1, then they drew 1–1; Lanre didn't come.
   const day = [
@@ -161,7 +173,7 @@ describe('the table', () => {
     const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: day });
     // Ada's side won (more points); Bisi's card is higher (goals and votes over time).
     const clubCard = jest.spyOn(service as never as { clubCard: () => Promise<unknown> }, 'clubCard');
-    clubCard.mockResolvedValue({ skills: new Map(), everyone: [], trial: new Map(), card: new Map([['ada', 64], ['bisi', 81]]) });
+    clubCard.mockResolvedValue(cardOf(new Map([['ada', 64], ['bisi', 81]])));
     const t = await service.getGroupTable('grp', 'org');
     const ada = t.rows.find((r) => r.player.id === 'ada')!;
     const bisi = t.rows.find((r) => r.player.id === 'bisi')!;
@@ -173,8 +185,22 @@ describe('the table', () => {
 
   it('level on rating, points decide', async () => {
     const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: day });
-    jest.spyOn(service as never as { clubCard: () => Promise<unknown> }, 'clubCard').mockResolvedValue({ skills: new Map(), everyone: [], trial: new Map(), card: new Map([['ada', 70], ['bisi', 70]]) });
+    jest.spyOn(service as never as { clubCard: () => Promise<unknown> }, 'clubCard').mockResolvedValue(cardOf(new Map([['ada', 70], ['bisi', 70]])));
     expect((await service.getGroupTable('grp', 'org')).rows.map((r) => r.player.id)).toEqual(['ada', 'bisi']);
+  });
+
+  it('shows no number until 3 match days, says how many to go, and ranks them below rated players', async () => {
+    const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: day });
+    // Ada has won more, but only Bisi has played 3 match days
+    jest.spyOn(service as any, 'clubCard').mockResolvedValue({
+      ...cardOf(new Map([['ada', 90], ['bisi', 60]])),
+      shown: (id: string) => (id === 'bisi' ? { ovr: 60, ratedIn: 0 } : { ovr: null, ratedIn: 2 }),
+    });
+    const t = await service.getGroupTable('grp', 'org');
+    expect(t.rows.map((r) => [r.player.id, r.ovr, r.ratedIn])).toEqual([
+      ['bisi', 60, 0],
+      ['ada', null, 2],
+    ]);
   });
 
   it("leaves out players who didn't come", async () => {
@@ -223,7 +249,7 @@ describe('the one-question ballot', () => {
       { voterId: 'ada', nomineeId: 'bisi', category: VoteCategory.POTM },
       { voterId: 'bisi', nomineeId: 'ada', category: VoteCategory.POTM },
     ];
-    const { rows } = await setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { votes }).service.getGroupTable('grp', 'org');
+    const { rows } = await rated(setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { votes }).service).getGroupTable('grp', 'org');
     for (const r of rows) {
       // No award or stat evidence: nothing below the card, and nothing made up either
       const a = Object.values(r.attributes).filter((v) => v !== null) as number[];
@@ -484,7 +510,7 @@ describe('award evidence', () => {
   const table = async (votes: { voterId: string; nomineeId: string; category: VoteCategory }[], sessions = [ten()]) => {
     // The in-memory repos hold one game: this one.
     const { service } = setup(sessions[0], { votes });
-    return (await service.getGroupTable('grp', 'org')).rows;
+    return (await rated(service).getGroupTable('grp', 'org')).rows;
   };
 
   it('lifts the abilities an award is evidence of, and counts how many people said so', async () => {
@@ -652,5 +678,18 @@ describe('ratingBreakdown', () => {
     if (b.mode !== 'steady') throw new Error('expected steady');
     expect(b).toMatchObject({ rating: 53, classic: 71, matchDays: 2, settling: true, maxMove: 4, votesCount: 0.6, voteMove: 1 });
     expect(b.recent.map((d) => [d.date, d.move])).toEqual([['2026-10-08', 4], ['2026-10-01', -1]]);
+  });
+});
+
+describe('when a card shows its number', () => {
+  it('after 3 match days, counting down before then', () => {
+    expect([0, 1, 2, 3, 7].map(ratedIn)).toEqual([3, 2, 1, 0, 0]);
+    expect(RATED_AFTER).toBe(3);
+  });
+
+  it('never makes one up: a player on 1 match day has none, in the table and on their card', async () => {
+    const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: [{ teamA: 'A', teamB: 'B', scoreA: 2, scoreB: 1 }] });
+    const t = await service.getGroupTable('grp', 'org');
+    expect(t.rows.every((r) => r.ovr === null && r.ratedIn === 2 && r.provisional)).toBe(true);
   });
 });

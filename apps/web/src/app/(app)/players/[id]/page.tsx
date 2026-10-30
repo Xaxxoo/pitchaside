@@ -33,7 +33,7 @@ import { photoUrl } from '@/lib/http';
 import { CardPhotoButton } from '@/components/photo-picker';
 import { Collapse } from '@/components/collapse';
 import { niceDate } from '@/components/player-ui';
-import { AttributeRow } from '@/components/ratings';
+import { AttributeRow, newLine } from '@/components/ratings';
 import { ShareCardButton, ShareIcon, shareIconDark } from '@/components/share-card';
 import { PlayerStats } from '@/components/player-stats';
 import { Player, Ball, JerseyBadge, kitFor, skins } from '@/components/illustrations';
@@ -230,11 +230,18 @@ export default function PlayerDetailPage() {
                 </button>
               ) : (
                 <div className="absolute z-10 top-2 left-2.5 leading-none">
-                  <p className="font-display text-[26px] font-extrabold text-volt-300 tabular-nums">{ratings?.ovr ?? '–'}</p>
-                  <p className="text-[8px] font-extrabold tracking-[0.14em] text-white/70 mt-0.5">OVR</p>
+                  {ratings?.ovr != null ? (
+                    <>
+                      <p className="font-display text-[26px] font-extrabold text-volt-300 tabular-nums">{ratings.ovr}</p>
+                      <p className="text-[8px] font-extrabold tracking-[0.14em] text-white/70 mt-0.5">OVR</p>
+                    </>
+                  ) : (
+                    // No number until 3 match days: never a made-up one
+                    <p className="rounded-md bg-volt-300 px-1.5 py-1 font-display text-[12px] font-extrabold uppercase tracking-[0.08em] text-ink">New</p>
+                  )}
                 </div>
               )}
-              {ratings?.provisional && (
+              {ratings?.provisional && ratings.ovr != null && (
                 <p className="absolute z-10 top-[54px] left-2 rounded-md bg-black/50 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.12em] text-volt-300" title="Rating is still settling: fewer than 3 games with scores">
                   Provisional
                 </p>
@@ -257,8 +264,10 @@ export default function PlayerDetailPage() {
                 {player.firstName} {player.lastName}
               </h1>
               {player.nickname && <p className="mt-1 text-sm font-bold text-volt-300 truncate">“{player.nickname}”</p>}
-              {ratings?.ovr != null && (
-                <p className="mt-2 self-start rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300">{levelOf(ratings.ovr).name}</p>
+              {ratings && (
+                <p className="mt-2 self-start rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300 whitespace-nowrap">
+                  {ratings.ovr != null ? levelOf(ratings.ovr).name : newLine(ratings.ratedIn)}
+                </p>
               )}
               {/* Their season in three numbers, so the column carries weight next to the portrait */}
               <dl className="mt-3 grid grid-cols-3 gap-1.5">

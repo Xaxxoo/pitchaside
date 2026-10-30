@@ -1,6 +1,7 @@
 'use client';
 
 import { matchDay } from '@/lib/match-words';
+import { EmptyState } from '@/components/empty-state';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Avatar } from '@/components/ratings';
@@ -129,7 +130,10 @@ export function GroupStats({
   // Counting stats list only players who have one; the rest fold into a line (a 0 isn't a place).
   const counts = sort !== 'rating' && sort !== 'games' && sort !== 'plusMinus';
   const none = counts ? played.filter((r) => stat.of(r) === 0).length : 0;
-  const rows = [...(counts ? played.filter((r) => stat.of(r) > 0) : played)].sort((a, b) => value(b) - value(a) || (b.ovr ?? 0) - (a.ovr ?? 0) || nameOf(a).localeCompare(nameOf(b)));
+  // Ranked by rating, only players with a number are listed; new players (under 3 match days) fold into a line
+  const unrated = sort === 'rating' ? played.filter((r) => r.ovr == null) : [];
+  const listed = counts ? played.filter((r) => stat.of(r) > 0) : sort === 'rating' ? played.filter((r) => r.ovr != null) : played;
+  const rows = [...listed].sort((a, b) => value(b) - value(a) || (b.ovr ?? 0) - (a.ovr ?? 0) || nameOf(a).localeCompare(nameOf(b)));
   const notYet = (table?.rows.length ?? 0) - played.length;
   const steady = table?.ratingMode === 'steady';
 
@@ -176,7 +180,19 @@ export function GroupStats({
       ) : !table ? (
         <div className="mt-3 h-64 rounded-3xl bg-gray-100 animate-pulse" aria-busy aria-label="Loading stats" />
       ) : played.length === 0 ? (
-        <p className="mt-3 rounded-3xl bg-chalk px-4 py-8 text-center text-sm text-gray-600">No one has played a game with scores yet.</p>
+        <div className="mt-3">
+          <EmptyState icon="box" title="No stats yet" description="Save scores on match day and every player shows up here." />
+        </div>
+      ) : sort === 'rating' && rows.length === 0 ? (
+        <div className="mt-3">
+          <EmptyState
+            icon="box"
+            title="No ratings yet"
+            description="Every card gets a number after 3 match days."
+            actionLabel="Rank by goals"
+            onAction={() => onSort('goals')}
+          />
+        </div>
       ) : rows.length === 0 ? (
         <p className="mt-3 rounded-3xl bg-chalk px-4 py-8 text-center text-sm text-gray-600">
           No {stat.label.toLowerCase()} recorded yet.{' '}
@@ -261,6 +277,11 @@ export function GroupStats({
       {table && rows.length > 0 && none > 0 && (
         <p className="mt-2 px-1 text-[12px] text-gray-500">
           {none} other player{none === 1 ? ' has' : 's have'} none.
+        </p>
+      )}
+      {table && rows.length > 0 && unrated.length > 0 && (
+        <p className="mt-2 px-1 text-[12px] text-gray-500">
+          {unrated.length} new player{unrated.length === 1 ? ' gets' : 's get'} a rating after 3 match days.
         </p>
       )}
       {table && notYet > 0 && (

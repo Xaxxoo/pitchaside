@@ -54,12 +54,12 @@ function PlayerCard({ c }: { c: PlayerCardData }) {
     >
       {/* Rating, top left */}
       <div style={{ display: 'flex', flexDirection: 'column', position: 'absolute', top: 34, left: 44 }}>
-        <div style={{ display: 'flex', fontFamily: DISPLAY, fontWeight: 800, fontSize: 132, lineHeight: 1 }}>{c.ovr ?? '–'}</div>
-        <div style={{ display: 'flex', fontSize: 30, fontWeight: 700, letterSpacing: 4, marginTop: 4 }}>OVR</div>
+        <div style={{ display: 'flex', fontFamily: DISPLAY, fontWeight: 800, fontSize: c.ovr != null ? 132 : 96, lineHeight: 1 }}>{c.ovr ?? 'NEW'}</div>
+        <div style={{ display: 'flex', fontSize: 30, fontWeight: 700, letterSpacing: 4, marginTop: 4 }}>{c.ovr != null ? 'OVR' : 'PLAYER'}</div>
         {c.ovr != null && (
           <div style={{ display: 'flex', marginTop: 10, fontSize: 20, fontWeight: 800, letterSpacing: 2 }}>{levelOf(c.ovr).name.toUpperCase()}</div>
         )}
-        {c.provisional && (
+        {c.provisional && c.ovr != null && (
           <div style={{ display: 'flex', marginTop: 10, padding: '4px 12px', borderRadius: 999, background: C.ink, color: C.volt300, fontSize: 18, fontWeight: 700, letterSpacing: 2 }}>
             SETTLING
           </div>

@@ -181,7 +181,10 @@ export interface PlayerRatings {
   skill: number;
   /** Fewer than PROVISIONAL_UNDER scored games so far: the card is still settling. */
   provisional: boolean;
+  /** The card's number; null until they've played RATED_AFTER match days (ratedIn says how many more). */
   ovr: number | null;
+  /** Match days still to play before the card shows a number; 0 once it does. */
+  ratedIn?: number;
   attributes: Record<Ability, number | null>;
   goals: number;
   assists: number;
@@ -350,6 +353,11 @@ export const noEvidence = (): AbilityEvidence => Object.fromEntries(ABILITIES.ma
  * supporting role). PRIOR keeps a low-turnout week from swinging it. GK shows only for players
  * nominated in goal. OVR is the best four attributes plus a Player of the Match bonus.
  */
+/** A card shows its number once a player has played this many match days (decided 30 Oct with Matt). */
+export const RATED_AFTER = 3;
+/** How many more match days before a player's card shows a number. */
+export const ratedIn = (days: number) => Math.max(0, RATED_AFTER - days);
+
 export function playerCard(skill: Skill | undefined, abilities: AbilityEvidence, potmVotes: number, ballotsSeen: number) {
   const base = cardRating(skill?.rating ?? DEFAULT_START);
   const liftOf = ({ n, e }: { n: number; e: number }) => Math.max(0, Math.min(VOTE_UP_MAX, Math.round((VOTE_WEIGHT * (n - e)) / (e + RATING_PRIOR))));
@@ -879,7 +887,8 @@ export class RatingsService {
         nickname: p.player.nickname || null,
         photoKey: p.player.photoKey ?? null,
         team: p.team ?? null,
-        ovr: ratings ? (ratings.ovr.get(p.player.id) ?? cardRating(ratings.skills.get(p.player.id)?.rating ?? DEFAULT_START)) : null,
+        // Only a number the card shows: none until 3 match days
+        ovr: ratings ? ratings.shown(p.player.id).ovr : null,
         goals: count(goals, (g) => (g.ownGoal ? null : g.scorerId), p.player.id),
         assists: count(goals, (g) => g.assistId, p.player.id),
         saves: count(events, (e) => (e.kind === 'save' ? e.playerId : null), p.player.id),
@@ -934,11 +943,11 @@ export class RatingsService {
 
   async getLineup(sessionId: string, organizationId: string) {
     const session = await this.loadSession(sessionId, organizationId);
-    const [{ ovr, skills }, games, paid, goals, events] = await Promise.all([
+    const [{ ovr, skills, shown }, games, paid, goals, events] = await Promise.all([
       // Ratings only decorate the teams: if they can't be worked out, the teams still load.
       this.ovrMap(organizationId).catch((err) => {
         this.logger.error(`Ratings for the lineup of ${sessionId} failed: ${err instanceof Error ? err.stack : err}`);
-        return { ovr: new Map<string, number | null>(), skills: new Map<string, Skill>() };
+        return { ovr: new Map<string, number | null>(), skills: new Map<string, Skill>(), shown: null };
       }),
       this.gamesRepo.find({ where: { sessionId }, order: { createdAt: 'ASC' } }),
       this.paidFor(session),
@@ -971,7 +980,10 @@ export class RatingsService {
           /** Where they play today, and where they usually play (null: not said). */
           position: p.position ?? p.player.position ?? null,
           usualPosition: p.player.position ?? null,
-          ovr: ovr.get(p.player.id) ?? cardRating(skills.get(p.player.id)?.rating ?? DEFAULT_START),
+          // What the card shows: nothing until 3 match days
+          ovr: shown ? shown(p.player.id).ovr : (ovr.get(p.player.id) ?? null),
+          // The number fair teams balances on, shown or not
+          strength: ovr.get(p.player.id) ?? cardRating(skills.get(p.player.id)?.rating ?? DEFAULT_START),
           skill: Math.round(skills.get(p.player.id)?.rating ?? DEFAULT_START),
           // Organisers always see who's paid for this game (or the period it falls in).
           paid: paid.get(p.playerId) ?? 'unpaid',
@@ -1599,7 +1611,7 @@ export class RatingsService {
     const lineup = await this.getLineup(sessionId, organizationId);
     const strength = (p: (typeof lineup.squad)[number]) => {
       const results = cardRating(p.skill);
-      return (results + (p.ovr ?? results)) / 2;
+      return (results + (p.strength ?? results)) / 2;
     };
     const sides = TEAM_KEYS.slice(0, lineup.teamCount) as unknown as string[];
     const split = fairSplit(
@@ -1880,8 +1892,8 @@ export class RatingsService {
   }
 
   private async ovrMap(organizationId: string) {
-    const { skills, card } = await this.clubCard(organizationId);
-    return { ovr: card, skills };
+    const { skills, card, shown } = await this.clubCard(organizationId);
+    return { ovr: card, skills, shown };
   }
 
   /**
@@ -1899,9 +1911,17 @@ export class RatingsService {
     // The old way's number, kept beside the steady one so the switch can be compared
     const classic = new Map<string, number>();
     for (const r of everyone) if (r.games > 0) classic.set(r.player.id, trial.get(r.player.id)!.trial);
-    const steady = mode === 'steady' ? await this.steadyCard(organizationId, without) : null;
+    // Replayed whatever the mode, for how many match days each player has played
+    const replay = await this.steadyCard(organizationId, without);
+    const steady = mode === 'steady' ? replay : null;
     for (const [id, n] of classic) card.set(id, steady ? Math.round(steady.steady.get(id)?.ovr ?? n) : n);
-    return { skills, everyone, trial, card, classic, mode, steady };
+    const days = new Map([...replay.steady].map(([id, x]) => [id, x.days]));
+    /** What the card shows: nothing until RATED_AFTER match days, then the number. */
+    const shown = (id: string) => {
+      const left = ratedIn(days.get(id) ?? 0);
+      return { ovr: left ? null : (card.get(id) ?? null), ratedIn: left };
+    };
+    return { skills, everyone, trial, card, classic, mode, steady, shown };
   }
 
   /** How the club's cards are worked out. Old databases without the column count as classic. */
@@ -2342,20 +2362,21 @@ export class RatingsService {
     // Ranked by the card's rating (Matt, 24 Oct): 40% goals and assists, 40% votes, 20% results,
     // so a player isn't top just for being on the winning side. The card's number is the club's,
     // all time, whatever period the table covers; level on rating, points decide.
-    const { card, mode } = await this.clubCard(organizationId);
+    const { shown, mode } = await this.clubCard(organizationId);
     const latest = sessions[sessions.length - 1];
-    const cardBefore = sessions.length > 1 ? (await this.clubCard(organizationId, latest.id)).card : null;
-    const ranked = async (list: Session[], ratings: Map<string, number>) =>
+    const shownBefore = sessions.length > 1 ? (await this.clubCard(organizationId, latest.id)).shown : null;
+    // Players with a number first, by it; players still to be rated after them, by points
+    const ranked = async (list: Session[], show: typeof shown) =>
       [...(await this.aggregate(list, skills)).values()].sort(
         (a, b) =>
-          (ratings.get(b.player.id) ?? b.ovr ?? 0) - (ratings.get(a.player.id) ?? a.ovr ?? 0) ||
+          (show(b.player.id).ovr ?? -1) - (show(a.player.id).ovr ?? -1) ||
           b.points - a.points ||
           b.potmWins - a.potmWins ||
           b.record.w - a.record.w ||
           b.games - a.games,
       );
-    const rows = await ranked(sessions, card);
-    const before = cardBefore ? await ranked(sessions.slice(0, -1), cardBefore) : [];
+    const rows = await ranked(sessions, shown);
+    const before = shownBefore ? await ranked(sessions.slice(0, -1), shownBefore) : [];
     const placeBefore = new Map(before.map((r, i) => [r.player.id, i]));
     // Each of the latest six match days on its own, oldest first: form is a player's last three of them.
     const days = await Promise.all(sessions.slice(-6).map((s) => this.aggregate([s], skills)));
@@ -2381,8 +2402,8 @@ export class RatingsService {
           .filter((rec): rec is { w: number; d: number; l: number } => !!rec && rec.w + rec.d + rec.l > 0)
           .map((rec) => (rec.w > rec.l ? 'W' : rec.w < rec.l ? 'L' : 'D') as 'W' | 'D' | 'L')
           .slice(-3);
-        const ovr = card.get(r.player.id) ?? r.ovr;
-        return { ...r, ovr, attributes: ovr == null ? r.attributes : cardAttributes(ovr, r, rows), form, move: was === undefined || !before.length ? null : was - i };
+        const { ovr, ratedIn: left } = shown(r.player.id);
+        return { ...r, ovr, ratedIn: left, provisional: left > 0, attributes: ovr == null ? r.attributes : cardAttributes(ovr, r, rows), form, move: was === undefined || !before.length ? null : was - i };
       }),
     };
   }
@@ -2471,7 +2492,7 @@ export class RatingsService {
     const group = await this.groupsRepo.findOne({ where: { id: groupId, organizationId }, relations: ['memberships'] });
     if (!group) throw new NotFoundException('Group not found');
     const members = new Set((group.memberships ?? []).map((m) => m.playerId));
-    const { everyone, trial, steady, mode, card } = await this.clubCard(organizationId);
+    const { everyone, trial, steady, mode, shown } = await this.clubCard(organizationId);
     const rows = everyone
       .filter((r) => members.has(r.player.id) && r.games > 0)
       .map((r) => ({
@@ -2483,7 +2504,7 @@ export class RatingsService {
         // What the card showed before 20 Oct, for comparing.
         oldOvr: r.ovr,
         ...trial.get(r.player.id)!,
-        card: card.get(r.player.id) ?? null,
+        card: shown(r.player.id).ovr,
         // Steady clubs: form and the latest match day, for the Stats spotlight
         steady: steady
           ? (() => {
@@ -2599,8 +2620,9 @@ export class RatingsService {
 
   async getPlayerRatings(playerId: string, organizationId: string): Promise<PlayerRatings & { compare: StatCompare; season: PlayerRatings & { compare: StatCompare } }> {
     const sessions = await this.gamesQuery(organizationId).getMany();
-    const { skills, card } = await this.clubCard(organizationId);
+    const { skills, shown } = await this.clubCard(organizationId);
     const year = String(new Date().getFullYear());
+    const { ovr, ratedIn: left } = shown(playerId);
     const of = async (list: Session[]): Promise<PlayerRatings & { compare: StatCompare }> => {
       const everyone = await this.aggregate(list, skills);
       const rows = [...everyone.values()];
@@ -2610,12 +2632,11 @@ export class RatingsService {
         const { player: _player, ...ratings } = s;
         // One card number, the club's all-time rating, for this season's view too; the attributes
         // sit around it, moved by what they did and what teammates voted
-        const ovr = card.get(playerId) ?? ratings.ovr;
-        return { ...ratings, ovr, attributes: ovr == null ? ratings.attributes : cardAttributes(ovr, ratings, rows), compare };
+        return { ...ratings, ovr, ratedIn: left, provisional: left > 0, attributes: ovr == null ? ratings.attributes : cardAttributes(ovr, ratings, rows), compare };
       }
       // Not played yet: the card starts from their level, with nothing to show for attributes yet.
       const blank = { ...blankRatings(), ...playerCard(skills.get(playerId), noEvidence(), 0, 0) };
-      return { ...blank, attributes: blankRatings().attributes, compare };
+      return { ...blank, ovr: null, ratedIn: left, provisional: true, attributes: blankRatings().attributes, compare };
     };
     return { ...(await of(sessions)), season: await of(sessions.filter((s) => String(s.date).startsWith(year))) };
   }

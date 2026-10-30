@@ -190,7 +190,7 @@ const shortOf = (r: TableRow) => {
 };
 
 /** The top three on a striped pitch: their shirt (or photo), name and rating (points under it), tallest in the middle. */
-function Podium({ rows }: { rows: TableRow[] }) {
+function Podium({ rows, byRating = true }: { rows: TableRow[]; byRating?: boolean }) {
   // Second, first, third, left to right.
   const order = [rows[1], rows[0], rows[2]];
   const place = ['2nd', '1st', '3rd'];
@@ -221,11 +221,19 @@ function Podium({ rows }: { rows: TableRow[] }) {
             )}
             <span className="max-w-full truncate text-[13px] font-bold text-white">{name}</span>
             <div className={`w-full ${block[i]} rounded-t-2xl flex flex-col items-center pt-2 text-ink animate-rise`}>
-              <span className="font-display text-2xl font-extrabold leading-none tabular-nums" aria-label={`Rating ${r.ovr ?? 'not yet'}`}>
-                {r.ovr ?? '–'}
-              </span>
+              {!byRating ? (
+                <span className="font-display text-2xl font-extrabold leading-none tabular-nums">{r.points}</span>
+              ) : r.ovr != null ? (
+                <span className="font-display text-2xl font-extrabold leading-none tabular-nums" aria-label={`Rating ${r.ovr}`}>
+                  {r.ovr}
+                </span>
+              ) : (
+                <span className="font-display text-lg font-extrabold leading-6 uppercase" aria-label={newLine(r.ratedIn)}>
+                  New
+                </span>
+              )}
               <span className="text-[11px] font-bold tabular-nums">
-                {place[i]} · {r.points} pts
+                {byRating ? `${place[i]} · ${r.points} pts` : `pts · ${place[i]}`}
               </span>
             </div>
           </div>
@@ -249,15 +257,16 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
       />
     );
   }
-  const byRating = table.rankedBy === 'rating';
+  // Until someone has played 3 match days there's no rating: the table ranks and shows points
+  const byRating = table.rankedBy === 'rating' && table.rows.some((r) => r.ovr != null);
   // A podium needs three who've played; otherwise it's all one list.
   const podium = table.rows.length >= 3 && (byRating ? table.rows[2].games > 0 : table.rows[2].points > 0);
   const rest = podium ? table.rows.slice(3) : table.rows;
   const first = podium ? 4 : 1;
-  const cols = 'grid grid-cols-[26px_minmax(0,1fr)_22px_54px_36px] items-center gap-2';
+  const cols = 'grid grid-cols-[26px_minmax(0,1fr)_22px_54px_40px] items-center gap-2';
   return (
     <div className="space-y-3">
-      {podium && <Podium rows={table.rows} />}
+      {podium && <Podium rows={table.rows} byRating={byRating} />}
       {rest.length > 0 && (
         <div className="bg-white rounded-3xl border border-gray-100 shadow-card overflow-hidden">
           <div className={`${cols} px-3.5 py-2.5 bg-ink text-[10px] font-extrabold uppercase tracking-wider text-white/60`}>
@@ -275,7 +284,8 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
               <div key={row.player.id} className={`${cols} px-3.5 py-2.5 border-t border-gray-100`}>
                 <span className="flex flex-col leading-none gap-0.5">
                   <span className="font-display text-[15px] font-extrabold text-ink tabular-nums">{first + i}</span>
-                  <Move move={row.move} />
+                  {/* A new player's NEW chip already says it: no second "new" under the place */}
+                  {!(byRating && row.ovr == null && row.move === null) && <Move move={row.move} />}
                 </span>
                 <span className="min-w-0 flex items-center gap-2.5">
                   <Avatar name={`${row.player.firstName} ${row.player.lastName}`} photoKey={row.player.photoKey} className="w-8 h-8 text-[10px]" />
@@ -301,7 +311,7 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
                 <span className="flex justify-center">
                   <FormDots form={row.form} />
                 </span>
-                <span className="text-right font-display text-lg font-extrabold text-ink tabular-nums">{byRating ? (row.ovr ?? '–') : row.points}</span>
+                <span className="text-right font-display text-lg font-extrabold text-ink tabular-nums">{!byRating ? row.points : row.ovr != null ? row.ovr : <NewChip ratedIn={row.ratedIn} />}</span>
               </div>
             );
           })}
@@ -556,6 +566,24 @@ export function VotePrompt() {
         </svg>
       </span>
     </Link>
+  );
+}
+
+/** "New · 2 more match days": a card with no number yet, and when it gets one. */
+export function newLine(ratedIn: number | undefined) {
+  const n = Math.max(1, ratedIn ?? 1);
+  return `New · ${n} more match day${n === 1 ? '' : 's'}`;
+}
+
+/** In a list's rating column, where a number would be: "New", with when it gets one said to screen readers. */
+export function NewChip({ ratedIn, dark = false }: { ratedIn?: number; dark?: boolean }) {
+  return (
+    <span
+      aria-label={newLine(ratedIn)}
+      className={`inline-flex h-6 items-center rounded-full px-2 text-[11px] font-extrabold uppercase tracking-[0.08em] ${dark ? 'bg-white/10 text-volt-300' : 'bg-chalk text-gray-600'}`}
+    >
+      New
+    </span>
   );
 }
 

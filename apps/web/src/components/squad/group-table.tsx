@@ -86,7 +86,7 @@ export function GroupTable({
               {table.rankedBy === 'rating' && (
                 <>
                   <span className="block font-bold text-volt-300">How it’s ranked</span>
-                  <span className="block mt-1 mb-2">By rating: {ratingWords(table.ratingMode).short}. Level on rating, more points go higher.</span>
+                  <span className="block mt-1 mb-2">By rating: {ratingWords(table.ratingMode).short}. Level on rating, more points go higher. New players get a rating after 3 match days and sit below, by points.</span>
                 </>
               )}
               <span className="block font-bold text-volt-300">How points are won</span>
@@ -113,7 +113,10 @@ export function GroupTable({
         )}
         </div>
         <p className="-mt-1 text-xs text-gray-500">
-          {table?.statsFrom
+          {/* Before anyone has played 3 match days there's no rating to rank by: points do it */}
+          {table?.rankedBy === 'rating' && table.rows.length > 0 && table.rows.every((r) => r.ovr == null)
+            ? 'Ranked by points. Ratings show after 3 match days.'
+            : table?.statsFrom
             ? `Ranked by rating. Counting from ${matchDay(table.statsFrom)}.`
             : table?.rankedBy === 'rating'
               ? 'Ranked by rating. Points break a tie.'
