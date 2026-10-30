@@ -35,7 +35,7 @@ export class Organization {
    * 'classic' ranks players against the club (40% stats, 40% votes, 20% results);
    * 'steady' moves a little each match day from what they did (ratings/match-rating.ts).
    */
-  @Column({ name: 'rating_mode', type: 'varchar', length: 10, default: 'classic' })
+  @Column({ name: 'rating_mode', type: 'varchar', length: 10, default: 'steady' })
   ratingMode: RatingMode;
 
   @OneToMany(() => User, (user) => user.organization)
