@@ -34,6 +34,8 @@ function setup(
     votes?: { voterId: string; nomineeId: string; category: VoteCategory }[];
     scores?: number;
     games?: { teamA: string; teamB: string; scoreA: number; scoreB: number; keeperA?: string | null; keeperB?: string | null }[];
+    goals?: { scorerId: string; assistId: string | null; ownGoal: boolean }[];
+    events?: { playerId: string; kind: string }[];
   } = {},
 ) {
   const votes = (opts.votes ?? []).map((v) => ({ sessionId: session.id, ...v }));
@@ -60,8 +62,8 @@ function setup(
   const votesRepo = { find: async () => votes, count: async () => votes.length, manager };
   const gamesRepo = { count: async () => opts.scores ?? games.length, find: async () => games, save: async (g: unknown) => g, create: (g: unknown) => g };
   const groupsRepo = { findOne: async () => session.group };
-  const goalsRepo = { find: async () => [], save: async (g: unknown) => g, create: (g: unknown) => g, delete: async () => undefined };
-  const service = new RatingsService(votesRepo as never, gamesRepo as never, goalsRepo as never, sessionsRepo as never, groupsRepo as never, { find: async () => [] } as never);
+  const goalsRepo = { find: async () => opts.goals ?? [], save: async (g: unknown) => g, create: (g: unknown) => g, delete: async () => undefined };
+  const service = new RatingsService(votesRepo as never, gamesRepo as never, goalsRepo as never, sessionsRepo as never, groupsRepo as never, { find: async () => opts.events ?? [] } as never);
   return { service, saved };
 }
 
@@ -286,17 +288,57 @@ describe('who played each game', () => {
     expect(b.squad.find((p) => p.id === 'ada')).toMatchObject({ played: 4, of: 4 });
   });
 
-  it('a vote for someone who played under half the games counts half', async () => {
-    const closed = { ...day(), voteOpensAt: new Date(Date.now() - 100 * HOUR) };
-    // Tolu gets 3 POTM votes but played 1 of 4 (1.5); Ada gets 2 and played them all (2)
-    const votes = [
-      ...['seyi', 'bisi', 'kemi'].map((voterId) => ({ voterId, nomineeId: 'tolu', category: VoteCategory.POTM })),
-      ...['tolu', 'x'].map((voterId) => ({ voterId, nomineeId: 'ada', category: VoteCategory.POTM })),
-    ];
-    const r = await setup(closed as never, { votes, games: four as never }).service.getPublicResults('tok');
+  // Tolu gets 3 POTM votes but played 1 of 4; Ada gets 2 and played them all
+  const potmVotes = [
+    ...['seyi', 'bisi', 'kemi'].map((voterId) => ({ voterId, nomineeId: 'tolu', category: VoteCategory.POTM })),
+    ...['tolu', 'x'].map((voterId) => ({ voterId, nomineeId: 'ada', category: VoteCategory.POTM })),
+  ];
+  const closed = () => ({ ...day(), voteOpensAt: new Date(Date.now() - 100 * HOUR) });
+
+  it('a vote for someone who played under half the games, with nothing to show, counts nothing', async () => {
+    const r = await setup(closed() as never, { votes: potmVotes, games: four as never }).service.getPublicResults('tok');
     const potm = r.categories.find((c) => c.key === VoteCategory.POTM)!;
-    expect(potm.standings[0].playerId).toBe('ada');
-    expect(potm.standings.find((x) => x.playerId === 'tolu')).toMatchObject({ count: 3, played: 1, of: 4 });
+    expect(potm.standings.map((x) => x.playerId)).toEqual(['ada']);
+    expect(potm.uncounted).toBe(3);
+  });
+
+  it('a goal in their one game counts them in full', async () => {
+    const goals = [{ scorerId: 'tolu', assistId: null, ownGoal: false }];
+    const r = await setup(closed() as never, { votes: potmVotes, games: four as never, goals: goals as never }).service.getPublicResults('tok');
+    expect(r.categories.find((c) => c.key === VoteCategory.POTM)!.standings[0]).toMatchObject({ playerId: 'tolu', count: 3 });
+  });
+
+  it('an own goal doesn’t, a save does', async () => {
+    const og = [{ scorerId: 'tolu', assistId: null, ownGoal: true }];
+    const r1 = await setup(closed() as never, { votes: potmVotes, games: four as never, goals: og as never }).service.getPublicResults('tok');
+    expect(r1.categories.find((c) => c.key === VoteCategory.POTM)!.standings[0].playerId).toBe('ada');
+    const saves = [{ playerId: 'tolu', kind: 'save' }];
+    const r2 = await setup(closed() as never, { votes: potmVotes, games: four as never, events: saves as never }).service.getPublicResults('tok');
+    expect(r2.categories.find((c) => c.key === VoteCategory.POTM)!.standings[0].playerId).toBe('tolu');
+  });
+
+  it('a keeper borrowed for the other side’s games counts as playing them', async () => {
+    // Tolu sat out A's first three games but kept goal for B in them
+    const kept = four.map((g, i) => ({ ...g, keeperB: i < 3 ? 'tolu' : null }));
+    const b = await setup(day(), { games: kept as never }).service.getBallot('tok');
+    expect(b.squad.find((p) => p.id === 'tolu')).toMatchObject({ played: 4, of: 7, inGoal: 3, canBePicked: true });
+  });
+
+  it('the ballot says who can be picked, and a pick of someone who can’t is turned down', async () => {
+    const b = await setup(day(), { games: four as never }).service.getBallot('tok');
+    expect(b.squad.find((p) => p.id === 'tolu')).toMatchObject({ played: 1, of: 4, canBePicked: false });
+    expect(b.squad.find((p) => p.id === 'ada')).toMatchObject({ canBePicked: true });
+    const open = setup(day(), { games: four as never }).service;
+    await expect(open.submitVotes('tok', ['bisi'], { potm: 'tolu', teammate: 'kemi' })).rejects.toThrow('played 1 of 4 games, too few to be picked');
+    await expect(open.submitVotes('tok', ['seyi'], { potm: 'bisi', teammate: 'tolu' })).rejects.toThrow('too few to be picked');
+    await expect(open.submitVotes('tok', ['seyi'], { potm: 'bisi', teammate: 'ada' })).resolves.toBeDefined();
+  });
+
+  it('Best on your team isn’t asked when nobody on the voter’s team can be picked', async () => {
+    // Ada's teammates: Seyi played every game; take him out of three so only Tolu-like subs are left
+    const subs = four.map((g) => ({ ...g, satOut: ['tolu', 'seyi'].slice(0, g === four[3] ? 0 : 2) }));
+    const open = setup(day(), { games: subs as never }).service;
+    await expect(open.submitVotes('tok', ['ada'], { potm: 'bisi' })).resolves.toBeDefined();
   });
 });
 

@@ -20,9 +20,6 @@ const votes = (n: number) => `${n} vote${n === 1 ? '' : 's'}`;
 const top = (c: Category | undefined) => (c?.standings.length ? c.standings.filter((s) => s.count === c.standings[0].count) : []);
 const both = (list: Standing[]) => (list.length > 2 ? `${list.slice(0, 2).map(nameOf).join(', ')} +${list.length - 2}` : list.map(nameOf).join(' & '));
 
-/** Played under half their side's games: why their votes counted half. */
-const light = (s: Standing) => (s.played != null && s.of ? `played ${s.played} of ${s.of}` : null);
-
 /** Their day in numbers, for a line under a name: "2 goals · 1 assist". */
 function dayLine(p: CardPlayer | undefined) {
   if (!p) return '';
@@ -73,7 +70,6 @@ export function VoteReveal({ results, card }: { results: VoteResults; card: Matc
                       {c.team && <span className="w-2.5 h-2.5 shrink-0 rounded-sm" style={bibFill(c.team as TeamKey, bibs)} aria-hidden />}
                       <span className="truncate">
                         {c.team ? teamName(c.team as TeamKey, card?.captains as Record<string, string> | undefined, bibs) : 'Their team'} · {votes(w[0].count)}
-                        {light(w[0]) ? ` · ${light(w[0])}` : ''}
                       </span>
                     </span>
                   </span>
@@ -81,9 +77,6 @@ export function VoteReveal({ results, card }: { results: VoteResults; card: Matc
               );
             })}
           </ul>
-          {mates.some((c) => c.standings.some((x) => light(x))) && (
-            <p className="px-4 pb-3 text-[12px] leading-snug text-gray-500">Votes for someone who played under half their team’s games count half.</p>
-          )}
         </section>
       )}
       {(named.length > 0 || unnamed.length > 0) && (
