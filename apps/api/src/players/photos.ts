@@ -11,14 +11,14 @@ const SIGNATURES: { mime: string; test: (b: Buffer) => boolean }[] = [
 
 /**
  * A photo as sent from the phone ("data:image/jpeg;base64,…"), checked: it must really be a
- * JPEG, PNG or WebP (by its bytes, not just what it says it is) and small enough.
+ * JPEG, PNG or WebP (by its bytes, not just what it says it is) and no bigger than `maxBytes`.
  */
-export function parsePhoto(dataUrl: unknown): { data: Buffer; mime: string } {
+export function parsePhoto(dataUrl: unknown, maxBytes = MAX_PHOTO_BYTES): { data: Buffer; mime: string } {
   const m = typeof dataUrl === 'string' ? dataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/) : null;
   if (!m) throw new BadRequestException('That isn’t a photo we can use. Try a JPEG or PNG.');
   const data = Buffer.from(m[2], 'base64');
   if (!data.length) throw new BadRequestException('That photo is empty.');
-  if (data.length > MAX_PHOTO_BYTES) throw new BadRequestException('That photo is too big. Try another one.');
+  if (data.length > maxBytes) throw new BadRequestException('That photo is too big. Try another one.');
   const kind = SIGNATURES.find((s) => s.test(data));
   if (!kind) throw new BadRequestException('That isn’t a photo we can use. Try a JPEG or PNG.');
   return { data, mime: kind.mime };

@@ -599,6 +599,8 @@ export interface IPitch {
   lengthM?: number | null;
   widthM?: number | null;
   facilities?: PitchFacility[];
+  /** Photo keys in order; the first is the cover. */
+  photoKeys?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -701,6 +703,8 @@ export interface IPublicPitch {
   lengthM?: number | null;
   widthM?: number | null;
   facilities?: PitchFacility[];
+  /** Photo keys in order; the first is the cover. */
+  photoKeys?: string[];
 }
 
 export * from './phone';

@@ -1,4 +1,4 @@
-import { http } from './http';
+import { BASE_URL, http } from './http';
 import type {
   IPitch,
   IPitchSchedule,
@@ -59,6 +59,26 @@ export function updatePitch(id: string, data: Partial<{
 
 export function deactivatePitch(id: string) {
   return http.delete<IPitch>(`/pitches/${id}`);
+}
+
+// ── Photos ──
+
+/** Where a pitch photo is served (public: anyone with the pitch link sees it). */
+export function pitchPhotoUrl(key: string) {
+  return `${BASE_URL}/pitch-photos/${key}`;
+}
+
+export function addPitchPhoto(pitchId: string, image: string) {
+  return http.post<{ photoKeys: string[] }>(`/pitches/${pitchId}/photos`, { image });
+}
+
+export function removePitchPhoto(pitchId: string, key: string) {
+  return http.delete<{ photoKeys: string[] }>(`/pitches/${pitchId}/photos/${key}`);
+}
+
+/** Makes this photo the cover (it moves to the front). */
+export function coverPitchPhoto(pitchId: string, key: string) {
+  return http.post<{ photoKeys: string[] }>(`/pitches/${pitchId}/photos/${key}/cover`, {});
 }
 
 // ── Schedule ──

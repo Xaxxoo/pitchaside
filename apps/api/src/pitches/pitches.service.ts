@@ -365,6 +365,7 @@ export class PitchesService {
       lengthM: pitch.lengthM,
       widthM: pitch.widthM,
       facilities: pitch.facilities ?? [],
+      photoKeys: pitch.photoKeys ?? [],
     };
   }
 

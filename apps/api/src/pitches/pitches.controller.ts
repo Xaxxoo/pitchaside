@@ -17,6 +17,8 @@ import { CreatePitchDto } from './dto/create-pitch.dto';
 import { UpdatePitchDto } from './dto/update-pitch.dto';
 import { SetScheduleDto } from './dto/set-schedule.dto';
 import { CreateOverrideDto } from './dto/create-override.dto';
+import { PitchPhotoDto } from './dto/pitch-photo.dto';
+import { PitchPhotosService } from './pitch-photos.service';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 
 const PIN_RATE_LIMIT = { default: { limit: 5, ttl: 60000 } };
@@ -24,7 +26,10 @@ const PIN_RATE_LIMIT = { default: { limit: 5, ttl: 60000 } };
 @UseGuards(JwtAuthGuard)
 @Controller('pitches')
 export class PitchesController {
-  constructor(private readonly pitchesService: PitchesService) {}
+  constructor(
+    private readonly pitchesService: PitchesService,
+    private readonly photos: PitchPhotosService,
+  ) {}
 
   @Post()
   create(@Body() dto: CreatePitchDto, @CurrentUser() user: any) {
@@ -49,6 +54,23 @@ export class PitchesController {
   @Delete(':id')
   deactivate(@Param('id') id: string, @CurrentUser() user: any) {
     return this.pitchesService.deactivate(id, user.id);
+  }
+
+  // ── Photos ──
+
+  @Post(':id/photos')
+  addPhoto(@Param('id') id: string, @Body() dto: PitchPhotoDto, @CurrentUser() user: any) {
+    return this.photos.add(id, user.id, dto.image);
+  }
+
+  @Delete(':id/photos/:key')
+  removePhoto(@Param('id') id: string, @Param('key') key: string, @CurrentUser() user: any) {
+    return this.photos.remove(id, user.id, key);
+  }
+
+  @Post(':id/photos/:key/cover')
+  coverPhoto(@Param('id') id: string, @Param('key') key: string, @CurrentUser() user: any) {
+    return this.photos.cover(id, user.id, key);
   }
 
   // ── Schedule ──
