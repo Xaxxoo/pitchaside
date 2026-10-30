@@ -38,14 +38,21 @@ export function getPitch(id: string) {
 
 export function updatePitch(id: string, data: Partial<{
   name: string;
-  address: string;
-  city: string;
-  state: string;
-  description: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  description: string | null;
   slotDurationMinutes: number;
   defaultPrice: number;
   currency: string;
   status: string;
+  mapUrl: string | null;
+  directions: string | null;
+  aSide: number | null;
+  surface: string | null;
+  lengthM: number | null;
+  widthM: number | null;
+  facilities: string[];
 }>) {
   return http.patch<IPitch>(`/pitches/${id}`, data);
 }

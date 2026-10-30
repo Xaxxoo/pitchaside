@@ -9,7 +9,7 @@ export class PitchesPublicController {
   @SkipCsrf()
   @Get(':code')
   findByShareCode(@Param('code') code: string) {
-    return this.pitchesService.findByShareCode(code);
+    return this.pitchesService.publicPitch(code);
   }
 
   @SkipCsrf()

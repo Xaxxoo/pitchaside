@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
+import { PitchCard } from '@/components/pitch/pitch-card';
 import { getPublicAvailability, createBooking, localYmd } from '@/lib/pitch';
 import type { IPublicPitch, IPitchDayAvailability, IPitchSlot } from '@pitchaside/shared';
 
@@ -133,14 +134,9 @@ export default function BookPitchPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-4">
-      {/* Pitch header */}
+      {/* The pitch: name, price, what it is, how to find it */}
       <div className="mb-6">
-        <h1 className="text-2xl font-extrabold text-ink">{pitch.name}</h1>
-        <p className="text-sm text-gray-500 mt-0.5">
-          {[pitch.city, pitch.state].filter(Boolean).join(', ')}
-          {(pitch.city || pitch.state) && ' \u00b7 '}
-          {pitch.currency} {Number(pitch.defaultPrice).toLocaleString()} / slot
-        </p>
+        <PitchCard pitch={pitch} />
       </div>
 
       {/* Week nav */}

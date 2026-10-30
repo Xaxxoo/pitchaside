@@ -86,6 +86,31 @@ export class Pitch {
   @Column({ name: 'account_reference', type: 'varchar', nullable: true })
   accountReference: string | null;
 
+  /** A Google or Apple Maps link to the pitch, pasted by the owner. */
+  @Column({ name: 'map_url', type: 'varchar', length: 500, nullable: true })
+  mapUrl: string | null;
+
+  /** One line to find it on the day. */
+  @Column({ type: 'varchar', length: 160, nullable: true })
+  directions: string | null;
+
+  /** Players a side it's made for. */
+  @Column({ name: 'a_side', type: 'smallint', nullable: true })
+  aSide: number | null;
+
+  @Column({ type: 'varchar', length: 20, nullable: true })
+  surface: string | null;
+
+  @Column({ name: 'length_m', type: 'smallint', nullable: true })
+  lengthM: number | null;
+
+  @Column({ name: 'width_m', type: 'smallint', nullable: true })
+  widthM: number | null;
+
+  /** What's there besides the pitch (PITCH_FACILITIES). */
+  @Column({ type: 'text', array: true, default: () => "'{}'" })
+  facilities: string[];
+
   @OneToMany(() => PitchSchedule, (s) => s.pitch)
   schedules: PitchSchedule[];
 

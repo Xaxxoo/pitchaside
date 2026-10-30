@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/brand';
+import { PitchCard } from '@/components/pitch/pitch-card';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { getPublicAvailability, createBooking, localYmd } from '@/lib/pitch';
@@ -222,31 +223,22 @@ export default function PublicPitchPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-ink text-white">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          <Logo />
-          <h1 className="text-2xl font-extrabold mt-4">{pitch.name}</h1>
-          {pitch.address && <p className="text-sm text-white/70 mt-1">{pitch.address}</p>}
-          {(pitch.city || pitch.state) && (
-            <p className="text-sm text-white/70 mt-0.5">
-              {[pitch.city, pitch.state].filter(Boolean).join(', ')}
-            </p>
-          )}
-          {pitch.description && <p className="text-sm text-white/60 mt-2">{pitch.description}</p>}
-          <div className="flex items-center gap-3 mt-3">
-            <span className="text-volt-300 font-bold text-sm">
-              {pitch.currency} {Number(pitch.defaultPrice).toLocaleString()} / {pitch.slotDurationMinutes} min
-            </span>
-          </div>
+      {/* The pitch: name, price, what it is, how to find it */}
+      <div className="bg-ink">
+        <div className="max-w-2xl mx-auto px-4 pt-[max(env(safe-area-inset-top),1rem)] pb-3">
+          <Logo tone="light" />
+        </div>
+      </div>
+      <div className="max-w-2xl mx-auto px-4 pt-4">
+        <PitchCard pitch={pitch}>
           {pitch.accountNumber && (
-            <div className="mt-4 bg-white/10 rounded-xl px-4 py-3">
-              <p className="text-xs font-bold text-white/70 mb-1">Pay via bank transfer</p>
+            <div className="mt-4 bg-white/10 rounded-2xl px-4 py-3">
+              <p className="text-xs font-bold text-white/70 mb-1">Pay by bank transfer</p>
               <p className="text-sm font-mono text-white">{pitch.accountNumber}</p>
-              <p className="text-xs text-white/70">{pitch.accountName} &middot; {pitch.virtualBankName}</p>
+              <p className="text-xs text-white/70 truncate">{pitch.accountName} &middot; {pitch.virtualBankName}</p>
             </div>
           )}
-        </div>
+        </PitchCard>
       </div>
 
       {/* Availability */}
