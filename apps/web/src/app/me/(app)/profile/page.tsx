@@ -9,6 +9,7 @@ import { RatingBreakdownSheet } from '@/components/rating-breakdown-sheet';
 import { useRouter } from 'next/navigation';
 import { InstallCard } from '@/components/pwa';
 import { PlayerCardHero, Section } from '@/components/player-ui';
+import { NewChip } from '@/components/ratings';
 import { PlayerStats } from '@/components/player-stats';
 import { usePlayerProfile } from '@/components/player-shell';
 import { PlayerAccountSettings } from '@/components/player-account';
@@ -99,7 +100,7 @@ export default function PlayerProfilePage() {
                     <span className="mt-0.5 text-[8px] font-extrabold tracking-[0.14em] text-white/60">OVR</span>
                   </span>
                 ) : (
-                  <span className="shrink-0 text-[12px] font-bold text-gray-500">No rating yet</span>
+                  <NewChip ratedIn={c.ratings.ratedIn} />
                 )}
               </li>
             ))}

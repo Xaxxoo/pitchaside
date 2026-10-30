@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ComparedStat, PlayerRatings, StatCompare, VoteCategory } from '@/lib/api';
 import { InfoTip } from '@/components/info-tip';
+import { Callout } from '@/components/callout';
 
 /** The awards voted on after games, in the ballot's order, with the old Fastest kept as The Engine. */
 const AWARDS: { key: VoteCategory; title: string }[] = [
@@ -202,9 +203,9 @@ export function PlayerStats({ ratings, you = false }: { ratings: PlayerRatings; 
       )}
 
       {r.games === 0 ? (
-        <p className="mt-3 rounded-3xl bg-chalk px-4 py-6 text-center text-sm text-gray-600">
-          {range === 'season' ? 'No games this season yet.' : 'No games yet.'}
-        </p>
+        <Callout className="mt-3" tone="info" title={range === 'season' ? 'No games this season yet' : 'No games yet'}>
+          Goals, assists and wins show up here.
+        </Callout>
       ) : (
         <>
           {/* The season in three numbers, one card */}

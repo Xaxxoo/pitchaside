@@ -7,7 +7,7 @@ import { Ticket } from '@/components/ticket';
 import { photoUrl } from '@/lib/http';
 import { Ball, Player, kitFor, skins } from '@/components/illustrations';
 import { BallSpinner } from '@/components/skeleton';
-import { Avatar, AttributeRow } from '@/components/ratings';
+import { Avatar, AttributeRow, newLine } from '@/components/ratings';
 import { PeopleRow, namesLine } from '@/components/people-row';
 import { TEAMS, bibFill, bibOf, bibTint, teamName } from '@/lib/teams';
 import { MatchDayBibs } from '@/components/match-day-bibs';
@@ -135,8 +135,15 @@ export function PlayerCardHero({
             </button>
           ) : (
             <div className="absolute z-10 top-2 left-2 leading-none">
-              <p className="font-display text-xl font-extrabold text-volt-300 tabular-nums">{ratings.ovr ?? '–'}</p>
-              <p className="text-[7px] font-extrabold tracking-[0.14em] text-white/60 mt-0.5">OVR</p>
+              {ratings.ovr != null ? (
+                <>
+                  <p className="font-display text-xl font-extrabold text-volt-300 tabular-nums">{ratings.ovr}</p>
+                  <p className="text-[7px] font-extrabold tracking-[0.14em] text-white/60 mt-0.5">OVR</p>
+                </>
+              ) : (
+                // No number until 3 match days: never a made-up one
+                <p className="rounded-md bg-volt-300 px-1.5 py-1 font-display text-[11px] font-extrabold uppercase tracking-[0.08em] text-ink">New</p>
+              )}
             </div>
           )}
           {photo ? (
@@ -161,7 +168,7 @@ export function PlayerCardHero({
             <Ball x={84} y={138} r={8} />
           </svg>
           )}
-          {ratings.provisional && (
+          {ratings.provisional && ratings.ovr != null && (
             <p className="absolute z-10 top-[46px] left-1.5 rounded-md bg-black/45 px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-[0.12em] text-volt-300" title="Rating is still settling: fewer than 3 games with scores">
               Provisional
             </p>
@@ -173,7 +180,11 @@ export function PlayerCardHero({
           <h2 className="font-display text-2xl font-extrabold leading-tight mt-0.5 break-words">{fullName}</h2>
           {nickname && <p className="mt-0.5 text-sm font-bold text-volt-300 truncate">“{nickname}”</p>}
           {/* The number in words: Regular, Key player, Star… */}
-          {ratings.ovr != null && <p className="mt-2 inline-flex rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300">{levelOf(ratings.ovr).name}</p>}
+          {ratings.ovr != null ? (
+            <p className="mt-2 inline-flex rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300">{levelOf(ratings.ovr).name}</p>
+          ) : (
+            <p className="mt-2 inline-flex rounded-full border border-volt-300/50 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-[0.12em] text-volt-300 whitespace-nowrap">{newLine(ratings.ratedIn)}</p>
+          )}
           <div className="mt-3">
             <AttributeRow ratings={ratings} dark />
           </div>

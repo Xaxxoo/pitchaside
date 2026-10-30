@@ -104,7 +104,7 @@ function Podium({ rows, byRating = false }: { rows: Row[]; byRating?: boolean })
               </div>
               <div style={{ ...oneLine, maxWidth: '100%', marginTop: 10, fontSize: 32, fontWeight: 700, color: '#ffffff' }}>{names(r).main}</div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', height: h, marginTop: 10, borderRadius: '30px 30px 0 0', background: bg, color: T.ink, paddingTop: 16 }}>
-                <div style={{ display: 'flex', fontFamily: DISPLAY, fontWeight: 800, fontSize: 72, lineHeight: 1 }}>{byRating ? (r.ovr ?? '–') : r.points}</div>
+                <div style={{ display: 'flex', fontFamily: DISPLAY, fontWeight: 800, fontSize: byRating && r.ovr == null ? 48 : 72, lineHeight: 1 }}>{byRating ? (r.ovr ?? 'NEW') : r.points}</div>
                 <div style={{ display: 'flex', fontSize: 28, fontWeight: 700, marginTop: 4 }}>{byRating ? `${place} · ${r.points} pts` : `pts · ${place}`}</div>
                 {first && (
                   <div style={{ display: 'flex', marginTop: 10 }}>
@@ -189,7 +189,7 @@ function Rows({ rows, from, byRating = false }: { rows: Row[]; from: number; byR
               <div style={{ display: 'flex', fontSize: 24, color: T.gray500 }}>–</div>
             )}
           </div>
-          <div style={{ display: 'flex', width: cols.pts, justifyContent: 'flex-end', fontFamily: DISPLAY, fontWeight: 800, fontSize: 40 }}>{byRating ? (r.ovr ?? '–') : r.points}</div>
+          <div style={{ display: 'flex', width: cols.pts, justifyContent: 'flex-end', fontFamily: DISPLAY, fontWeight: 800, fontSize: byRating && r.ovr == null ? 26 : 40 }}>{byRating ? (r.ovr ?? 'NEW') : r.points}</div>
         </div>
       ))}
     </div>
@@ -242,10 +242,10 @@ function Card({ t }: { t: TableCard }) {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', flex: 1, marginTop: 26 }}>
-          {podium && <Podium rows={t.rows} byRating={t.rankedBy === 'rating'} />}
+          {podium && <Podium rows={t.rows} byRating={t.rankedBy === 'rating' && t.rows.some((r) => r.ovr != null)} />}
           {list.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', marginTop: podium ? 16 : 0 }}>
-              <Rows rows={list} from={podium ? 4 : 1} byRating={t.rankedBy === 'rating'} />
+              <Rows rows={list} from={podium ? 4 : 1} byRating={t.rankedBy === 'rating' && t.rows.some((r) => r.ovr != null)} />
             </div>
           )}
         </div>
