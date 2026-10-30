@@ -1,615 +1,536 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   getPitch, updatePitch, setSchedule, getSchedule, addOverride, listOverrides, removeOverride,
   saveBankDetails, pitchNameEnquiry, deactivatePitch,
-  getPitchBalance, listPitchTransfers, listPitchPayouts, withdrawFromPitch, localYmd,
+  createPitchAccount, getPitchBalance, listPitchTransfers, listPitchPayouts, withdrawFromPitch,
 } from '@/lib/pitch';
-import { getNigerianBanks, type NigerianBank } from '@/lib/api';
 import { useToast } from '@/components/toast';
-import { PageHeader } from '@/components/brand';
-import { btnDanger, btnPrimary } from '@/components/buttons';
-import { BallLoader } from '@/components/skeleton';
-import { ConfirmSheet } from '@/components/match-day/confirm-sheet';
-import { BankPicker } from '@/components/group-payee';
-import { NigerianLocationPicker } from '@/components/nigerian-location-picker';
-import { SettingsSection, SettingsSections } from '@/components/group/settings-sections';
-import { chip, field, label, Stepper } from '@/components/group/group-edit-sheet';
-import { prettyTime } from '@/components/player-ui';
-import { pitchFacts, hoursSummary, naira, PITCH_ICONS } from '@/components/pitch/pitch-facts';
-import {
-  PITCH_A_SIDE, PITCH_FACILITIES, PITCH_FACILITY_LABEL, PITCH_SURFACES, PITCH_SURFACE_LABEL,
-  type IPitch, type IPitchSchedule, type IPitchSlotOverride, type PitchFacility, type PitchSurface,
-} from '@pitchaside/shared';
+import { useSearchParams } from 'next/navigation';
+import type { IPitch, IPitchSchedule, IPitchSlotOverride } from '@pitchaside/shared';
 
-const card = 'bg-white rounded-3xl border border-gray-100 shadow-card overflow-hidden px-5 sm:px-7 [&>div]:border-y-0';
-/** Monday first, as people say the week; dayOfWeek is 0 = Sunday. */
-const WEEK = [1, 2, 3, 4, 5, 6, 0];
-const DAY_NAME = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-/** Opening and closing times on the half hour, through the day. */
-const TIMES = Array.from({ length: 48 }, (_, i) => `${String(Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
-const GAME_LENGTHS = [60, 90, 120];
-const OVERRIDE_KINDS = [
-  { value: 'blocked', label: 'Closed' },
-  { value: 'added', label: 'Extra hours' },
-  { value: 'price_override', label: 'Different price' },
-];
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-type Section = 'where' | 'pitch' | 'hours' | 'changes' | 'bank' | 'account';
-interface DayHours { open: boolean; from: string; to: string; price: string }
+interface ScheduleRow { dayOfWeek: number; openTime: string; closeTime: string; price: string; }
 
-function GroupLabel({ children }: { children: React.ReactNode }) {
-  return <h2 className="mt-5 mb-1.5 px-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500">{children}</h2>;
-}
-
-/** The week as one row per day, from what's saved (a day with several opening times keeps the first). */
-function toWeek(rows: IPitchSchedule[]): Record<number, DayHours> {
-  const week: Record<number, DayHours> = {};
-  for (const d of WEEK) {
-    const r = rows.find((x) => x.dayOfWeek === d);
-    week[d] = r
-      ? { open: true, from: r.openTime, to: r.closeTime, price: r.price != null ? String(Number(r.price)) : '' }
-      : { open: false, from: '17:00', to: '22:00', price: '' };
-  }
-  return week;
-}
-
-export default function PitchDetailsPage() {
+export default function PitchSettingsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const toast = useToast();
   const searchParams = useSearchParams();
+  const initialTab = searchParams.get('tab') as any;
   const [pitch, setPitch] = useState<IPitch | null>(null);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState<Section | null>(null);
-  const toggle = (s: Section) => setOpen((o) => (o === s ? null : s));
-  const [saving, setSaving] = useState<Section | null>(null);
+  const [tab, setTab] = useState<'general' | 'schedule' | 'overrides' | 'bank' | 'account'>(
+    ['general', 'schedule', 'overrides', 'bank', 'account'].includes(initialTab) ? initialTab : 'general',
+  );
 
-  // Where
-  const [where, setWhere] = useState({ address: '', city: '', state: '', mapUrl: '', directions: '' });
-  // The pitch
-  const [about, setAbout] = useState({ name: '', description: '', aSide: null as number | null, surface: null as PitchSurface | null, lengthM: '', widthM: '', facilities: [] as PitchFacility[] });
-  // Prices and hours
-  const [price, setPrice] = useState(0);
-  const [gameMinutes, setGameMinutes] = useState(60);
-  const [week, setWeek] = useState<Record<number, DayHours>>(toWeek([]));
-  const [dayPrices, setDayPrices] = useState(false);
-  const [splitDays, setSplitDays] = useState<string[]>([]);
-  // Days off and changes
+  // General form
+  const [general, setGeneral] = useState({ name: '', address: '', city: '', state: '', description: '', defaultPrice: '', slotDurationMinutes: '60' });
+  const [savingGeneral, setSavingGeneral] = useState(false);
+
+  // Schedule
+  const [scheduleRows, setScheduleRows] = useState<ScheduleRow[]>([]);
+  const [savingSchedule, setSavingSchedule] = useState(false);
+
+  // Overrides
   const [overrides, setOverrides] = useState<IPitchSlotOverride[]>([]);
-  const [ovr, setOvr] = useState({ date: '', type: 'blocked', startTime: '00:00', endTime: '23:30', price: '', reason: '' });
-  // Getting paid
-  const [banks, setBanks] = useState<NigerianBank[]>([]);
+  const [ovrForm, setOvrForm] = useState({ date: '', startTime: '', endTime: '', type: 'blocked', price: '', reason: '' });
+  const [savingOvr, setSavingOvr] = useState(false);
+
+  // Bank
   const [bank, setBank] = useState({ bankAccountNumber: '', bankCode: '', bankName: '', accountHolderName: '' });
-  // Pitch account (only pitches that already have one)
+  const [savingBank, setSavingBank] = useState(false);
+  const [lookingUp, setLookingUp] = useState(false);
+
+  // Account (virtual account)
+  const [creatingAccount, setCreatingAccount] = useState(false);
   const [balance, setBalance] = useState<{ totalIn: number; totalOut: number; available: number } | null>(null);
   const [transfers, setTransfers] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [withdrawForm, setWithdrawForm] = useState({ amount: '', pin: '', narration: '' });
-  const [confirmHide, setConfirmHide] = useState(false);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [p, s, o] = await Promise.all([getPitch(id), getSchedule(id), listOverrides(id, localYmd(new Date()))]);
+      const [p, s, o] = await Promise.all([getPitch(id), getSchedule(id), listOverrides(id)]);
       setPitch(p);
-      setWhere({ address: p.address ?? '', city: p.city ?? '', state: p.state ?? '', mapUrl: p.mapUrl ?? '', directions: p.directions ?? '' });
-      setAbout({
+      setGeneral({
         name: p.name,
-        description: p.description ?? '',
-        aSide: p.aSide ?? null,
-        surface: (p.surface as PitchSurface) ?? null,
-        lengthM: p.lengthM ? String(p.lengthM) : '',
-        widthM: p.widthM ? String(p.widthM) : '',
-        facilities: (p.facilities ?? []) as PitchFacility[],
+        address: p.address || '',
+        city: p.city || '',
+        state: p.state || '',
+        description: p.description || '',
+        defaultPrice: String(Number(p.defaultPrice)),
+        slotDurationMinutes: String(p.slotDurationMinutes),
       });
-      setPrice(Number(p.defaultPrice));
-      setGameMinutes(p.slotDurationMinutes);
-      setWeek(toWeek(s));
-      setDayPrices(s.some((r) => r.price != null));
-      setSplitDays(WEEK.filter((d) => s.filter((r) => r.dayOfWeek === d).length > 1).map((d) => DAY_NAME[d]));
+      setScheduleRows(s.map((r) => ({ dayOfWeek: r.dayOfWeek, openTime: r.openTime, closeTime: r.closeTime, price: r.price != null ? String(Number(r.price)) : '' })));
       setOverrides(o);
-      setBank({ bankAccountNumber: p.bankAccountNumber ?? '', bankCode: p.bankCode ?? '', bankName: p.bankName ?? '', accountHolderName: p.accountHolderName ?? '' });
-    } catch {
-      /* the page says it couldn't find the pitch */
-    } finally {
-      setLoading(false);
-    }
+      setBank({
+        bankAccountNumber: p.bankAccountNumber || '',
+        bankCode: p.bankCode || '',
+        bankName: p.bankName || '',
+        accountHolderName: p.accountHolderName || '',
+      });
+    } catch { /* ignore */ } finally { setLoading(false); }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
-  useEffect(() => {
-    const s = searchParams.get('open') as Section | null;
-    if (s) setOpen(s);
-  }, [searchParams]);
-  useEffect(() => {
-    if (open === 'bank' && !banks.length) getNigerianBanks().then(setBanks).catch(() => {});
-    if (open === 'account' && pitch?.accountNumber) {
-      getPitchBalance(id).then(setBalance).catch(() => {});
-      listPitchTransfers(id).then(setTransfers).catch(() => {});
-      listPitchPayouts(id).then(setPayouts).catch(() => {});
-    }
-  }, [open, id, pitch?.accountNumber, banks.length]);
 
-  async function run(section: Section, work: () => Promise<unknown>, done: string) {
-    setSaving(section);
+  // Load account tab data when switching to it
+  useEffect(() => {
+    if (tab !== 'account' || !pitch?.accountNumber) return;
+    getPitchBalance(id).then(setBalance).catch(() => {});
+    listPitchTransfers(id).then(setTransfers).catch(() => {});
+    listPitchPayouts(id).then(setPayouts).catch(() => {});
+  }, [tab, id, pitch?.accountNumber]);
+
+  async function saveGeneral(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingGeneral(true);
     try {
-      await work();
-      toast.success(done);
-      await load();
-      setOpen(null);
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'That didn’t save. Try again.');
-    } finally {
-      setSaving(null);
-    }
+      await updatePitch(id, {
+        name: general.name,
+        address: general.address || undefined,
+        city: general.city || undefined,
+        state: general.state || undefined,
+        description: general.description || undefined,
+        defaultPrice: Number(general.defaultPrice),
+        slotDurationMinutes: Number(general.slotDurationMinutes),
+      });
+      toast.success('Pitch updated');
+    } catch (err: any) { toast.error(err.message); } finally { setSavingGeneral(false); }
   }
 
-  function saveWhere(e: React.FormEvent) {
+  async function saveScheduleHandler(e: React.FormEvent) {
     e.preventDefault();
-    run('where', () => updatePitch(id, {
-      address: where.address.trim() || null,
-      city: where.city || null,
-      state: where.state || null,
-      mapUrl: where.mapUrl.trim() || null,
-      directions: where.directions.trim() || null,
-    }), 'Saved where it is');
-  }
-
-  function saveAbout(e: React.FormEvent) {
-    e.preventDefault();
-    if (about.name.trim().length < 2) return toast.error('Give the pitch a name.');
-    run('pitch', () => updatePitch(id, {
-      name: about.name.trim(),
-      description: about.description.trim() || null,
-      aSide: about.aSide,
-      surface: about.surface,
-      lengthM: about.lengthM ? Number(about.lengthM) : null,
-      widthM: about.widthM ? Number(about.widthM) : null,
-      facilities: about.facilities,
-    }), 'Saved the pitch');
-  }
-
-  function saveHours(e: React.FormEvent) {
-    e.preventDefault();
-    if (price < 1) return toast.error('Set a price for a game.');
-    const days = WEEK.filter((d) => week[d].open);
-    const short = days.find((d) => week[d].from >= week[d].to);
-    if (short != null) return toast.error(`${DAY_NAME[short]} closes before it opens.`);
-    const tooShort = days.find((d) => minutes(week[d].to) - minutes(week[d].from) < gameMinutes);
-    if (tooShort != null) return toast.error(`${DAY_NAME[tooShort]} is open for less than one ${gameMinutes}-minute game.`);
-    run('hours', async () => {
-      await updatePitch(id, { defaultPrice: price, slotDurationMinutes: gameMinutes });
-      await setSchedule(id, days.map((d) => ({
-        dayOfWeek: d,
-        openTime: week[d].from,
-        closeTime: week[d].to,
-        price: dayPrices && week[d].price ? Number(week[d].price) : undefined,
+    setSavingSchedule(true);
+    try {
+      await setSchedule(id, scheduleRows.map((r) => ({
+        dayOfWeek: r.dayOfWeek,
+        openTime: r.openTime,
+        closeTime: r.closeTime,
+        price: r.price ? Number(r.price) : undefined,
       })));
-    }, 'Saved prices and hours');
+      toast.success('Schedule saved');
+    } catch (err: any) { toast.error(err.message); } finally { setSavingSchedule(false); }
   }
 
-  function addChange(e: React.FormEvent) {
+  function addScheduleRow() {
+    setScheduleRows([...scheduleRows, { dayOfWeek: 1, openTime: '08:00', closeTime: '22:00', price: '' }]);
+  }
+
+  function removeScheduleRow(i: number) {
+    setScheduleRows(scheduleRows.filter((_, idx) => idx !== i));
+  }
+
+  function updateScheduleRow(i: number, field: keyof ScheduleRow, value: string) {
+    const rows = [...scheduleRows];
+    (rows[i] as any)[field] = field === 'dayOfWeek' ? Number(value) : value;
+    setScheduleRows(rows);
+  }
+
+  async function addOvrHandler(e: React.FormEvent) {
     e.preventDefault();
-    if (!ovr.date) return toast.error('Pick the day.');
-    if (ovr.startTime >= ovr.endTime) return toast.error('The end time is before the start.');
-    if (ovr.type === 'price_override' && !ovr.price) return toast.error('Set the price for those hours.');
-    run('changes', () => addOverride(id, {
-      date: ovr.date,
-      type: ovr.type,
-      startTime: ovr.startTime,
-      endTime: ovr.endTime,
-      price: ovr.type !== 'blocked' && ovr.price ? Number(ovr.price) : undefined,
-      reason: ovr.reason.trim() || undefined,
-    }).then(() => setOvr({ date: '', type: 'blocked', startTime: '00:00', endTime: '23:30', price: '', reason: '' })), 'Added');
-  }
-
-  async function removeChange(o: IPitchSlotOverride) {
+    setSavingOvr(true);
     try {
-      await removeOverride(id, o.id);
-      toast.success('Removed');
-      setOverrides((list) => list.filter((x) => x.id !== o.id));
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'That didn’t go through. Try again.');
-    }
+      await addOverride(id, {
+        date: ovrForm.date,
+        startTime: ovrForm.startTime,
+        endTime: ovrForm.endTime,
+        type: ovrForm.type,
+        price: ovrForm.price ? Number(ovrForm.price) : undefined,
+        reason: ovrForm.reason || undefined,
+      });
+      toast.success('Override added');
+      setOvrForm({ date: '', startTime: '', endTime: '', type: 'blocked', price: '', reason: '' });
+      load();
+    } catch (err: any) { toast.error(err.message); } finally { setSavingOvr(false); }
   }
 
-  async function checkName() {
-    if (!bank.bankCode || bank.bankAccountNumber.length !== 10) return;
+  async function deleteOvr(ovrId: string) {
+    try {
+      await removeOverride(id, ovrId);
+      toast.success('Override removed');
+      load();
+    } catch (err: any) { toast.error(err.message); }
+  }
+
+  async function saveBankHandler(e: React.FormEvent) {
+    e.preventDefault();
+    setSavingBank(true);
+    try {
+      await saveBankDetails(id, bank);
+      toast.success('Bank details saved');
+    } catch (err: any) { toast.error(err.message); } finally { setSavingBank(false); }
+  }
+
+  async function lookupName() {
+    if (!bank.bankCode || !bank.bankAccountNumber) return;
+    setLookingUp(true);
     try {
       const res = await pitchNameEnquiry(id, bank.bankCode, bank.bankAccountNumber);
-      setBank((b) => ({ ...b, accountHolderName: res.accountName }));
-    } catch (err) {
-      setBank((b) => ({ ...b, accountHolderName: '' }));
-      toast.error(err instanceof Error ? err.message : 'We couldn’t find that account.');
-    }
+      setBank({ ...bank, accountHolderName: res.accountName });
+      toast.success('Name verified');
+    } catch (err: any) { toast.error(err.message); } finally { setLookingUp(false); }
   }
 
-  function saveBank(e: React.FormEvent) {
-    e.preventDefault();
-    if (!bank.accountHolderName) return toast.error('Check the account first so we know whose it is.');
-    const bankName = banks.find((b) => b.code === bank.bankCode)?.name ?? bank.bankName;
-    run('bank', () => saveBankDetails(id, { ...bank, bankName }), 'Saved your bank');
-  }
-
-  async function withdraw(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving('account');
+  async function handleCreateAccount() {
+    setCreatingAccount(true);
     try {
-      await withdrawFromPitch(id, { amount: Number(withdrawForm.amount), pin: withdrawForm.pin, narration: withdrawForm.narration || undefined });
-      toast.success('Withdrawal sent');
+      const updated = await createPitchAccount(id);
+      setPitch(updated);
+      toast.success('Collection account created');
+    } catch (err: any) { toast.error(err.message); } finally { setCreatingAccount(false); }
+  }
+
+  async function handleWithdraw(e: React.FormEvent) {
+    e.preventDefault();
+    setWithdrawing(true);
+    try {
+      await withdrawFromPitch(id, {
+        amount: Number(withdrawForm.amount),
+        pin: withdrawForm.pin,
+        narration: withdrawForm.narration || undefined,
+      });
+      toast.success('Withdrawal initiated');
       setWithdrawForm({ amount: '', pin: '', narration: '' });
+      // Refresh balance and payouts
       getPitchBalance(id).then(setBalance).catch(() => {});
       listPitchPayouts(id).then(setPayouts).catch(() => {});
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'That didn’t go through. Try again.');
-    } finally {
-      setSaving(null);
-    }
+    } catch (err: any) { toast.error(err.message); } finally { setWithdrawing(false); }
   }
 
-  async function hide() {
+  async function handleDeactivate() {
+    if (!confirm('Deactivate this pitch? It will no longer be bookable.')) return;
     try {
       await deactivatePitch(id);
-      toast.success('Pitch hidden');
+      toast.success('Pitch deactivated');
       router.push('/pitch-owner/pitches');
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'That didn’t go through. Try again.');
-    }
+    } catch (err: any) { toast.error(err.message); }
   }
 
-  if (loading) return <div className="flex justify-center py-20"><BallLoader /></div>;
-  if (!pitch) return <p className="py-20 text-center text-sm text-gray-500">We couldn’t find that pitch.</p>;
+  if (loading) return <div className="text-center py-20 text-gray-400">Loading...</div>;
+  if (!pitch) return <div className="text-center py-20 text-gray-500">Pitch not found</div>;
 
-  const place = [pitch.address, pitch.city].filter(Boolean).join(', ');
-  // The row shows the size and surface; the facilities are inside it.
-  const facts = pitchFacts(pitch, false);
-  const openDays = WEEK.filter((d) => week[d].open).length;
+  const inputClass = 'w-full rounded-xl border border-gray-200 px-3.5 py-3 text-sm focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <Link href={`/pitch-owner/pitches/${id}`} className="press inline-flex items-center gap-1 min-h-11 -ml-1 px-1 text-sm font-bold text-pitch-700">
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-        </svg>
-        Bookings
-      </Link>
-      <PageHeader eyebrow="Pitch details" title={pitch.name} subtitle="What groups see when you share your link." />
+    <div className="max-w-2xl">
+      <h1 className="text-2xl font-extrabold text-ink mb-1">{pitch.name} &mdash; Settings</h1>
+      <p className="text-sm text-gray-500 mb-6">Manage pitch details, schedule, bank, and overrides.</p>
 
-      <GroupLabel>The pitch</GroupLabel>
-      <div className={card}>
-        <SettingsSections inset="card">
-          <SettingsSection id="s-where" icon={PITCH_ICONS.pin} title="Where it is" summary={place || 'Add the address and a map link'} open={open === 'where'} onToggle={() => toggle('where')}>
-            <form onSubmit={saveWhere} noValidate className="space-y-4">
-              <div>
-                <label htmlFor="address" className={label}>Address</label>
-                <input id="address" value={where.address} onChange={(e) => setWhere({ ...where, address: e.target.value })} placeholder="e.g. 14 Bode Thomas Street" className={field} />
-              </div>
-              <NigerianLocationPicker
-                state={where.state}
-                city={where.city}
-                onStateChange={(state) => setWhere((w) => ({ ...w, state, city: '' }))}
-                onCityChange={(city) => setWhere((w) => ({ ...w, city }))}
-              />
-              <div>
-                <label htmlFor="mapUrl" className={label}>Map link</label>
-                <input id="mapUrl" type="url" inputMode="url" value={where.mapUrl} onChange={(e) => setWhere({ ...where, mapUrl: e.target.value })} placeholder="Paste from Google Maps" className={field} />
-                <p className="text-[12px] text-gray-500 mt-1.5">In Google Maps: find the pitch, tap Share, then Copy link.</p>
-              </div>
-              <div>
-                <label htmlFor="directions" className={label}>How to find it</label>
-                <input id="directions" maxLength={160} value={where.directions} onChange={(e) => setWhere({ ...where, directions: e.target.value })} placeholder="e.g. Behind the church, green gate" className={field} />
-                <p className="text-[12px] text-gray-500 mt-1.5">Players see this on the day.</p>
-              </div>
-              <button type="submit" disabled={saving === 'where'} className={`w-full ${btnPrimary}`}>{saving === 'where' ? 'Saving…' : 'Save'}</button>
-            </form>
-          </SettingsSection>
-
-          <SettingsSection id="s-pitch" icon={PITCH_ICONS.pitch} title="Size and surface" summary={facts.join(' · ') || 'Size, surface, what’s there'} open={open === 'pitch'} onToggle={() => toggle('pitch')}>
-            <form onSubmit={saveAbout} noValidate className="space-y-4">
-              <div>
-                <label htmlFor="name" className={label}>Name</label>
-                <input id="name" value={about.name} onChange={(e) => setAbout({ ...about, name: e.target.value })} className={field} />
-              </div>
-              <fieldset>
-                <legend className={label}>Made for</legend>
-                <div className="flex flex-wrap gap-2">
-                  {PITCH_A_SIDE.map((n) => (
-                    <button key={n} type="button" aria-pressed={about.aSide === n} onClick={() => setAbout({ ...about, aSide: about.aSide === n ? null : n })} className={chip(about.aSide === n)}>
-                      {n}-a-side
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset>
-                <legend className={label}>Surface</legend>
-                <div className="flex flex-wrap gap-2">
-                  {PITCH_SURFACES.map((s) => (
-                    <button key={s} type="button" aria-pressed={about.surface === s} onClick={() => setAbout({ ...about, surface: about.surface === s ? null : s })} className={chip(about.surface === s)}>
-                      {PITCH_SURFACE_LABEL[s]}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-              <fieldset>
-                <legend className={label}>Size in metres <span className="font-medium text-gray-500">(optional)</span></legend>
-                <div className="flex items-center gap-2">
-                  <input aria-label="Length in metres" inputMode="numeric" value={about.lengthM} onChange={(e) => setAbout({ ...about, lengthM: e.target.value.replace(/\D/g, '').slice(0, 3) })} placeholder="Length" className={field} />
-                  <span className="text-gray-500 font-bold" aria-hidden>×</span>
-                  <input aria-label="Width in metres" inputMode="numeric" value={about.widthM} onChange={(e) => setAbout({ ...about, widthM: e.target.value.replace(/\D/g, '').slice(0, 3) })} placeholder="Width" className={field} />
-                </div>
-              </fieldset>
-              <fieldset>
-                <legend className={label}>What’s there</legend>
-                <div className="flex flex-wrap gap-2">
-                  {PITCH_FACILITIES.map((f) => {
-                    const on = about.facilities.includes(f);
-                    return (
-                      <button key={f} type="button" aria-pressed={on} onClick={() => setAbout({ ...about, facilities: on ? about.facilities.filter((x) => x !== f) : [...about.facilities, f] })} className={chip(on)}>
-                        {PITCH_FACILITY_LABEL[f]}
-                      </button>
-                    );
-                  })}
-                </div>
-              </fieldset>
-              <div>
-                <label htmlFor="description" className={label}>Anything else <span className="font-medium text-gray-500">(optional)</span></label>
-                <textarea id="description" rows={2} maxLength={300} value={about.description} onChange={(e) => setAbout({ ...about, description: e.target.value })} placeholder="e.g. Bibs and balls available" className={`${field} py-3`} />
-              </div>
-              <button type="submit" disabled={saving === 'pitch'} className={`w-full ${btnPrimary}`}>{saving === 'pitch' ? 'Saving…' : 'Save'}</button>
-            </form>
-          </SettingsSection>
-        </SettingsSections>
-      </div>
-
-      <GroupLabel>Bookings</GroupLabel>
-      <div className={card}>
-        <SettingsSections inset="card">
-          <SettingsSection id="s-hours" icon={PITCH_ICONS.clock} title="Prices and hours" summary={`${naira(pitch.defaultPrice)} a game · ${hoursSummary(openDays)}`} open={open === 'hours'} onToggle={() => toggle('hours')}>
-            <form onSubmit={saveHours} noValidate className="space-y-4">
-              <div>
-                <p id="price-label" className={label}>Price a game</p>
-                <Stepper id="price" value={price} onChange={setPrice} step={1000} min={0} prefix="₦" labelledBy="price-label" less="₦1,000 less" more="₦1,000 more" />
-              </div>
-              <fieldset>
-                <legend className={label}>Each game lasts</legend>
-                <div className="flex flex-wrap gap-2">
-                  {(GAME_LENGTHS.includes(gameMinutes) ? GAME_LENGTHS : [...GAME_LENGTHS, gameMinutes].sort((a, b) => a - b)).map((m) => (
-                    <button key={m} type="button" aria-pressed={gameMinutes === m} onClick={() => setGameMinutes(m)} className={chip(gameMinutes === m)}>
-                      {gameLength(m)}
-                    </button>
-                  ))}
-                </div>
-              </fieldset>
-
-              <fieldset>
-                <legend className={label}>Open</legend>
-                <ul className="divide-y divide-gray-200 border-y border-gray-200">
-                  {WEEK.map((d) => {
-                    const h = week[d];
-                    const set = (patch: Partial<DayHours>) => setWeek((w) => ({ ...w, [d]: { ...w[d], ...patch } }));
-                    return (
-                      <li key={d} className="py-2.5">
-                        <div className="flex items-center gap-2">
-                          <button type="button" aria-pressed={h.open} onClick={() => set({ open: !h.open })} className={`${chip(h.open)} w-[4.25rem] shrink-0 px-0`}>
-                            {DAY_NAME[d].slice(0, 3)}
-                          </button>
-                          {h.open ? (
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <TimeSelect id={`from-${d}`} label={`${DAY_NAME[d]} opens`} value={h.from} onChange={(from) => set({ from })} />
-                              <span className="text-[12px] text-gray-500" aria-hidden>to</span>
-                              <TimeSelect id={`to-${d}`} label={`${DAY_NAME[d]} closes`} value={h.to} onChange={(to) => set({ to })} />
-                            </div>
-                          ) : (
-                            <span className="text-[13px] text-gray-500">Closed</span>
-                          )}
-                        </div>
-                        {h.open && dayPrices && (
-                          <div className="mt-2 ml-[4.75rem] flex items-center gap-2">
-                            <label htmlFor={`price-${d}`} className="text-[12px] text-gray-500 whitespace-nowrap">Price</label>
-                            <input id={`price-${d}`} inputMode="numeric" value={h.price} onChange={(e) => set({ price: e.target.value.replace(/\D/g, '').slice(0, 7) })} placeholder={String(price)} className={`${field} min-h-10 text-[14px]`} />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {splitDays.length > 0 && (
-                  <p className="text-[12px] text-kit-600 mt-2">{splitDays.join(', ')} had more than one opening time. Saving keeps the times shown.</p>
-                )}
-                <label className="mt-3 flex items-center gap-2.5 min-h-11 text-[14px] text-ink cursor-pointer">
-                  <input type="checkbox" checked={dayPrices} onChange={(e) => setDayPrices(e.target.checked)} className="w-5 h-5 accent-pitch-700" />
-                  Some days cost more (or less)
-                </label>
-              </fieldset>
-              <button type="submit" disabled={saving === 'hours'} className={`w-full ${btnPrimary}`}>{saving === 'hours' ? 'Saving…' : 'Save'}</button>
-            </form>
-          </SettingsSection>
-
-          <SettingsSection id="s-changes" icon={PITCH_ICONS.calendar} title="Days off and changes" summary={overrides.length ? `${overrides.length} coming up` : 'Close a day or change its hours'} open={open === 'changes'} onToggle={() => toggle('changes')}>
-            {overrides.length > 0 && (
-              <ul className="divide-y divide-gray-200 border-y border-gray-200 -mt-1">
-                {overrides.map((o) => (
-                  <li key={o.id} className="flex items-center gap-3 py-2.5">
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[14px] font-bold text-ink truncate">{changeTitle(o)}</span>
-                      <span className="block text-[12px] text-gray-500 truncate">{[prettyDate(o.date), `${prettyTime(o.startTime)}–${prettyTime(o.endTime)}`, o.reason].filter(Boolean).join(' · ')}</span>
-                    </span>
-                    <button type="button" onClick={() => removeChange(o)} className="press min-h-11 px-2 text-[13px] font-bold text-gray-600 hover:text-ink" aria-label={`Remove ${changeTitle(o)} on ${prettyDate(o.date)}`}>
-                      Remove
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-            <form onSubmit={addChange} noValidate className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {OVERRIDE_KINDS.map((k) => (
-                  <button key={k.value} type="button" aria-pressed={ovr.type === k.value} onClick={() => setOvr({ ...ovr, type: k.value })} className={chip(ovr.type === k.value)}>
-                    {k.label}
-                  </button>
-                ))}
-              </div>
-              <div>
-                <label htmlFor="ovr-date" className={label}>Day</label>
-                <input id="ovr-date" type="date" min={localYmd(new Date())} value={ovr.date} onChange={(e) => setOvr({ ...ovr, date: e.target.value })} className={field} />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <TimeSelect id="ovr-from" label="From" value={ovr.startTime} onChange={(startTime) => setOvr({ ...ovr, startTime })} />
-                <span className="text-[12px] text-gray-500" aria-hidden>to</span>
-                <TimeSelect id="ovr-to" label="To" value={ovr.endTime} onChange={(endTime) => setOvr({ ...ovr, endTime })} />
-              </div>
-              {ovr.type !== 'blocked' && (
-                <div>
-                  <label htmlFor="ovr-price" className={label}>Price a game{ovr.type === 'added' && <span className="font-medium text-gray-500"> (optional)</span>}</label>
-                  <input id="ovr-price" inputMode="numeric" value={ovr.price} onChange={(e) => setOvr({ ...ovr, price: e.target.value.replace(/\D/g, '').slice(0, 7) })} placeholder={String(pitch.defaultPrice)} className={field} />
-                </div>
-              )}
-              <div>
-                <label htmlFor="ovr-reason" className={label}>Why <span className="font-medium text-gray-500">(optional)</span></label>
-                <input id="ovr-reason" maxLength={80} value={ovr.reason} onChange={(e) => setOvr({ ...ovr, reason: e.target.value })} placeholder="e.g. Tournament" className={field} />
-              </div>
-              <button type="submit" disabled={saving === 'changes'} className={`w-full ${btnPrimary}`}>{saving === 'changes' ? 'Adding…' : 'Add'}</button>
-            </form>
-          </SettingsSection>
-        </SettingsSections>
-      </div>
-
-      <GroupLabel>Money</GroupLabel>
-      <div className={card}>
-        <SettingsSections inset="card">
-          <SettingsSection id="s-bank" icon={PITCH_ICONS.bank} title="Your bank" summary={pitch.bankAccountNumber ? `${pitch.bankName} · ${pitch.bankAccountNumber}` : 'Where groups pay you for the pitch'} open={open === 'bank'} onToggle={() => toggle('bank')}>
-            <form onSubmit={saveBank} noValidate className="space-y-4">
-              <div>
-                <p className={label}>Bank</p>
-                {banks.length ? (
-                  <BankPicker banks={banks} value={bank.bankCode} onChange={(bankCode) => setBank((b) => ({ ...b, bankCode, accountHolderName: '' }))} />
-                ) : (
-                  <p className="text-[13px] text-gray-500">Loading banks…</p>
-                )}
-              </div>
-              <div>
-                <label htmlFor="acct" className={label}>Account number</label>
-                <input
-                  id="acct"
-                  inputMode="numeric"
-                  value={bank.bankAccountNumber}
-                  onChange={(e) => setBank({ ...bank, bankAccountNumber: e.target.value.replace(/\D/g, '').slice(0, 10), accountHolderName: '' })}
-                  onBlur={checkName}
-                  placeholder="10 digits"
-                  className={field}
-                />
-                {bank.accountHolderName && <p className="text-[13px] font-bold text-pitch-700 mt-1.5">✓ {bank.accountHolderName}</p>}
-              </div>
-              <button type="submit" disabled={saving === 'bank'} className={`w-full ${btnPrimary}`}>{saving === 'bank' ? 'Saving…' : 'Save'}</button>
-            </form>
-          </SettingsSection>
-
-          {pitch.accountNumber && (
-            <SettingsSection id="s-account" icon={PITCH_ICONS.wallet} title="Pitch account" summary={`${pitch.virtualBankName} · ${pitch.accountNumber}`} open={open === 'account'} onToggle={() => toggle('account')}>
-              <div className="rounded-2xl bg-ink text-white px-4 py-3.5">
-                <p className="text-[12px] text-white/60">Available</p>
-                <p className="font-display text-[28px] font-extrabold leading-tight">{balance ? naira(balance.available) : '…'}</p>
-                <p className="text-[12px] text-white/60 truncate">{pitch.accountName} · {pitch.accountNumber}</p>
-              </div>
-              {!pitch.bankAccountNumber ? (
-                <p className="text-[13px] text-gray-600">Add your bank above to withdraw.</p>
-              ) : (
-                <form onSubmit={withdraw} className="space-y-3">
-                  <p className="text-[12px] text-gray-500 truncate">To {pitch.accountHolderName} · {pitch.bankName} · {pitch.bankAccountNumber}</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <input aria-label="Amount" inputMode="numeric" required value={withdrawForm.amount} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value.replace(/\D/g, '') })} placeholder="Amount" className={field} />
-                    <input aria-label="Transfer PIN" type="password" inputMode="numeric" required maxLength={6} value={withdrawForm.pin} onChange={(e) => setWithdrawForm({ ...withdrawForm, pin: e.target.value })} placeholder="PIN" className={field} />
-                  </div>
-                  <button type="submit" disabled={saving === 'account'} className={`w-full ${btnPrimary}`}>{saving === 'account' ? 'Sending…' : 'Withdraw'}</button>
-                  <p className="text-[12px] text-gray-500">The ₦350 service fee is taken from the balance too.</p>
-                </form>
-              )}
-              {transfers.length > 0 && (
-                <MoneyList title="Paid in" rows={transfers.slice(0, 10).map((t) => ({ id: t.id, amount: t.amount, who: t.senderName, status: t.status }))} />
-              )}
-              {payouts.length > 0 && (
-                <MoneyList title="Withdrawn" rows={payouts.slice(0, 10).map((p) => ({ id: p.id, amount: p.amount, who: p.beneficiaryBankName, status: p.status }))} />
-              )}
-            </SettingsSection>
-          )}
-        </SettingsSections>
-      </div>
-
-      <div className="mt-8 mb-4">
-        <button type="button" onClick={() => setConfirmHide(true)} className={`w-full ${btnDanger}`}>Hide this pitch</button>
-        <p className="text-[12px] text-gray-500 mt-1.5 text-center">Its link stops working and no one can book it.</p>
-      </div>
-      <ConfirmSheet
-        open={confirmHide}
-        title="Hide this pitch?"
-        message="Its link stops working and groups can’t book it. Bookings already made stay as they are."
-        confirmLabel="Hide pitch"
-        cancelLabel="Keep it"
-        danger
-        onConfirm={() => { setConfirmHide(false); hide(); }}
-        onCancel={() => setConfirmHide(false)}
-      />
-    </div>
-  );
-}
-
-/** "1 hour", "1½ hours", "2 hours", "45 minutes". */
-function gameLength(m: number) {
-  if (m === 60) return '1 hour';
-  if (m % 60 === 0) return `${m / 60} hours`;
-  if (m % 60 === 30 && m > 60) return `${Math.floor(m / 60)}½ hours`;
-  return `${m} minutes`;
-}
-
-function minutes(t: string) {
-  const [h, m] = t.split(':').map(Number);
-  return h * 60 + m;
-}
-
-function prettyDate(ymd: string) {
-  return new Date(`${ymd}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
-function changeTitle(o: IPitchSlotOverride) {
-  if (o.type === 'blocked') return 'Closed';
-  if (o.type === 'added') return o.price != null ? `Extra hours · ${naira(o.price)}` : 'Extra hours';
-  return `Price ${naira(o.price ?? 0)}`;
-}
-
-function TimeSelect({ id, label: name, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
-  return (
-    <select
-      id={id}
-      aria-label={name}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="min-w-0 flex-1 min-h-11 px-2 bg-white border border-gray-200 rounded-xl text-[14px] text-ink text-center focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
-    >
-      {(TIMES.includes(value) ? TIMES : [...TIMES, value].sort()).map((t) => (
-        <option key={t} value={t}>{prettyTime(t)}</option>
-      ))}
-    </select>
-  );
-}
-
-const STATUS_WORD: Record<string, string> = { matched: 'Matched', assigned: 'Matched', unmatched: 'Not matched', completed: 'Sent', pending: 'Sending', failed: 'Failed' };
-
-function MoneyList({ title, rows }: { title: string; rows: { id: string; amount: number; who?: string | null; status: string }[] }) {
-  return (
-    <div>
-      <p className={label}>{title}</p>
-      <ul className="divide-y divide-gray-200 border-y border-gray-200">
-        {rows.map((r) => (
-          <li key={r.id} className="flex items-center gap-3 py-2">
-            <span className="font-display text-[15px] font-extrabold text-ink">{naira(r.amount)}</span>
-            <span className="min-w-0 flex-1 text-[12px] text-gray-500 truncate">{r.who}</span>
-            <span className={`text-[11px] font-bold ${r.status === 'failed' ? 'text-kit-600' : 'text-gray-600'}`}>{STATUS_WORD[r.status] ?? r.status}</span>
-          </li>
+      <div className="flex gap-1 mb-6 border-b border-gray-100 overflow-x-auto">
+        {(['general', 'schedule', 'overrides', 'bank', 'account'] as const).map((t) => (
+          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium capitalize transition-colors whitespace-nowrap ${tab === t ? 'text-ink border-b-2 border-ink' : 'text-gray-400 hover:text-gray-600'}`}>
+            {t}
+          </button>
         ))}
-      </ul>
+      </div>
+
+      {/* General */}
+      {tab === 'general' && (
+        <form onSubmit={saveGeneral} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">Name *</label>
+            <input required value={general.name} onChange={(e) => setGeneral({ ...general, name: e.target.value })} className={inputClass} />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">Address</label>
+            <input value={general.address} onChange={(e) => setGeneral({ ...general, address: e.target.value })} className={inputClass} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">City</label>
+              <input value={general.city} onChange={(e) => setGeneral({ ...general, city: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">State</label>
+              <input value={general.state} onChange={(e) => setGeneral({ ...general, state: e.target.value })} className={inputClass} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">Description</label>
+            <textarea rows={3} value={general.description} onChange={(e) => setGeneral({ ...general, description: e.target.value })} className={inputClass} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Default price</label>
+              <input type="number" min={0} step="0.01" value={general.defaultPrice} onChange={(e) => setGeneral({ ...general, defaultPrice: e.target.value })} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Slot duration</label>
+              <select value={general.slotDurationMinutes} onChange={(e) => setGeneral({ ...general, slotDurationMinutes: e.target.value })} className={inputClass}>
+                <option value="30">30 min</option>
+                <option value="60">60 min</option>
+                <option value="90">90 min</option>
+                <option value="120">120 min</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" disabled={savingGeneral} className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50">
+            {savingGeneral ? 'Saving...' : 'Save'}
+          </button>
+          <div className="pt-6 border-t border-gray-100">
+            <button type="button" onClick={handleDeactivate} className="text-sm text-red-600 font-bold hover:text-red-700">
+              Deactivate pitch
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Schedule */}
+      {tab === 'schedule' && (
+        <form onSubmit={saveScheduleHandler} className="space-y-4">
+          <p className="text-xs text-gray-500">Set your weekly recurring availability. One row per day window.</p>
+          {scheduleRows.map((row, i) => (
+            <div key={i} className="flex items-end gap-2">
+              <div className="flex-1">
+                <label className="block text-xs font-bold text-gray-700 mb-1">Day</label>
+                <select value={row.dayOfWeek} onChange={(e) => updateScheduleRow(i, 'dayOfWeek', e.target.value)} className={inputClass}>
+                  {DAYS.map((d, di) => <option key={di} value={di}>{d}</option>)}
+                </select>
+              </div>
+              <div className="w-24">
+                <label className="block text-xs font-bold text-gray-700 mb-1">Open</label>
+                <input type="time" value={row.openTime} onChange={(e) => updateScheduleRow(i, 'openTime', e.target.value)} className={inputClass} />
+              </div>
+              <div className="w-24">
+                <label className="block text-xs font-bold text-gray-700 mb-1">Close</label>
+                <input type="time" value={row.closeTime} onChange={(e) => updateScheduleRow(i, 'closeTime', e.target.value)} className={inputClass} />
+              </div>
+              <div className="w-24">
+                <label className="block text-xs font-bold text-gray-700 mb-1">Price</label>
+                <input type="number" min={0} step="0.01" placeholder="default" value={row.price} onChange={(e) => updateScheduleRow(i, 'price', e.target.value)} className={inputClass} />
+              </div>
+              <button type="button" onClick={() => removeScheduleRow(i)} className="text-red-500 hover:text-red-700 pb-3 text-lg font-bold">&times;</button>
+            </div>
+          ))}
+          <button type="button" onClick={addScheduleRow} className="text-sm text-pitch-600 font-bold">+ Add time window</button>
+          <div>
+            <button type="submit" disabled={savingSchedule} className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50">
+              {savingSchedule ? 'Saving...' : 'Save schedule'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Overrides */}
+      {tab === 'overrides' && (
+        <div className="space-y-6">
+          <form onSubmit={addOvrHandler} className="space-y-3 bg-white rounded-xl border border-gray-100 p-4">
+            <p className="text-xs font-bold text-gray-700">Add a date override</p>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="date" required value={ovrForm.date} onChange={(e) => setOvrForm({ ...ovrForm, date: e.target.value })} className={inputClass} />
+              <select value={ovrForm.type} onChange={(e) => setOvrForm({ ...ovrForm, type: e.target.value })} className={inputClass}>
+                <option value="blocked">Block slots</option>
+                <option value="added">Add extra slots</option>
+                <option value="price_override">Price override</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <input type="time" required value={ovrForm.startTime} onChange={(e) => setOvrForm({ ...ovrForm, startTime: e.target.value })} className={inputClass} placeholder="Start" />
+              <input type="time" required value={ovrForm.endTime} onChange={(e) => setOvrForm({ ...ovrForm, endTime: e.target.value })} className={inputClass} placeholder="End" />
+            </div>
+            {(ovrForm.type === 'added' || ovrForm.type === 'price_override') && (
+              <input type="number" min={0} step="0.01" placeholder="Price" value={ovrForm.price} onChange={(e) => setOvrForm({ ...ovrForm, price: e.target.value })} className={inputClass} />
+            )}
+            <input placeholder="Reason (optional)" value={ovrForm.reason} onChange={(e) => setOvrForm({ ...ovrForm, reason: e.target.value })} className={inputClass} />
+            <button type="submit" disabled={savingOvr} className="px-4 py-2 bg-ink text-volt-300 text-sm font-bold rounded-xl disabled:opacity-50">
+              {savingOvr ? 'Adding...' : 'Add override'}
+            </button>
+          </form>
+
+          {overrides.length > 0 && (
+            <div className="space-y-2">
+              {overrides.map((o) => (
+                <div key={o.id} className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-3">
+                  <div>
+                    <span className="text-sm font-semibold text-ink">{o.date}</span>
+                    <span className="text-xs text-gray-500 ml-2">{o.startTime} - {o.endTime}</span>
+                    <span className={`text-xs font-bold ml-2 ${o.type === 'blocked' ? 'text-red-600' : o.type === 'added' ? 'text-green-600' : 'text-blue-600'}`}>
+                      {o.type.replace('_', ' ')}
+                    </span>
+                    {o.reason && <span className="text-xs text-gray-400 ml-2">{o.reason}</span>}
+                  </div>
+                  <button onClick={() => deleteOvr(o.id)} className="text-xs text-red-500 font-bold hover:text-red-700">Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Account (virtual account) */}
+      {tab === 'account' && (
+        <div className="space-y-6">
+          {!pitch.accountNumber ? (
+            <div className="bg-white rounded-xl border border-gray-100 p-6 text-center">
+              <h3 className="text-sm font-bold text-ink mb-2">Collection account</h3>
+              <p className="text-xs text-gray-500 mb-4">
+                Create a virtual account so bookers can pay directly via bank transfer.
+                You&apos;ll need BVN or NIN set up in your account settings.
+              </p>
+              <button
+                onClick={handleCreateAccount}
+                disabled={creatingAccount}
+                className="px-5 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
+              >
+                {creatingAccount ? 'Creating...' : 'Create collection account'}
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Account details */}
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <h3 className="text-xs font-bold text-gray-500 mb-3">Collection account</h3>
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs text-gray-500">Account number</p>
+                      <p className="text-sm font-mono font-bold text-ink">{pitch.accountNumber}</p>
+                    </div>
+                    <button
+                      onClick={() => { navigator.clipboard.writeText(pitch.accountNumber!); toast.success('Copied'); }}
+                      className="text-xs font-bold text-pitch-600 hover:text-pitch-700"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Bank</p>
+                    <p className="text-sm font-semibold text-ink">{pitch.virtualBankName}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-gray-500">Account name</p>
+                    <p className="text-sm font-semibold text-ink">{pitch.accountName}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Balance */}
+              {balance && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
+                    <p className="text-xs text-gray-500">Total in</p>
+                    <p className="text-sm font-bold text-ink">{Number(balance.totalIn).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-gray-100 p-3 text-center">
+                    <p className="text-xs text-gray-500">Total out</p>
+                    <p className="text-sm font-bold text-ink">{Number(balance.totalOut).toLocaleString()}</p>
+                  </div>
+                  <div className="bg-white rounded-xl border border-green-200 p-3 text-center">
+                    <p className="text-xs text-gray-500">Available</p>
+                    <p className="text-sm font-bold text-green-700">{Number(balance.available).toLocaleString()}</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Withdraw */}
+              <div className="bg-white rounded-xl border border-gray-100 p-4">
+                <h3 className="text-xs font-bold text-gray-500 mb-3">Withdraw to your bank</h3>
+                {(!pitch.bankAccountNumber || !pitch.bankCode) ? (
+                  <p className="text-xs text-gray-500">Set your personal bank details in the Bank tab first.</p>
+                ) : (
+                  <form onSubmit={handleWithdraw} className="space-y-3">
+                    <p className="text-xs text-gray-400">
+                      To: {pitch.accountHolderName} &middot; {pitch.bankAccountNumber} &middot; {pitch.bankName}
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input type="number" required min={1} placeholder="Amount" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value })} className={inputClass} />
+                      <input type="password" required maxLength={6} placeholder="PIN" value={withdrawForm.pin} onChange={(e) => setWithdrawForm({ ...withdrawForm, pin: e.target.value })} className={inputClass} />
+                    </div>
+                    <input placeholder="Narration (optional)" value={withdrawForm.narration} onChange={(e) => setWithdrawForm({ ...withdrawForm, narration: e.target.value })} className={inputClass} />
+                    <button type="submit" disabled={withdrawing} className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50">
+                      {withdrawing ? 'Withdrawing...' : 'Withdraw'}
+                    </button>
+                    <p className="text-[11px] text-gray-400">A service fee of NGN 350 applies per withdrawal.</p>
+                  </form>
+                )}
+              </div>
+
+              {/* Recent transfers */}
+              {transfers.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-gray-500 mb-2">Recent transfers in</h3>
+                  <div className="space-y-1.5">
+                    {transfers.slice(0, 10).map((t: any) => (
+                      <div key={t.id} className="bg-white rounded-xl border border-gray-100 px-4 py-2.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-semibold text-ink">NGN {Number(t.amount).toLocaleString()}</span>
+                          {t.senderName && <span className="text-xs text-gray-400 ml-2">{t.senderName}</span>}
+                        </div>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${t.status === 'matched' || t.status === 'assigned' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {t.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent payouts */}
+              {payouts.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold text-gray-500 mb-2">Recent withdrawals</h3>
+                  <div className="space-y-1.5">
+                    {payouts.slice(0, 10).map((p: any) => (
+                      <div key={p.id} className="bg-white rounded-xl border border-gray-100 px-4 py-2.5 flex items-center justify-between">
+                        <div>
+                          <span className="text-sm font-semibold text-ink">NGN {Number(p.amount).toLocaleString()}</span>
+                          <span className="text-xs text-gray-400 ml-2">{p.beneficiaryBankName}</span>
+                        </div>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          p.status === 'completed' ? 'bg-green-100 text-green-700'
+                          : p.status === 'failed' ? 'bg-red-100 text-red-700'
+                          : 'bg-yellow-100 text-yellow-700'
+                        }`}>
+                          {p.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Bank */}
+      {tab === 'bank' && (
+        <form onSubmit={saveBankHandler} className="space-y-4">
+          <p className="text-xs text-gray-500">Set your bank account to receive on-platform payments from organisers.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Bank code</label>
+              <input required value={bank.bankCode} onChange={(e) => setBank({ ...bank, bankCode: e.target.value })} className={inputClass} placeholder="e.g. 058" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Account number</label>
+              <input required maxLength={10} value={bank.bankAccountNumber} onChange={(e) => setBank({ ...bank, bankAccountNumber: e.target.value })} className={inputClass} />
+            </div>
+          </div>
+          <div className="flex gap-2 items-end">
+            <div className="flex-1">
+              <label className="block text-xs font-bold text-gray-700 mb-1.5">Account holder name</label>
+              <input required value={bank.accountHolderName} onChange={(e) => setBank({ ...bank, accountHolderName: e.target.value })} className={inputClass} />
+            </div>
+            <button type="button" onClick={lookupName} disabled={lookingUp} className="px-3 py-3 text-xs font-bold text-pitch-600 border border-gray-200 rounded-xl hover:bg-gray-50 disabled:opacity-50">
+              {lookingUp ? 'Checking...' : 'Verify'}
+            </button>
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">Bank name</label>
+            <input required value={bank.bankName} onChange={(e) => setBank({ ...bank, bankName: e.target.value })} className={inputClass} />
+          </div>
+          <button type="submit" disabled={savingBank} className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50">
+            {savingBank ? 'Saving...' : 'Save bank details'}
+          </button>
+        </form>
+      )}
     </div>
   );
 }

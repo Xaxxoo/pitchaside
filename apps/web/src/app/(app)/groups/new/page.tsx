@@ -135,7 +135,8 @@ export default function NewGroupPage() {
         progress={setup ? <Stepper labels={SETUP_STEPS} at={1} note="Then add players" /> : undefined}
       />
 
-      <form ref={formRef} onSubmit={handleSubmit} onChange={readForm} className={formCardClass}>
+      {/* noValidate: our own check runs and opens the folded row with the mistake (the browser can't point at it) */}
+      <form ref={formRef} onSubmit={handleSubmit} onChange={readForm} noValidate className={formCardClass}>
         <div>
           <label htmlFor="name" className="block text-xs font-bold text-gray-700 mb-1.5">
             Group name

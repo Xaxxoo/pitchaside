@@ -84,6 +84,25 @@ describe('PlayersService', () => {
       expect(result.organizationId).toBe('org-1');
       expect(result.firstName).toBe('John');
     });
+
+    it('keeps the position given when adding them, and a keeper is happy in goal', async () => {
+      playersRepo.findOne.mockResolvedValue(null);
+      playersRepo.create.mockImplementation((x: any) => ({ ...x }));
+      playersRepo.save.mockImplementation(async (x: any) => x);
+      const mid = await service.create({ firstName: 'Zino', lastName: 'A', position: 'MID' } as any, 'org-1');
+      expect(mid.position).toBe('MID');
+      expect(mid.keeper).toBeUndefined();
+      const gk = await service.create({ firstName: 'Kola', lastName: 'B', position: 'GK' } as any, 'org-1');
+      expect(gk.keeper).toBe('happy');
+    });
+
+    it('the add-player form check lets the position through (it used to be stripped)', () => {
+      const { validateSync } = require('class-validator');
+      const { plainToInstance } = require('class-transformer');
+      const { CreatePlayerDto } = require('./dto/create-player.dto');
+      expect(validateSync(plainToInstance(CreatePlayerDto, { firstName: 'Zino', lastName: 'A', position: 'MID' }))).toEqual([]);
+      expect(validateSync(plainToInstance(CreatePlayerDto, { firstName: 'Zino', lastName: 'A', position: 'STRIKER' })).some((e: any) => e.property === 'position')).toBe(true);
+    });
   });
 
   describe('getStats', () => {

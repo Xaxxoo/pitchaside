@@ -21,6 +21,8 @@ export class PlayersService {
   async create(dto: CreatePlayerDto, organizationId: string) {
     await this.phoneFree(dto.phone, organizationId);
     const player = this.playersRepo.create({ ...dto, nickname: cleanNickname(dto.nickname), organizationId });
+    // A keeper is happy in goal, the same as when a position is set later
+    if (dto.position === 'GK') player.keeper = 'happy';
     return this.saveOrSayWhoHasThePhone(player);
   }
 
