@@ -10,6 +10,7 @@ import { NigerianLocationPicker } from '@/components/nigerian-location-picker';
 import { field, label, Stepper } from '@/components/group/group-edit-sheet';
 import { GameLengthPicker, gameLengthOk } from '@/components/pitch/game-length-picker';
 import { BackButton } from '@/components/back-button';
+import { ListPitchGate, useCanListPitch } from '@/components/pitch/list-pitch-gate';
 
 
 /**
@@ -26,6 +27,7 @@ export default function NewPitchPage() {
   const [price, setPrice] = useState(0);
   const [minutes, setMinutes] = useState(60);
   const [saving, setSaving] = useState(false);
+  const canList = useCanListPitch();
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -47,6 +49,8 @@ export default function NewPitchPage() {
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <BackButton label="Your pitches" href="/my-pitches" />
       <PageHeader eyebrow="Your pitches" title="Add a pitch" subtitle="Name, area and price now. Hours and photos next." />
+      {/* Not allowed yet (not an admin, or email not confirmed): say what to do instead of a form that fails */}
+      {!canList ? <ListPitchGate /> : (
       <form onSubmit={save} noValidate className="rounded-3xl bg-white border border-gray-100 shadow-card px-5 py-6 space-y-5">
         <div>
           <label htmlFor="name" className={label}>Pitch name</label>
@@ -61,6 +65,7 @@ export default function NewPitchPage() {
         <GameLengthPicker value={minutes} onChange={setMinutes} />
         <button type="submit" disabled={saving} className={`w-full ${btnMain}`}>{saving ? 'Adding…' : 'Add pitch'}</button>
       </form>
+      )}
     </div>
   );
 }

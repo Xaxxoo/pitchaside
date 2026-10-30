@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createPitch } from '@/lib/pitch';
+import { ListPitchGate, useCanListPitch } from '@/components/pitch/list-pitch-gate';
 import { useToast } from '@/components/toast';
 
 export default function NewPitchPage() {
+  const canList = useCanListPitch();
   const router = useRouter();
   const toast = useToast();
   const [form, setForm] = useState({
@@ -53,6 +55,7 @@ export default function NewPitchPage() {
   return (
     <div className="max-w-lg">
       <h1 className="text-2xl font-extrabold text-ink mb-6">Add a pitch</h1>
+      {!canList ? <ListPitchGate /> : (
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label htmlFor="name" className="block text-xs font-bold text-gray-700 mb-1.5">Pitch name *</label>
@@ -95,6 +98,7 @@ export default function NewPitchPage() {
           {submitting ? 'Creating...' : 'Create Pitch'}
         </button>
       </form>
+      )}
     </div>
   );
 }
