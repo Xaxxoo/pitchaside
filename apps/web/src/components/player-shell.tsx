@@ -216,12 +216,12 @@ export function PlayerShell({ children }: { children: React.ReactNode }) {
       <PushKeeper side="player" />
 
       {/* Until it's on their home screen: a nudge just above the tab bar, every visit */}
-      <div className="md:hidden fixed bottom-[calc(max(env(safe-area-inset-bottom),0.75rem)+5rem)] inset-x-3 z-40 max-w-md mx-auto">
+      <div className="hide-while-typing md:hidden fixed bottom-[calc(max(env(safe-area-inset-bottom),0.75rem)+5rem)] inset-x-3 z-40 max-w-md mx-auto">
         <InstallNudge />
       </div>
 
       {/* Phone tab bar */}
-      <nav className="md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pointer-events-none">
+      <nav className="hide-while-typing md:hidden fixed bottom-0 inset-x-0 z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pointer-events-none">
         <div className="pointer-events-auto max-w-md mx-auto flex justify-around items-center bg-ink/95 backdrop-blur-xl rounded-[22px] px-1.5 py-1.5 shadow-lift">
           {tabs.map((t) => (
             <Link

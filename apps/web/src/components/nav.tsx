@@ -214,7 +214,7 @@ export function Nav() {
     <>
       {confirmEmailSheet}
       {/* Mobile bottom nav — floating pill */}
-      <nav className="fixed bottom-0 left-0 right-0 md:hidden z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pointer-events-none">
+      <nav className="hide-while-typing fixed bottom-0 left-0 right-0 md:hidden z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pointer-events-none">
         <div className="pointer-events-auto flex justify-around items-center bg-ink/95 backdrop-blur-xl rounded-[22px] px-1.5 py-1.5 shadow-lift">
           {tabs.map((tab) => {
             const isActive = pathname.startsWith(tab.href);
