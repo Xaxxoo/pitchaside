@@ -6,6 +6,8 @@ import { UsersService } from '../users/users.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { MailService } from '../mail/mail.service';
 import { CryptoService } from '../crypto/crypto.service';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { PlayerAccount } from '../player-portal/entities/player-account.entity';
 import { UserRole } from '../users/entities/user.entity';
 
 jest.mock('bcrypt');
@@ -71,6 +73,8 @@ describe('AuthService', () => {
         { provide: JwtService, useValue: { sign: mockJwtSign, verify: mockJwtVerify } },
         { provide: MailService, useValue: mailService },
         { provide: CryptoService, useValue: { provisionUserWallets: jest.fn().mockResolvedValue([]) } },
+        // Pitch-owner sign-up looks up player accounts; none here
+        { provide: getRepositoryToken(PlayerAccount), useValue: { findOne: jest.fn().mockResolvedValue(null), save: jest.fn() } },
       ],
     }).compile();
 
