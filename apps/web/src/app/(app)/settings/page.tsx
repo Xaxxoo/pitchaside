@@ -11,6 +11,28 @@ import { PageHeader } from '@/components/brand';
 import { VerifyEmailRow } from '@/components/verify-email-modal';
 import { IdentityForm } from '@/components/identity-form';
 import { UserRole } from '@pitchaside/shared';
+import { SettingsSection, SettingsSections } from '@/components/group/settings-sections';
+
+const ICONS = {
+  // A person
+  person: 'M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z',
+  // An ID card
+  id: 'M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 0 0 2.25-2.25V6.75A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25v10.5A2.25 2.25 0 0 0 4.5 19.5Zm6-10.125a1.875 1.875 0 1 1-3.75 0 1.875 1.875 0 0 1 3.75 0Zm1.294 6.336a6.721 6.721 0 0 1-3.17.789 6.721 6.721 0 0 1-3.168-.789 3.376 3.376 0 0 1 6.338 0Z',
+  // A padlock
+  pin: 'M16.5 10.5V6.75a4.5 4.5 0 1 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z',
+  // A key
+  key: 'M15.75 5.25a3 3 0 0 1 3 3m3 0a6 6 0 0 1-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1 1 21.75 8.25Z',
+  // A shield with a tick
+  shield: 'M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z',
+};
+
+/** A small heading over each group of settings. */
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return <h2 className="mt-5 mb-1.5 px-1 text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500">{children}</h2>;
+}
+
+/** The card each group sits in; the rows run edge to edge inside it. */
+const card = 'bg-white rounded-3xl border border-gray-100 shadow-card overflow-hidden px-5 sm:px-7 [&>div]:border-y-0';
 
 export default function SettingsPage() {
   const { user, refreshUser } = useAuth();
@@ -39,6 +61,29 @@ export default function SettingsPage() {
   const [hasPin, setHasPin] = useState<boolean | null>(null);
   const [pinData, setPinData] = useState({ currentPin: '', newPin: '', confirmPin: '' });
   const [savingPin, setSavingPin] = useState(false);
+
+  // Which setting is open: one at a time. A link to #identity (the home banner) opens BVN and NIN.
+  const [open, setOpen] = useState<string | null>(null);
+  const toggle = (k: string) => setOpen((o) => (o === k ? null : k));
+  useEffect(() => {
+    let t = 0;
+    const openFromHash = () => {
+      if (window.location.hash !== '#identity') return;
+      setOpen('identity');
+      window.clearTimeout(t);
+      t = window.setTimeout(() => {
+        const row = document.getElementById('identity')?.previousElementSibling as HTMLElement | null;
+        if (row) window.scrollTo({ top: row.getBoundingClientRect().top + window.scrollY - 16 });
+      }, 350);
+    };
+    openFromHash();
+    // Also when only the # changes (already on Settings)
+    window.addEventListener('hashchange', openFromHash);
+    return () => {
+      window.clearTimeout(t);
+      window.removeEventListener('hashchange', openFromHash);
+    };
+  }, []);
 
   useEffect(() => {
     getTransferPinStatus().then((r) => setHasPin(r.hasPin)).catch(() => {});
@@ -161,9 +206,19 @@ export default function SettingsPage() {
         <p className="text-[12px] leading-snug text-gray-500 mt-1.5 px-1">When money lands, when to send the link to the group, and when voting closes.</p>
       </div>
 
-      {/* Profile Section */}
-      <form onSubmit={handleProfileSave} className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
-        <h2 className="text-lg font-bold text-ink mb-4">Profile</h2>
+      {/* Everything else as rows that say where it stands; tap one to change it, one open at a time */}
+      <GroupLabel>You</GroupLabel>
+      <div className={card}>
+        <SettingsSections inset="card">
+          <SettingsSection
+            id="s-profile"
+            icon={ICONS.person}
+            title="Profile"
+            summary={[`${user.firstName} ${user.lastName}`, user.phone].filter(Boolean).join(' · ')}
+            open={open === 'profile'}
+            onToggle={() => toggle('profile')}
+          >
+            <form onSubmit={handleProfileSave}>
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
             <label className="block text-xs font-bold text-gray-700 mb-1.5">First name</label>
@@ -208,12 +263,26 @@ export default function SettingsPage() {
         >
           {savingProfile ? 'Saving…' : 'Update profile'}
         </button>
-      </form>
+            </form>
+          </SettingsSection>
+        </SettingsSections>
+      </div>
 
-      {/* Identity: the club admin's BVN or NIN unlocks group collection accounts */}
-      {(user?.role === UserRole.ORG_ADMIN || user?.role === UserRole.SUPER_ADMIN) && (
-      <div id="identity" className="scroll-mt-6 bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
-        <h2 className="text-lg font-bold text-ink mb-1">Identity</h2>
+      {((user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) || hasPin !== null) && (
+        <>
+          <GroupLabel>Money</GroupLabel>
+          <div className={card}>
+            <SettingsSections inset="card">
+              {(user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) && (
+                <SettingsSection
+                  id="identity"
+                  icon={ICONS.id}
+                  title="BVN and NIN"
+                  summary={user.bvn && user.nin ? 'Both added' : user.bvn ? 'Add your NIN too' : user.nin ? 'Add your BVN too' : 'Needed before players can pay'}
+                  open={open === 'identity'}
+                  onToggle={() => toggle('identity')}
+                >
+                  <div>
         {user?.bvn && user?.nin ? (
           <p className="text-sm text-gray-600 mb-3 flex items-start gap-2">
             <span className="mt-0.5 w-5 h-5 shrink-0 rounded-full bg-volt-300 text-ink flex items-center justify-center" aria-hidden>
@@ -233,59 +302,19 @@ export default function SettingsPage() {
           </Callout>
         )}
         <IdentityForm submitLabel={user?.bvn || user?.nin ? 'Save' : 'Add'} onDone={() => toast.success('Saved: your BVN and NIN are on file')} />
-      </div>
-      )}
-
-      {/* Change Password */}
-      <form onSubmit={handlePasswordChange} className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
-        <h2 className="text-lg font-bold text-ink mb-4">Password</h2>
-        <div className="space-y-3 mb-4">
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">Current password</label>
-            <input
-              type="password"
-              required
-              value={pwData.currentPassword}
-              onChange={(e) => setPwData({ ...pwData, currentPassword: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">New password</label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={pwData.newPassword}
-              onChange={(e) => setPwData({ ...pwData, newPassword: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-bold text-gray-700 mb-1.5">Confirm new password</label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              value={pwData.confirm}
-              onChange={(e) => setPwData({ ...pwData, confirm: e.target.value })}
-              className={inputClass}
-            />
-          </div>
-        </div>
-        <button
-          type="submit"
-          disabled={savingPw}
-          className="w-full py-3 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
-        >
-          {savingPw ? 'Saving…' : 'Change password'}
-        </button>
-      </form>
-
-      {/* Transfer PIN */}
-      {hasPin !== null && (
-        <form onSubmit={handlePinSave} className="bg-white rounded-3xl border border-gray-100 shadow-card p-5 mb-4">
-          <h2 className="text-lg font-bold text-ink mb-1">{hasPin ? 'Change transfer PIN' : 'Set transfer PIN'}</h2>
+                  </div>
+                </SettingsSection>
+              )}
+              {hasPin !== null && (
+                <SettingsSection
+                  id="s-pin"
+                  icon={ICONS.pin}
+                  title="Transfer PIN"
+                  summary={hasPin ? 'Set · asked before money goes out' : 'Not set · needed to send money'}
+                  open={open === 'pin'}
+                  onToggle={() => toggle('pin')}
+                >
+                  <form onSubmit={handlePinSave}>
           <p className="text-xs text-gray-500 mb-4">
             {hasPin
               ? 'Enter your current PIN and choose a new 4‑digit PIN.'
@@ -346,12 +375,78 @@ export default function SettingsPage() {
           >
             {savingPin ? 'Saving…' : hasPin ? 'Change PIN' : 'Set PIN'}
           </button>
-        </form>
+                  </form>
+                </SettingsSection>
+              )}
+            </SettingsSections>
+          </div>
+        </>
       )}
 
-      {/* 2FA Section */}
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-card p-5">
-        <h2 className="text-lg font-bold text-ink mb-4">Two-step sign-in</h2>
+      <GroupLabel>Signing in</GroupLabel>
+      <div className={card}>
+        <SettingsSections inset="card">
+          <SettingsSection
+            id="s-password"
+            icon={ICONS.key}
+            title="Password"
+            summary="Change your password"
+            open={open === 'password'}
+            onToggle={() => toggle('password')}
+          >
+            <form onSubmit={handlePasswordChange}>
+        <div className="space-y-3 mb-4">
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">Current password</label>
+            <input
+              type="password"
+              required
+              value={pwData.currentPassword}
+              onChange={(e) => setPwData({ ...pwData, currentPassword: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">New password</label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={pwData.newPassword}
+              onChange={(e) => setPwData({ ...pwData, newPassword: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1.5">Confirm new password</label>
+            <input
+              type="password"
+              required
+              minLength={8}
+              value={pwData.confirm}
+              onChange={(e) => setPwData({ ...pwData, confirm: e.target.value })}
+              className={inputClass}
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          disabled={savingPw}
+          className="w-full py-3 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors disabled:opacity-50"
+        >
+          {savingPw ? 'Saving…' : 'Change password'}
+        </button>
+            </form>
+          </SettingsSection>
+          <SettingsSection
+            id="s-2fa"
+            icon={ICONS.shield}
+            title="Two-step sign-in"
+            summary={user.twoFactorEnabled ? 'On' : 'Off · an extra code when you sign in'}
+            open={open === '2fa'}
+            onToggle={() => toggle('2fa')}
+          >
+            <div>
         {user.twoFactorEnabled ? (
           <div>
             <div className="flex items-center gap-2 mb-4">
@@ -421,6 +516,9 @@ export default function SettingsPage() {
             </button>
           </div>
         )}
+            </div>
+          </SettingsSection>
+        </SettingsSections>
       </div>
     </div>
   );
