@@ -100,6 +100,12 @@ export function PitchBooking({ code, pitch, inApp = false }: { code: string; pit
   const total = picked.reduce((sum, p) => sum + p.slot.price, 0);
   const pickedDays = new Set(picked.map((p) => p.date)).size;
   const sorted = useMemo(() => [...picked].sort((a, b) => keyOf(a.date, a.slot).localeCompare(keyOf(b.date, b.slot))), [picked]);
+  // The picked times under their day, earliest first: a day is said once, not on every row
+  const byDay = useMemo(() => {
+    const m = new Map<string, Picked[]>();
+    for (const p of sorted) m.set(p.date, [...(m.get(p.date) ?? []), p]);
+    return [...m.entries()];
+  }, [sorted]);
 
   function toggle(s: IPitchSlot) {
     const k = keyOf(date, s);
@@ -293,30 +299,44 @@ export function PitchBooking({ code, pitch, inApp = false }: { code: string; pit
           }
         >
           <SheetTitle id={sheetTitle} title={picked.length === 1 ? 'Request this time' : `Request ${picked.length} times`} sub="The owner confirms, then you pay." onClose={() => setOpen(false)} />
-          <ul className="mt-4 divide-y divide-gray-200 border-y border-gray-200">
-            {sorted.map((p) => (
-              <li key={keyOf(p.date, p.slot)} className="flex items-center gap-3 py-2.5">
-                <span className="min-w-0 flex-1 text-[14px] text-ink truncate"><b>{shortDay(p.date)}</b> · {span(p.slot)}</span>
-                <span className="font-display text-[15px] font-extrabold text-ink">{naira(p.slot.price)}</span>
-                <button
-                  type="button"
-                  onClick={() => setPicked((l) => { const next = l.filter((x) => keyOf(x.date, x.slot) !== keyOf(p.date, p.slot)); if (!next.length) setOpen(false); return next; })}
-                  className="press -mr-2 w-11 h-11 flex items-center justify-center text-gray-500 hover:text-ink"
-                  aria-label={`Remove ${shortDay(p.date)} ${span(p.slot)}`}
-                >
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                </button>
-              </li>
+          {/* 1. What it costs: the one number, said first */}
+          <div className="mt-4 rounded-2xl bg-ink text-white px-4 py-3.5">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-volt-300 truncate">{pitch.name}</p>
+            <p className="mt-1 font-display text-[30px] leading-none font-extrabold tabular-nums">{naira(total)}</p>
+            <p className="mt-1.5 text-[13px] text-white/70">
+              {picked.length} game{picked.length === 1 ? '' : 's'}
+              {pickedDays > 1 ? ` on ${pickedDays} days` : ''}
+            </p>
+          </div>
+
+          {/* 2. The times, under their day */}
+          <div className="mt-5 space-y-4">
+            {byDay.map(([d, list]) => (
+              <section key={d} aria-label={longDay(d)}>
+                <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500 mb-1.5">{headDay(d)}</h3>
+                <ul className="rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 overflow-hidden">
+                  {list.map((p) => (
+                    <li key={keyOf(p.date, p.slot)} className="flex items-center gap-3 pl-4 pr-1 min-h-14">
+                      <span className="min-w-0 flex-1 text-[15px] font-bold text-ink tabular-nums truncate">{span(p.slot)}</span>
+                      <span className="shrink-0 text-[14px] text-gray-600 tabular-nums">{naira(p.slot.price)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setPicked((l) => { const next = l.filter((x) => keyOf(x.date, x.slot) !== keyOf(p.date, p.slot)); if (!next.length) setOpen(false); return next; })}
+                        className="press shrink-0 w-11 h-11 rounded-full flex items-center justify-center text-gray-500 hover:bg-chalk hover:text-ink"
+                        aria-label={`Remove ${shortDay(p.date)} ${span(p.slot)}`}
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-            {picked.length > 1 && (
-              <li className="flex items-center justify-between py-2.5 pr-9">
-                <span className="text-[14px] font-bold text-ink">Total</span>
-                <span className="font-display text-[17px] font-extrabold text-ink">{naira(total)}</span>
-              </li>
-            )}
-          </ul>
+          </div>
+
           {authLoading ? null : user ? (
-            <form id="booking-form" onSubmit={send} noValidate className="mt-4 space-y-4">
+            <form id="booking-form" onSubmit={send} noValidate className="mt-6 pt-5 border-t border-gray-200 space-y-4">
+              <h3 className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-gray-500">Your details</h3>
               <div>
                 <label htmlFor="bk-name" className={label}>Your name</label>
                 <input id="bk-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={field} />
@@ -331,8 +351,9 @@ export function PitchBooking({ code, pitch, inApp = false }: { code: string; pit
               </div>
             </form>
           ) : (
-            <div className="mt-4 space-y-2">
-              <p className="text-[14px] text-gray-600">Sign in so the owner knows who’s booking.</p>
+            <div className="mt-6 pt-5 border-t border-gray-200 space-y-2">
+              <h3 className="text-[15px] font-bold text-ink">Sign in to send it</h3>
+              <p className="text-[13px] text-gray-600 -mt-1 pb-1">So the owner knows who’s booking.</p>
               <Link href={`/signin?redirect=${encodeURIComponent(`/p/${code}`)}`} className={`w-full ${btnPrimary}`}>Sign in</Link>
               <Link href={`/signup?redirect=${encodeURIComponent(`/p/${code}`)}`} className={`w-full ${btnSecondary}`}>New here? Sign up</Link>
             </div>
