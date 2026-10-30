@@ -133,6 +133,10 @@ export class Group {
   @Column({ type: 'varchar', length: 5, default: 'NGN' })
   currency: string;
 
+  /** Match days before this date don't count for the table, cards, games played or votes. Null counts every one. */
+  @Column({ name: 'stats_from', type: 'date', nullable: true })
+  statsFrom: string | null;
+
   @ManyToOne(() => Organization, (org) => org.groups, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'organization_id' })
   organization: Organization;

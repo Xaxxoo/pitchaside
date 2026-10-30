@@ -34,7 +34,7 @@ import { Payment } from '../payments/entities/payment.entity';
 import { bestSeven } from './best-seven';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
 import { canBePicked, emptyInvolvement, pickable, voteWorth, type Involvement } from './vote-involvement';
-import { MISS_GRACE, MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
+import { MISS_GRACE, MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTE_MOVE_MAX, VOTE_WEIGHT as STEADY_VOTE_WEIGHT, replaySteady, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
 import { Organization, RATING_MODES, type RatingMode } from '../organizations/entities/organization.entity';
 
 /** Sides on match day. Colours live in the UI (Orange, Yellow, Blue, White, Green, Red). */
@@ -2252,7 +2252,9 @@ export class RatingsService {
       .where('group.organizationId = :organizationId', { organizationId })
       .andWhere('session.kind = :kind', { kind: SessionKind.GAME })
       .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
-      .andWhere('session.date <= CURRENT_DATE');
+      .andWhere('session.date <= CURRENT_DATE')
+      // A group can start its stats afresh from a date: earlier match days stay on record but stop counting.
+      .andWhere('(group.statsFrom IS NULL OR session.date >= group.statsFrom)');
   }
 
   /** A player's recent match days: their side, how the day went, and who won POTM. */
@@ -2361,6 +2363,8 @@ export class RatingsService {
       games: sessions.length,
       /** The latest match day the table counts. */
       lastDate: sessions.length ? String(sessions[sessions.length - 1].date).slice(0, 10) : null,
+      /** Match days before this date don't count (the organiser started the stats afresh); null counts all. */
+      statsFrom: group.statsFrom ? String(group.statsFrom).slice(0, 10) : null,
       /** The group's join link code: the table's share link is built on it. */
       shareCode: group.inviteCode ?? null,
       /** What the table is ranked by: the card's rating (points still shown, and break a tie). */
@@ -2577,10 +2581,9 @@ export class RatingsService {
       /** The most the card can move on their next match day. */
       maxMove: played < NEW_FOR ? MOVE_NEW : MOVE_SETTLED,
       settledMove: MOVE_SETTLED,
-      /** Share of the vote bonus their next match day gets (1 while new, down to VOTES_FLOOR). */
-      votesCount: voteWeight(played + 1),
-      votesFull: VOTES_FULL,
-      votesFloor: VOTES_FLOOR,
+      /** Share of the vote bonus a match day gets (the same for everyone), and the most votes can move the card in one. */
+      votesCount: STEADY_VOTE_WEIGHT,
+      voteMove: VOTE_MOVE_MAX,
       form: s?.form ?? null,
       /** Their groups' match days missed in a row, and what that has taken off (after MISS_GRACE). */
       missed: s?.missed ?? 0,

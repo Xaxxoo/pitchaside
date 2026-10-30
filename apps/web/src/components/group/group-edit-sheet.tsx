@@ -10,6 +10,7 @@ import { ContributionsVisibilityPicker } from '@/components/contributions-visibi
 import { prettyTime } from '@/components/player-ui';
 import { frequencyOptions } from '@/lib/billing';
 import { MatchDayFields } from '@/components/group/match-day-fields';
+import { matchDay } from '@/lib/match-words';
 import { SECTION_ICONS, SEEN, SettingsSection, SettingsSections } from '@/components/group/settings-sections';
 
 export interface GroupEditData {
@@ -27,6 +28,8 @@ export interface GroupEditData {
   gameMinutes: number;
   /** Whether match day shows the game timer. */
   timerOn: boolean;
+  /** Match days before this date (YYYY-MM-DD) stop counting for stats and votes; null counts them all. */
+  statsFrom?: string | null;
 
   /** What each side wears and is called; null for the default colours. */
   bibs: Bibs | null;
@@ -147,12 +150,15 @@ export function dayOf(schedule: string) {
  */
 export function GroupEditSheet({
   initial,
+  matchDays = [],
   saving,
   onSave,
   onClose,
   onDelete,
 }: {
   initial: GroupEditData;
+  /** The group's match days so far, newest first: where its stats can start from. None: no Stats section. */
+  matchDays?: string[];
   saving: boolean;
   onSave: (data: GroupEditData) => void;
   onClose: () => void;
@@ -167,8 +173,10 @@ export function GroupEditSheet({
   const valid = d.name.trim().length > 0 && d.targetPlayers >= 2 && d.feePerPlayer >= 0 && d.gameMinutes >= 1 && d.gameMinutes <= 60;
   const freq = frequencyOptions.find((o) => o.value === d.paymentType);
   // Which settings section is open: one at a time, all closed to start
-  const [open, setOpen] = useState<'money' | 'when' | 'day' | null>(null);
-  const toggle = (k: 'money' | 'when' | 'day') => setOpen((o) => (o === k ? null : k));
+  const [open, setOpen] = useState<'money' | 'when' | 'day' | 'stats' | null>(null);
+  const toggle = (k: 'money' | 'when' | 'day' | 'stats') => setOpen((o) => (o === k ? null : k));
+  // The latest few match days to start the stats from, and the one already set even if it's older.
+  const starts = [...new Set([...matchDays.slice(0, 6), ...(initial.statsFrom ? [initial.statsFrom] : [])])].sort().reverse();
 
   function pickDay(v: string) {
     setDay(v);
@@ -367,6 +375,34 @@ export function GroupEditSheet({
             <RsvpToggle checked={d.requireRsvp} onChange={(v) => set({ requireRsvp: v })} />
             <MatchDayFields value={d} onChange={set} />
           </SettingsSection>
+
+          {starts.length > 0 && (
+            <SettingsSection
+              id="g-stats"
+              icon={SECTION_ICONS.stats}
+              title="Stats"
+              summary={d.statsFrom ? `Counting from ${matchDay(d.statsFrom)}` : 'Counting every match day'}
+              open={open === 'stats'}
+              onToggle={() => toggle('stats')}
+            >
+              <fieldset>
+                <legend className={label}>Count stats from</legend>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" aria-pressed={!d.statsFrom} onClick={() => set({ statsFrom: null })} className={chip(!d.statsFrom)}>
+                    All match days
+                  </button>
+                  {starts.map((x) => (
+                    <button key={x} type="button" aria-pressed={d.statsFrom === x} onClick={() => set({ statsFrom: x })} className={chip(d.statsFrom === x)}>
+                      {matchDay(x)}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-gray-500">
+                  {d.statsFrom ? 'Earlier days stay saved, but stop counting.' : 'Pick a day to start the table afresh.'}
+                </p>
+              </fieldset>
+            </SettingsSection>
+          )}
         </SettingsSections>
 
         {onDelete && (

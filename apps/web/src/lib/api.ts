@@ -127,6 +127,7 @@ export function updateGroup(
     contributionsVisibility: ContributionsVisibility;
     gameMinutes: number | null;
     timerOn: boolean;
+    statsFrom: string | null;
 
     bibs: Bibs | null;
   }>,
@@ -1261,6 +1262,8 @@ export interface LeagueTable {
   games: number;
   /** The latest match day counted. */
   lastDate?: string | null;
+  /** Match days before this date don't count (the organiser started afresh); null or missing counts all. */
+  statsFrom?: string | null;
   /** The group's join-link code: the table's share link is built on it. Null: can't be shared. */
   shareCode?: string | null;
   /** 'rating': ranked by the card's rating, points shown beside it. Missing: by points (older servers). */
@@ -1345,10 +1348,10 @@ export interface SteadyBreakdown {
   /** The most the card can move on their next match day, and once settled. */
   maxMove: number;
   settledMove: number;
-  /** Share of the vote bonus their next match day gets: 1 while new, down to votesFloor. */
+  /** Share of the vote bonus a match day gets (the same for everyone). */
   votesCount: number;
-  votesFull: number;
-  votesFloor: number;
+  /** The most votes can move the card in one match day. */
+  voteMove: number;
   form: number | null;
   /** Their groups' match days missed in a row, and what that has taken off (after missGrace). Newer servers. */
   missed?: number;

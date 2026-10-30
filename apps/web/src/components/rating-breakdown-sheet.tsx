@@ -160,7 +160,6 @@ const dayLabel = (iso: string) => {
  * their latest match days, each with its match rating, what made it and how far the card moved.
  */
 function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
-  const votes = Math.round(data.votesCount * 100);
   return (
     <div className="mt-4 space-y-3">
       <dl className="grid grid-cols-3 gap-2">
@@ -182,7 +181,7 @@ function SteadyBody({ data, first }: { data: SteadyBreakdown; first: string }) {
         {data.settling
           ? `Moves up to ${data.maxMove} a match day for the first ${data.newFor}, then ${data.settledMove}.`
           : `Settled: moves ${data.settledMove} at most a match day.`}{' '}
-        Votes count {votes}% for {first} now.
+        Votes: up to +{data.voteMove} a match day.
       </p>
       {(data.missedLost ?? 0) > 0 && (
         <p className="rounded-2xl bg-kit-400/10 px-3 py-2.5 text-[13px] leading-snug text-kit-600">
