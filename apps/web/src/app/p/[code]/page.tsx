@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Logo } from '@/components/brand';
@@ -38,6 +38,7 @@ export default function PublicPitchPage() {
   const [weekOffset, setWeekOffset] = useState(0);
 
   // Booking state
+  const bookingRef = useRef<HTMLDivElement>(null);
   const [selectedSlot, setSelectedSlot] = useState<{ date: string; slot: IPitchSlot } | null>(null);
   const [bookerName, setBookerName] = useState('');
   const [bookerPhone, setBookerPhone] = useState('');
@@ -81,7 +82,13 @@ export default function PublicPitchPage() {
   function handleSelectSlot(date: string, slot: IPitchSlot) {
     if (!slot.available) return;
     const alreadySelected = selectedSlot?.date === date && selectedSlot.slot.startTime === slot.startTime;
-    setSelectedSlot(alreadySelected ? null : { date, slot });
+    if (alreadySelected) {
+      setSelectedSlot(null);
+    } else {
+      setSelectedSlot({ date, slot });
+      // Scroll the booking form into view after React renders it
+      setTimeout(() => bookingRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+    }
   }
 
   async function handleBook(e: React.FormEvent) {
@@ -280,7 +287,7 @@ export default function PublicPitchPage() {
 
         {/* Booking form / sign-in prompt — appears when a slot is selected */}
         {selectedSlot && (
-          <div className="mt-6 bg-white rounded-xl border border-gray-100 p-5">
+          <div ref={bookingRef} className="mt-6 bg-white rounded-xl border border-gray-100 p-5">
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-sm font-bold text-ink">Book this slot</h2>
