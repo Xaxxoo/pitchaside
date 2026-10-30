@@ -38,6 +38,10 @@ export class Organization {
   @Column({ name: 'rating_mode', type: 'varchar', length: 10, default: 'steady' })
   ratingMode: RatingMode;
 
+  /** When this club was moved from Classic to Steady ratings (null: it was always Steady). */
+  @Column({ name: 'ratings_switched_at', type: 'timestamptz', nullable: true })
+  ratingsSwitchedAt: Date | null;
+
   @OneToMany(() => User, (user) => user.organization)
   users: User[];
 
