@@ -269,6 +269,30 @@
   }
 }
 
+/* Bars pinned to the bottom of the screen step aside while the phone's keyboard is up (KeyboardWatch),
+   instead of riding up and sticking mid-screen as you scroll. */
+.hide-while-typing {
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+html[data-typing] .hide-while-typing {
+  transform: translateY(calc(100% + 2rem));
+  opacity: 0;
+}
+/* Its tabs too (they turn pointer events back on for themselves), so a tap reaches the page behind. */
+html[data-typing] .hide-while-typing,
+html[data-typing] .hide-while-typing * {
+  pointer-events: none !important;
+}
+
+/* Phones zoom the page into any box with text under 16px, and stay zoomed after typing. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

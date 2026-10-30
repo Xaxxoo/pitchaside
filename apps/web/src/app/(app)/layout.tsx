@@ -59,7 +59,7 @@ export default function AppLayout({
       <main className="min-h-screen pb-[calc(7rem_+_var(--install-nudge,0px))] md:pb-10 md:pl-60 md:pt-4">
         {children}
       </main>
-      <div className="fixed bottom-20 left-4 right-4 z-40 md:hidden">
+      <div className="hide-while-typing fixed bottom-20 left-4 right-4 z-40 md:hidden">
         <InstallNudge />
       </div>
       <Nav />
