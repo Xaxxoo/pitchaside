@@ -36,6 +36,11 @@ export class CreatePlayerDto {
   @IsOptional()
   @IsIn(PLAYER_LEVELS)
   level?: PlayerLevel;
+
+  /** Where they usually play, if the organiser said when adding them (was dropped before: only editing took it). */
+  @IsOptional()
+  @IsIn(POSITIONS)
+  position?: Position | null;
 }
 
 /**
