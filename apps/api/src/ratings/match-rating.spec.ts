@@ -1,4 +1,4 @@
-import { dayLines, matchRating, replaySteady, stepOvr, voteWeight, MOVE_NEW, MOVE_SETTLED, NEW_FOR, type DayInput } from './match-rating';
+import { dayLines, matchRating, replaySteady, stepOvr, voteWeight, MOVE_NEW, MOVE_SETTLED, NEW_FOR, VOTE_MOVE_MAX, VOTE_WEIGHT, type DayInput } from './match-rating';
 
 const A = ['a1', 'a2', 'a3'];
 const B = ['b1', 'b2', 'b3'];
@@ -60,10 +60,9 @@ describe('matchRating', () => {
     expect(matchRating(r, 1)!.rating).toBeLessThan(matchRating(l, 1)!.rating);
   });
 
-  it('votes count less once a player has played a while', () => {
+  it('votes count the same for everyone, new or settled', () => {
     const l = dayLines(day({ potm: new Set(['a2']) })).get('a2')!;
-    expect(matchRating(l, voteWeight(1))!.parts.votes).toBe(1);
-    expect(matchRating(l, voteWeight(20))!.parts.votes).toBe(0.4);
+    expect(matchRating(l, voteWeight())!.parts.votes).toBe(VOTE_WEIGHT);
   });
 
   it('stays between 3 and 10', () => {
@@ -204,3 +203,56 @@ describe('own goals and missed penalties', () => {
     expect(mr.parts.cards).toBeCloseTo(0);
   });
 });
+
+describe('votes nudge the card, they don’t carry it (decided 30 Oct)', () => {
+  // A 10-player club over 10 match days: teams rotate, scores vary (a small seeded random)
+  const ids = Array.from({ length: 10 }, (_, i) => `p${i}`);
+  function season(potm: (d: number) => string[], seed = 7): DayInput[] {
+    let x = seed;
+    const rand = () => ((x = (x * 9301 + 49297) % 233280) / 233280);
+    return Array.from({ length: 10 }, (_, d) => ({
+      games: Array.from({ length: 3 }, (_, g) => {
+        const r = [...ids.slice((d * 3 + g) % 10), ...ids.slice(0, (d * 3 + g) % 10)];
+        // e, l and n always play together, so only their votes differ
+        const sideA = ['e', 'l', 'n', ...r.slice(0, 2)], sideB = r.slice(2, 7);
+        return { sideA, sideB, scoreA: Math.floor(rand() * 3), scoreB: Math.floor(rand() * 3) };
+      }),
+      goals: [],
+      potm: new Set(potm(d)),
+    }));
+  }
+  const early = replaySteady(season((d) => (d < 2 ? ['e'] : d >= 8 ? ['l'] : [])));
+  const card = (id: string) => early.get(id)!.ovr;
+
+  // Measured over 40 such seasons (30 Oct): before this rule early vs late averaged 14.5 apart
+  // (never under 9.5) and early vs never 15.3; now 3.1 and 3.9
+  it('Player of the Match early or late ends up about the same', () => {
+    expect(Math.abs(card('e') - card('l'))).toBeLessThanOrEqual(5);
+  });
+
+  it('two early Player of the Match wins don’t lift a card far above never winning it', () => {
+    expect(card('e') - card('n')).toBeLessThanOrEqual(7);
+  });
+
+  it('a card never moves more than MOVE_NEW in a day, and votes alone at most VOTE_MOVE_MAX', () => {
+    let last = new Map<string, number>();
+    replaySteady(season((d) => (d < 2 ? ['e'] : [])), new Map(), new Map(), (_i, _l, _r, after) => {
+      for (const [id, s] of after) {
+        if (last.has(id)) expect(Math.abs(s.ovr - last.get(id)!)).toBeLessThanOrEqual(MOVE_NEW + 0.05);
+      }
+      last = new Map([...after].map(([id, s]) => [id, s.ovr]));
+    });
+    // A day where all of the rating above the start is votes: the card moves at most VOTE_MOVE_MAX for them
+    const settled = { ovr: 50, days: NEW_FOR, last: null, form: 6.9, formNoVotes: 6.9 };
+    const withVotes = stepOvr(settled, 6.9 + 1.08, 4, undefined, 4, 1.08).ovr - 50;
+    expect(withVotes).toBeLessThanOrEqual(VOTE_MOVE_MAX + 0.05);
+  });
+
+  it('a card doesn’t move on a day its player doesn’t play', () => {
+    const days = season(() => []);
+    const before = replaySteady(days.slice(0, 5));
+    const withDayOff = replaySteady([...days.slice(0, 5), { games: [{ sideA: ['p0'], sideB: ['p1'], scoreA: 3, scoreB: 0 }], goals: [], potm: new Set(['p0']) }]);
+    expect(withDayOff.get('p5')!.ovr).toBe(before.get('p5')!.ovr);
+  });
+});
+

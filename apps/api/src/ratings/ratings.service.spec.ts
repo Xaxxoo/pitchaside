@@ -608,7 +608,7 @@ describe('ratingBreakdown', () => {
     });
     const b = (await service.ratingBreakdown('a', 'org'))!;
     if (b.mode !== 'steady') throw new Error('expected steady');
-    expect(b).toMatchObject({ rating: 53, classic: 71, matchDays: 2, settling: true, maxMove: 4, votesCount: 1 });
+    expect(b).toMatchObject({ rating: 53, classic: 71, matchDays: 2, settling: true, maxMove: 4, votesCount: 0.6, voteMove: 1 });
     expect(b.recent.map((d) => [d.date, d.move])).toEqual([['2026-10-08', 4], ['2026-10-01', -1]]);
   });
 });

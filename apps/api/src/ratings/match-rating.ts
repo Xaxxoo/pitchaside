@@ -3,8 +3,9 @@
  * match day, and an OVR that moves only a little each match day, like a manager game's ability.
  *
  * Match rating: starts at 6.0. What the player did counts most (goals, assists, results while
- * on the pitch, clean sheets, saves; cards cost). Votes add a bonus that matters a lot while a
- * player is new and less once their numbers have built up.
+ * on the pitch, clean sheets, saves; cards cost). Votes add a small bonus, the same for everyone
+ * (VOTE_WEIGHT), and can move the card at most VOTE_MOVE_MAX a match day (decided 30 Oct with the
+ * council: before, a new player's first votes counted in full and stuck to the card for weeks).
  *
  * OVR: starts where the organiser's level puts it, then each match day steps toward what that
  * day's match rating says, by at most MOVE_NEW points while new and MOVE_SETTLED after. One great
@@ -94,11 +95,15 @@ const PEN_MISS = 0.4;
 /** Vote bonuses before they taper. */
 const VOTE = { potm: 1, vii: 0.5, best: 0.3 } as const;
 
-/** Votes count fully for a player's first VOTES_FULL match days, then less, down to VOTES_FLOOR by day 10. */
-export const VOTES_FULL = 4;
-export const VOTES_FLOOR = 0.4;
-export function voteWeight(daysPlayed: number) {
-  return daysPlayed <= VOTES_FULL ? 1 : Math.max(VOTES_FLOOR, 1 - 0.1 * (daysPlayed - VOTES_FULL));
+/**
+ * Votes count this much of their bonus for every player, every match day (new players' votes used
+ * to count in full and stuck to the card for weeks), and can move the card at most VOTE_MOVE_MAX a
+ * match day: what a player did moves it; teammates' opinion nudges it.
+ */
+export const VOTE_WEIGHT = 0.6;
+export const VOTE_MOVE_MAX = 1;
+export function voteWeight() {
+  return VOTE_WEIGHT;
 }
 
 /** OVR: average form (6.9) points at 50, each point of form above it at 25 more (7.9 → 75). */
@@ -221,6 +226,8 @@ export interface Steady {
   last: number | null;
   /** Recent form: the average match rating, newer days counting more (FORM_WEIGHT once settled). */
   form: number | null;
+  /** The same form without the vote bonus: how far the card goes on what they did alone. */
+  formNoVotes?: number | null;
   /** Their groups' match days missed in a row, and how much that has taken off since they last played. */
   missed?: number;
   drift?: number;
@@ -238,14 +245,27 @@ export const FORM_WEIGHT = 0.2;
  * newest day counts FORM_WEIGHT); the OVR steps toward what that form is worth, capped, and less
  * for a short day. Aiming at form, not the one day, is what stops a lucky hat-trick swinging it.
  */
-export function stepOvr(s: Steady, rating: number, games: number, target: (form: number) => number = ovrTarget, dayMost = FULL_DAY_GAMES): Steady {
+export function stepOvr(s: Steady, rating: number, games: number, target: (form: number) => number = ovrTarget, dayMost = FULL_DAY_GAMES, votes = 0): Steady {
   // Their share of the day: games played against the most anyone played (FULL_DAY_GAMES at least)
   const share = Math.min(1, games / Math.max(dayMost, FULL_DAY_GAMES));
   const w = Math.max(FORM_WEIGHT, 1 / (s.days + 1)) * share;
-  const form = s.form === null ? rating : s.form + (rating - s.form) * w;
+  const fold = (f: number | null | undefined, r: number) => (f == null ? r : f + (r - f) * w);
+  const form = fold(s.form, rating);
+  const formNoVotes = fold(s.formNoVotes ?? s.form, rating - votes);
   const cap = s.days < NEW_FOR ? MOVE_NEW : MOVE_SETTLED;
-  const move = Math.max(-cap, Math.min(cap, PULL * (target(form) - s.ovr))) * share;
-  return { ovr: Math.round((s.ovr + move) * 10) / 10, days: s.days + 1, last: rating, form: Math.round(form * 100) / 100, missed: 0, drift: 0 };
+  const clamp = (n: number, c: number) => Math.max(-c, Math.min(c, n));
+  // What they did moves the card up to the cap; votes add at most VOTE_MOVE_MAX on top, all within the cap
+  const stats = target(formNoVotes);
+  const move = clamp(clamp(PULL * (stats - s.ovr), cap) + clamp(PULL * (target(form) - stats), VOTE_MOVE_MAX), cap) * share;
+  return {
+    ovr: Math.round((s.ovr + move) * 10) / 10,
+    days: s.days + 1,
+    last: rating,
+    form: Math.round(form * 100) / 100,
+    formNoVotes: Math.round(formNoVotes * 100) / 100,
+    missed: 0,
+    drift: 0,
+  };
 }
 
 /**
@@ -298,14 +318,14 @@ export function replaySteady(
     const target = clubTarget([...out.values()].filter((x) => x.form !== null && x.days >= SETTLED_FORM_DAYS).map((x) => x.form!));
     for (const [id, l] of lines) {
       const s = out.get(id) ?? { ovr: starts.get(id) ?? 50, days: 0, last: null, form: null };
-      const mr = matchRating(l, voteWeight(s.days + 1));
+      const mr = matchRating(l, voteWeight());
       if (!mr) continue;
       ratings.set(id, mr);
       // Their usual position (a day in goal counts as GK): how far its average sits from everyone's
       const pos = l.inGoal * 2 >= l.games ? 'GK' : (positions.get(id) ?? 'unknown');
       const h = history.get(pos);
       const gap = h && all.n ? ((h.sum / h.n - all.sum / all.n) * h.n) / (h.n + POSITION_PRIOR) : 0;
-      out.set(id, stepOvr(s, mr.rating - POSITION_FAIRNESS * gap, l.games, target, dayMost));
+      out.set(id, stepOvr(s, mr.rating - POSITION_FAIRNESS * gap, l.games, target, dayMost, mr.parts.votes));
     }
     // Learn from today only after rating everyone, so the order players are listed in doesn't matter
     for (const [id, mr] of ratings) {
