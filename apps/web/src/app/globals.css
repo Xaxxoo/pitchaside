@@ -277,7 +277,11 @@
 html[data-typing] .hide-while-typing {
   transform: translateY(calc(100% + 2rem));
   opacity: 0;
-  pointer-events: none;
+}
+/* Its tabs too (they turn pointer events back on for themselves), so a tap reaches the page behind. */
+html[data-typing] .hide-while-typing,
+html[data-typing] .hide-while-typing * {
+  pointer-events: none !important;
 }
 
 /* Phones zoom the page into any box with text under 16px, and stay zoomed after typing. */
