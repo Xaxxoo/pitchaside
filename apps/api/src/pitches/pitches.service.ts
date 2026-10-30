@@ -262,17 +262,21 @@ export class PitchesService {
 
   async myBookings(userId: string) {
     await this.expireStale({ bookedById: userId });
-    return this.bookingRepo.find({
+    const bookings = await this.bookingRepo.find({
       where: { bookedById: userId },
       relations: ['pitch'],
       order: { date: 'DESC', startTime: 'ASC' },
     });
+    // The booker sees the pitch as anyone with its link does: never the owner's own bank details.
+    return bookings.map((b) => ({ ...b, pitch: this.sanitizePitch(b.pitch) }));
   }
 
   async cancelBookingOrganiser(bookingId: string, userId: string) {
     await this.expireStale({ bookedById: userId });
     const booking = await this.bookingRepo.findOne({ where: { id: bookingId, bookedById: userId } });
     if (!booking) throw new NotFoundException('Booking not found');
+    // Cancelling here doesn't move any money, so a paid booking goes through the owner.
+    if (booking.paymentStatus === 'paid') throw new BadRequestException('This one is paid. Ask the owner to cancel it, so they can sort out the money.');
     if (booking.status === 'expired') throw new BadRequestException(EXPIRED_MESSAGE);
     if (booking.status === 'cancelled' || booking.status === 'rejected') {
       throw new BadRequestException('Booking is already cancelled or rejected');

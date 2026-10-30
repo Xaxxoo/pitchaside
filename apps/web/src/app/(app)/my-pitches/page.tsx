@@ -4,67 +4,50 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getMyPitches } from '@/lib/pitch';
 import type { IPitch } from '@pitchaside/shared';
+import { PageHeader } from '@/components/brand';
+import { btnPrimary } from '@/components/buttons';
+import { BallLoader } from '@/components/skeleton';
+import { EmptyState } from '@/components/empty-state';
+import { naira } from '@/components/pitch/pitch-facts';
 
+/** The pitches you run: one card each (tap for its bookings), and a way to add another. */
 export default function PitchListPage() {
-  const [pitches, setPitches] = useState<IPitch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [pitches, setPitches] = useState<IPitch[] | null>(null);
 
   useEffect(() => {
-    getMyPitches()
-      .then(setPitches)
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    getMyPitches().then(setPitches).catch(() => setPitches([]));
   }, []);
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-extrabold text-ink">My Pitches</h1>
-        <Link
-          href="/my-pitches/new"
-          className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors"
-        >
-          Add pitch
-        </Link>
-      </div>
-
-      {loading ? (
-        <div className="text-center py-20 text-gray-400">Loading...</div>
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <PageHeader eyebrow="Pitches" title="Your pitches" subtitle={pitches?.length ? 'Tap one for its bookings and details.' : undefined} />
+      {!pitches ? (
+        <div className="flex justify-center py-20"><BallLoader /></div>
       ) : pitches.length === 0 ? (
-        <div className="text-center py-20">
-          <p className="text-gray-500 mb-4">No pitches yet. Add your first pitch to get started.</p>
-          <Link
-            href="/my-pitches/new"
-            className="px-4 py-2.5 bg-ink text-volt-300 text-sm font-bold rounded-xl hover:bg-pitch-900 transition-colors"
-          >
-            Add pitch
-          </Link>
-        </div>
+        <EmptyState icon="calendar" title="No pitch yet" description="Own or run a pitch? Add it so groups can book it from your link." actionLabel="Add a pitch" actionHref="/my-pitches/new" />
       ) : (
-        <div className="grid gap-3">
-          {pitches.map((pitch) => (
-            <Link
-              key={pitch.id}
-              href={`/my-pitches/${pitch.id}`}
-              className="flex items-center justify-between bg-white rounded-xl border border-gray-100 px-4 py-4 hover:border-gray-200 transition-colors"
-            >
-              <div>
-                <h2 className="font-bold text-ink">{pitch.name}</h2>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {[pitch.city, pitch.state].filter(Boolean).join(', ') || 'No location set'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-sm font-bold text-ink">
-                  {pitch.currency} {Number(pitch.defaultPrice).toLocaleString()}
-                </p>
-                <span className={`text-xs font-bold ${pitch.status === 'active' ? 'text-green-600' : 'text-gray-400'}`}>
-                  {pitch.status}
-                </span>
-              </div>
-            </Link>
-          ))}
-        </div>
+        <>
+          <ul className="space-y-2">
+            {pitches.map((p) => {
+              const hidden = p.status !== 'active';
+              return (
+                <li key={p.id}>
+                  <Link href={`/my-pitches/${p.id}`} className="press flex items-center gap-3 rounded-3xl bg-ink turf-stripes text-white shadow-card px-5 py-4">
+                    <span className="min-w-0 flex-1">
+                      <span className="block font-display text-[18px] font-extrabold leading-tight truncate">{p.name}</span>
+                      <span className="block text-[12px] text-white/70 truncate">
+                        {[p.city, p.state].filter(Boolean).join(', ') || 'Add where it is'} · {naira(p.defaultPrice)} a game
+                      </span>
+                    </span>
+                    {hidden && <span className="shrink-0 px-2 py-0.5 rounded-full bg-white/15 text-[11px] font-extrabold">Hidden</span>}
+                    <svg className="w-4 h-4 shrink-0 text-white/70" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden><path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" /></svg>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <Link href="/my-pitches/new" className={`mt-4 w-full ${btnPrimary}`}>Add another pitch</Link>
+        </>
       )}
     </div>
   );

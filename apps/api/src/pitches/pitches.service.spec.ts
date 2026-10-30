@@ -129,3 +129,23 @@ describe('pitch details', () => {
     expect(pub).toMatchObject({ aSide: 5, surface: 'astro', facilities: ['floodlights'], directions: 'Green gate', defaultPrice: 30000 });
   });
 });
+
+describe('bookings, as the booker sees them', () => {
+  const pitch = { id: 'p1', ownerId: 'o1', name: 'Arena', defaultPrice: '30000', bankAccountNumber: '0123456789', accountHolderName: 'Bayo', bankCode: '058', facilities: [], photoKeys: [] };
+  const make = (bookingRepo: any) =>
+    new PitchesService({} as any, {} as any, {} as any, bookingRepo, {} as any, {} as any, {} as any);
+  const qb = () => { const q: any = new Proxy({}, { get: (_t, k) => (k === 'execute' ? async () => ({}) : () => q) }); return q; };
+
+  it('never includes the owner’s own bank details', async () => {
+    const repo = { createQueryBuilder: qb, find: jest.fn().mockResolvedValue([{ id: 'b1', pitch }]) };
+    const [b] = await make(repo).myBookings('u1');
+    for (const k of ['ownerId', 'bankAccountNumber', 'accountHolderName', 'bankCode']) expect(b.pitch).not.toHaveProperty(k);
+    expect(b.pitch).toMatchObject({ name: 'Arena', defaultPrice: 30000 });
+  });
+
+  it('won’t cancel a paid booking from the booker’s side', async () => {
+    const repo = { createQueryBuilder: qb, findOne: jest.fn().mockResolvedValue({ id: 'b1', status: 'confirmed', paymentStatus: 'paid' }), save: jest.fn() };
+    await expect(make(repo).cancelBookingOrganiser('b1', 'u1')).rejects.toThrow('Ask the owner to cancel it');
+    expect(repo.save).not.toHaveBeenCalled();
+  });
+});

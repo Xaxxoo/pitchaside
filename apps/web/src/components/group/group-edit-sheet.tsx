@@ -44,12 +44,17 @@ export const TIMES = Array.from({ length: 37 }, (_, i) => {
   return `${String(Math.floor(mins / 60)).padStart(2, '0')}:${String(mins % 60).padStart(2, '0')}`;
 });
 
-export const label = 'block text-xs font-bold text-gray-700 mb-1.5';
+export const label = 'block text-[13px] font-bold text-ink mb-2';
+/** A text box or select: roomy (52px tall, 16px in from the edge), a firm border, rounded like the cards. */
 export const field =
-  'w-full min-h-12 px-3.5 bg-white border border-gray-200 rounded-xl text-[15px] placeholder:text-gray-400 focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600';
+  'w-full min-h-[52px] px-4 bg-white border-[1.5px] border-gray-200 rounded-2xl text-[16px] text-ink placeholder:text-gray-400 transition-colors hover:border-gray-300 focus:outline-none focus:border-pitch-600 focus:ring-4 focus:ring-volt-300/60 disabled:bg-chalk disabled:text-gray-500';
+/**
+ * A pill you pick from a short list. Picked is solid pitch green, so it never looks like the
+ * page's main button (ink or volt); not picked is white with a firm border.
+ */
 export const chip = (on: boolean) =>
-  `h-10 px-3 rounded-full border text-[13px] font-bold whitespace-nowrap transition-colors ${
-    on ? 'bg-ink border-ink text-volt-300' : 'bg-white border-gray-200 text-gray-700 hover:border-ink'
+  `min-h-11 px-4 rounded-full border-[1.5px] text-[14px] font-bold whitespace-nowrap transition-colors ${
+    on ? 'bg-pitch-700 border-pitch-700 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-pitch-600'
   }`;
 
 /** A native select with the field's padding and a chevron set in from the edge like the app's other icons. */
@@ -92,9 +97,9 @@ export function Stepper({
   more: string;
 }) {
   const btn =
-    'w-12 shrink-0 flex items-center justify-center text-ink hover:bg-chalk disabled:text-gray-300 disabled:hover:bg-transparent transition-colors';
+    'w-14 shrink-0 flex items-center justify-center text-ink hover:bg-chalk disabled:text-gray-300 disabled:hover:bg-transparent transition-colors';
   return (
-    <div className="flex h-12 rounded-xl border border-gray-200 bg-white overflow-hidden focus-within:ring-4 focus-within:ring-volt-300/70 focus-within:border-pitch-600">
+    <div className="flex h-[52px] rounded-2xl border-[1.5px] border-gray-200 bg-white overflow-hidden transition-colors hover:border-gray-300 focus-within:ring-4 focus-within:ring-volt-300/60 focus-within:border-pitch-600">
       <button type="button" aria-label={less} disabled={value - step < min} onClick={() => onChange(Math.max(min, value - step))} className={`${btn} border-r border-gray-200`}>
         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.75} stroke="currentColor" aria-hidden>
           <path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14" />
