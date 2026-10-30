@@ -1,6 +1,6 @@
 // In production, requests go through the Next.js rewrite proxy at /api
 // In development, NEXT_PUBLIC_API_URL can point directly at the backend
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 /** A receipt picture: the organiser's view of it, or (mine) the player's own. Private, sent with the login cookie. */
 export function receiptUrl(claimId: string, mine = false) {
