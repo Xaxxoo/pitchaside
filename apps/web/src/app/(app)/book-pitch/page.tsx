@@ -12,7 +12,7 @@ import type { IPitchBooking } from '@pitchaside/shared';
 const HOW = [
   { title: 'Get the link', sub: 'From the owner', icon: 'M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244' },
   { title: 'Pick times', sub: 'One or more', icon: 'M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
-  { title: 'Owner says yes', sub: 'Then you pay', icon: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
+  { title: 'Get confirmed', sub: 'Then you pay', icon: 'M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z' },
 ];
 
 /** Bookings still to come, and how many are waiting on the owner, for the row under the card. */
