@@ -5,6 +5,7 @@ import { Logo } from '@/components/brand';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth';
+import { nextPath, useCarryRedirect } from '@/lib/after-sign-in';
 import { useToast } from '@/components/toast';
 import { Stepper } from '@/components/steps';
 import { PasswordField } from '@/components/password-sign-in';
@@ -14,6 +15,7 @@ import { SETUP_STEPS } from '@/lib/setup-steps';
 
 export default function SignUpPage() {
   const router = useRouter();
+  const carry = useCarryRedirect();
   const { register } = useAuth();
   const toast = useToast();
   const [form, setForm] = useState({ teamName: '', firstName: '', lastName: '', email: '', password: '' });
@@ -44,8 +46,8 @@ export default function SignUpPage() {
         email: form.email.trim(),
         password: form.password,
       });
-      // Straight on to step 2: the first group
-      router.push('/groups/new?setup=1');
+      // Back to the pitch they were booking, if that's what sent them; else on to step 2: the first group
+      router.push(nextPath() ?? '/groups/new?setup=1');
     } catch (err: any) {
       try {
         sessionStorage.removeItem('pa_after_signup');
@@ -122,7 +124,7 @@ export default function SignUpPage() {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Already have an account?{' '}
-        <Link href="/signin" className="text-pitch-600 font-semibold hover:text-pitch-700">
+        <Link href={`/signin${carry}`} className="text-pitch-600 font-semibold hover:text-pitch-700">
           Sign in
         </Link>
       </p>

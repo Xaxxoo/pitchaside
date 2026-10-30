@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { homeFor, nextPath } from '@/lib/after-sign-in';
 import { NightStadium } from '@/components/illustrations';
 import { BallLoader } from '@/components/skeleton';
 
@@ -16,10 +17,11 @@ export default function AuthLayout({
 
   useEffect(() => {
     if (!loading && user) {
-      // Just signed up: on to step 2 (the first group), not the home page
-      let next = '/dashboard';
+      // Back to the page that sent them (a pitch they were booking); else, just signed up, on to
+      // step 2 (the first group); else their own home
+      let next = nextPath() ?? homeFor(user);
       try {
-        if (sessionStorage.getItem('pa_after_signup')) next = '/groups/new?setup=1';
+        if (!nextPath() && sessionStorage.getItem('pa_after_signup')) next = '/groups/new?setup=1';
         sessionStorage.removeItem('pa_after_signup');
       } catch {
         // Storage blocked: home, which also leads to making a group
