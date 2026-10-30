@@ -127,6 +127,7 @@ export function updateGroup(
     contributionsVisibility: ContributionsVisibility;
     gameMinutes: number | null;
     timerOn: boolean;
+    statsFrom: string | null;
 
     bibs: Bibs | null;
   }>,
@@ -1261,6 +1262,8 @@ export interface LeagueTable {
   games: number;
   /** The latest match day counted. */
   lastDate?: string | null;
+  /** Match days before this date don't count (the organiser started afresh); null or missing counts all. */
+  statsFrom?: string | null;
   /** The group's join-link code: the table's share link is built on it. Null: can't be shared. */
   shareCode?: string | null;
   /** 'rating': ranked by the card's rating, points shown beside it. Missing: by points (older servers). */

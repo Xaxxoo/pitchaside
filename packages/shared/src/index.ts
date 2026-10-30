@@ -48,6 +48,8 @@ export interface IGroup {
   gameMinutes?: number | null;
   /** Whether match day shows the game timer; on unless turned off. */
   timerOn?: boolean;
+  /** Match days before this date (YYYY-MM-DD) don't count for stats or votes; null counts them all. */
+  statsFrom?: string | null;
 
   /** What each side wears and is called; null for the default colours. */
   bibs?: Bibs | null;

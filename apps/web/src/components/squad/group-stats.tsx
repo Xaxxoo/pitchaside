@@ -1,5 +1,6 @@
 'use client';
 
+import { matchDay } from '@/lib/match-words';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Avatar } from '@/components/ratings';
@@ -140,7 +141,9 @@ export function GroupStats({
       <h2 id="stats-title" className="text-base font-bold text-ink">
         Stats
       </h2>
-      <p className="mb-2.5 text-xs text-gray-500">Every player, ranked. Pick what to rank by.</p>
+      <p className="mb-2.5 text-xs text-gray-500">
+        {table?.statsFrom ? `Every player, ranked. Counting from ${matchDay(table.statsFrom)}.` : 'Every player, ranked. Pick what to rank by.'}
+      </p>
       {api.setMode && table && sort === 'rating' && (
         <div className="-mt-1 mb-2.5">
           <RatingModeRow mode={table.ratingMode ?? 'classic'} onChange={(m) => api.setMode!(m).then(load)} />

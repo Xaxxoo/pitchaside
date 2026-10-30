@@ -2240,7 +2240,9 @@ export class RatingsService {
       .where('group.organizationId = :organizationId', { organizationId })
       .andWhere('session.kind = :kind', { kind: SessionKind.GAME })
       .andWhere('session.status != :cancelled', { cancelled: SessionStatus.CANCELLED })
-      .andWhere('session.date <= CURRENT_DATE');
+      .andWhere('session.date <= CURRENT_DATE')
+      // A group can start its stats afresh from a date: earlier match days stay on record but stop counting.
+      .andWhere('(group.statsFrom IS NULL OR session.date >= group.statsFrom)');
   }
 
   /** A player's recent match days: their side, how the day went, and who won POTM. */
@@ -2349,6 +2351,8 @@ export class RatingsService {
       games: sessions.length,
       /** The latest match day the table counts. */
       lastDate: sessions.length ? String(sessions[sessions.length - 1].date).slice(0, 10) : null,
+      /** Match days before this date don't count (the organiser started the stats afresh); null counts all. */
+      statsFrom: group.statsFrom ? String(group.statsFrom).slice(0, 10) : null,
       /** The group's join link code: the table's share link is built on it. */
       shareCode: group.inviteCode ?? null,
       /** What the table is ranked by: the card's rating (points still shown, and break a tie). */
