@@ -33,6 +33,7 @@ import { pitchName, sheetName } from '../players/player-name';
 import { Payment } from '../payments/entities/payment.entity';
 import { bestSeven } from './best-seven';
 import { DEFAULT_START, LEVEL_START, PROVISIONAL_UNDER, cardRating, replaySkill, type Skill, type SkillGame } from './skill';
+import { canBePicked, emptyInvolvement, pickable, voteWorth, type Involvement } from './vote-involvement';
 import { MISS_GRACE, MOVE_NEW, MOVE_SETTLED, NEW_FOR, POSITIONS, VOTES_FLOOR, VOTES_FULL, replaySteady, voteWeight, type DayInput, type MatchRating, type Position, type Steady } from './match-rating';
 import { Organization, RATING_MODES, type RatingMode } from '../organizations/entities/organization.entity';
 
@@ -108,11 +109,6 @@ export const AWARD_MIN_VOTERS = 3;
 
 const titleOf = (key: VoteCategory) => CATEGORIES.find((c) => c.key === key)?.title ?? key;
 
-/**
- * A Player of the Match or Best on your team vote for someone who played under half their side's
- * games (a sub who came on once) counts half: the vote still counts, it just can't carry them alone.
- */
-export const VOTE_LIGHT = 0.5;
 
 /** Ratings need a few games of votes before they reach the extremes. */
 const RATING_PRIOR = 6;
@@ -480,13 +476,15 @@ export class RatingsService {
    */
   private async results(session: Session) {
     const hidden = this.window(session).open;
-    const [votes, games] = await Promise.all([
+    const [votes, games, goals, events] = await Promise.all([
       this.votesRepo.find({ where: { sessionId: session.id } }),
       this.gamesRepo.find({ where: { sessionId: session.id } }),
+      this.goalsRepo.find({ where: { sessionId: session.id } }),
+      this.eventsRepo.find({ where: { sessionId: session.id } }),
     ]);
     const squad = this.squad(session);
     const byId = new Map(squad.map((p) => [p.id, p]));
-    const inv = this.involvement(session, games);
+    const inv = this.involvement(session, games, goals, events);
     const ballots = new Set(votes.map((v) => v.voterId)).size;
     const sideOf = (id: string) => this.teamOf(session, session.payments?.find((p) => p.playerId === id)?.team ?? null);
 
@@ -497,20 +495,22 @@ export class RatingsService {
       for (const v of votes) {
         const base = v.category === category ? 1 : category === VoteCategory.VII && v.category === VoteCategory.VII_SUB ? 0.5 : 0;
         if (!base) continue;
-        // Played under half their side's games: a POTM or best-on-team vote counts half
+        // Player of the Match and Best on your team: a vote for someone who can't be picked counts nothing
         const weight = category === VoteCategory.POTM || category === VoteCategory.TEAMMATE ? base * this.voteWeight(inv, v.nomineeId) : base;
         counts.set(v.nomineeId, (counts.get(v.nomineeId) ?? 0) + 1);
         score.set(v.nomineeId, (score.get(v.nomineeId) ?? 0) + weight);
       }
-      return [...counts.entries()]
+      const all = [...counts.entries()]
         .map(([playerId, count]) => ({ player: byId.get(playerId) ?? null, playerId, count, score: score.get(playerId) ?? 0 }))
-        .filter((s) => s.player && (!team || sideOf(s.playerId) === team))
-        .sort((x, y) => y.score - x.score || y.count - x.count)
-        .map(({ score: _score, ...rest }) => {
-          // How much of the day they played, when it was under half: the results say why their votes count half
-          const x = inv.get(rest.playerId);
-          return x && this.voteWeight(inv, rest.playerId) < 1 ? { ...rest, played: x.played, of: x.of } : rest;
-        });
+        .filter((s) => s.player && (!team || sideOf(s.playerId) === team));
+      return {
+        standings: all
+          .filter((s) => s.score > 0)
+          .sort((x, y) => y.score - x.score || y.count - x.count)
+          .map(({ score: _score, ...rest }) => rest),
+        // Votes that went to someone who played too little to be picked (cast before a correction, say)
+        uncounted: all.filter((s) => s.score === 0).reduce((n, s) => n + s.count, 0),
+      };
     };
     const votersIn = (category: VoteCategory) => new Set(votes.filter((v) => v.category === category).map((v) => v.voterId)).size;
 
@@ -520,9 +520,9 @@ export class RatingsService {
       if (c.key === VoteCategory.TEAMMATE) {
         // Best on your team is a result per side: "Best on Orange: Ada".
         return TEAM_KEYS.slice(0, session.teamCount)
-          .map((team) => ({ key: c.key, title: c.title, team: team as string | null, standings: tally(c.key, team), voters: 0, inconclusive: false }))
-          .filter((t) => t.standings.length > 0)
-          .map((t) => ({ ...t, standings: hidden ? [] : t.standings }));
+          .map((team) => ({ key: c.key, title: c.title, team: team as string | null, ...tally(c.key, team), voters: 0, inconclusive: false }))
+          .filter((t) => t.standings.length > 0 || t.uncounted > 0)
+          .map((t) => ({ ...t, standings: hidden ? [] : t.standings, uncounted: hidden ? 0 : t.uncounted }));
       }
       const voters = votersIn(c.key);
       // An award with nominations from too few voters names nobody: not enough evidence.
@@ -531,10 +531,11 @@ export class RatingsService {
         // Best VII of the Day: the keeper, the outfield starters, then the sub (best-seven.ts).
         const seven = bestSeven(votes);
         const standings = hidden ? [] : seven.ids.filter((id) => byId.has(id)).map((id) => ({ player: byId.get(id)!, playerId: id, count: seven.picks.get(id) ?? 0 }));
-        return [{ key: c.key, title: c.title, team: null as string | null, standings, voters, inconclusive, keeperId: hidden ? null : seven.keeper }];
+        return [{ key: c.key, title: c.title, team: null as string | null, standings, voters, inconclusive, uncounted: 0, keeperId: hidden ? null : seven.keeper }];
       }
-      const standings = hidden || inconclusive ? [] : tally(c.key);
-      return [{ key: c.key, title: c.title, team: null as string | null, standings, voters, inconclusive }];
+      const t = tally(c.key);
+      const standings = hidden || inconclusive ? [] : t.standings;
+      return [{ key: c.key, title: c.title, team: null as string | null, standings, voters, inconclusive, uncounted: hidden || inconclusive ? 0 : t.uncounted }];
     });
     return { ballots, squadSize: squad.length, hidden, categories, bibs: bibsFor(session) };
   }
@@ -613,7 +614,12 @@ export class RatingsService {
     const w = this.window(session);
     const r = await this.results(session);
     const keepers = this.viiAsked(session) ? await this.keepersToday(session) : null;
-    const inv = this.involvement(session, await this.gamesRepo.find({ where: { sessionId: session.id } }));
+    const [games, goals, events] = await Promise.all([
+      this.gamesRepo.find({ where: { sessionId: session.id } }),
+      this.goalsRepo.find({ where: { sessionId: session.id } }),
+      this.eventsRepo.find({ where: { sessionId: session.id } }),
+    ]);
+    const inv = this.involvement(session, games, goals, events);
     return {
       groupName: session.group?.name,
       // The group link: someone who played but never signed up (added by hand) joins with it, then votes
@@ -634,10 +640,21 @@ export class RatingsService {
       // Each player's side, so the ballot can group them by team (own team first).
       squad: this.squad(session).map((p) => {
         const pay = session.payments?.find((x) => x.playerId === p.id);
-        // Where they played today (else usually), so the Best VII can list them by line
-        // Games they played of their side's, so voters can see who was on the pitch most
-        const x = inv.get(p.id);
-        return { ...p, team: this.teamOf(session, pay?.team ?? null), position: pay?.position ?? pay?.player?.position ?? null, played: x?.played ?? 0, of: x?.of ?? 0 };
+        // Where they played today (else usually), so the Best VII can list them by line.
+        // Their day on the pitch, so the ballot can say why they're listed (and leave out who can't be picked)
+        const x = inv.get(p.id) ?? emptyInvolvement();
+        return {
+          ...p,
+          team: this.teamOf(session, pay?.team ?? null),
+          position: pay?.position ?? pay?.player?.position ?? null,
+          played: x.played,
+          of: x.of,
+          inGoal: x.inGoal,
+          goals: x.goals,
+          assists: x.assists,
+          saves: x.saves,
+          canBePicked: canBePicked(x),
+        };
       }),
       teamCount: session.teamCount,
       captains: this.captainsOf(session),
@@ -722,17 +739,31 @@ export class RatingsService {
     };
     const rows: Partial<Vote>[] = [];
     const add = (category: VoteCategory, nomineeId: string) => rows.push({ sessionId: session.id, voterId: voter.id, category, nomineeId });
+    // Player of the Match and Best on your team: only someone on the pitch long enough (vote-involvement.ts)
+    const [games, goals, events] = await Promise.all([
+      this.gamesRepo.find({ where: { sessionId: session.id } }),
+      this.goalsRepo.find({ where: { sessionId: session.id } }),
+      this.eventsRepo.find({ where: { sessionId: session.id } }),
+    ]);
+    const inv = this.involvement(session, games, goals, events);
+    const onPitch = (id: string, from: string[]) => {
+      if (pickable(id, from, inv)) return id;
+      const x = inv.get(id)!;
+      const name = this.squad(session).find((p) => p.id === id)?.firstName ?? 'They';
+      throw new BadRequestException(`${name} played ${x.played} of ${x.of} games, too few to be picked. Pick someone else`);
+    };
 
     if (!picks[VoteCategory.POTM]) throw new BadRequestException('Pick a Player of the Match');
-    add(VoteCategory.POTM, check(picks[VoteCategory.POTM]));
+    add(VoteCategory.POTM, onPitch(check(picks[VoteCategory.POTM]), [...squadIds].filter((id) => id !== voter.id)));
 
-    // Best on your team: required when you were on a side with teammates.
+    // Best on your team: required when you were on a side with teammates who can be picked.
     const mates = [...squadIds].filter((id) => id !== voter.id && myTeam && teamOf(id) === myTeam);
-    if (this.hasTeams(session) && mates.length) {
+    // Asked only when someone on their team can be picked; otherwise the ballot goes on without it
+    if (this.hasTeams(session) && mates.some((id) => canBePicked(inv.get(id)))) {
       const mate = picks[VoteCategory.TEAMMATE];
       if (!mate) throw new BadRequestException('Pick the best player on your team');
       if (teamOf(check(mate)) !== myTeam) throw new BadRequestException('Pick the best player from your own team');
-      add(VoteCategory.TEAMMATE, mate as string);
+      add(VoteCategory.TEAMMATE, onPitch(mate as string, mates));
     }
 
     if (this.viiAsked(session)) {
@@ -1756,24 +1787,51 @@ export class RatingsService {
   }
 
   /**
-   * How much of the day each player played: games they played of the games their side played.
-   * A vote for someone who played under half of them counts half (see VOTE_LIGHT).
+   * How much of the day each player was on the pitch (vote-involvement.ts): games they played of
+   * their side's games, games kept for another side counted in both, and what shows them on the
+   * pitch (in goal, goals, assists, saves). Decides who can be picked for Player of the Match and
+   * Best on your team.
    */
-  private involvement(session: Session, games: SessionGame[]) {
-    const out = new Map<string, { played: number; of: number }>();
+  private involvement(session: Session, games: SessionGame[], goals: Pick<MatchGoal, 'scorerId' | 'assistId' | 'ownGoal'>[] = [], events: Pick<MatchEvent, 'playerId' | 'kind'>[] = []) {
+    const out = new Map<string, Involvement>();
+    const get = (id: string) => {
+      let x = out.get(id);
+      if (!x) out.set(id, (x = emptyInvolvement()));
+      return x;
+    };
     for (const pay of session.payments ?? []) {
       if (!pay.player || pay.attendance === 'no_show') continue;
       const side = this.teamOf(session, pay.team);
       const mine = side ? games.filter((g) => g.teamA === side || g.teamB === side) : [];
-      out.set(pay.playerId, { played: mine.filter((g) => this.played(session, pay, g)).length, of: mine.length });
+      const x = get(pay.playerId);
+      x.played = mine.filter((g) => this.played(session, pay, g)).length;
+      x.of = mine.length;
     }
+    for (const g of games) {
+      for (const [keeper, team] of [[g.keeperA, g.teamA], [g.keeperB, g.teamB]] as const) {
+        if (!keeper || !out.has(keeper)) continue;
+        const x = get(keeper);
+        x.inGoal += 1;
+        // Borrowed by the other side: a game on the pitch they couldn't have played for their own
+        const own = this.teamOf(session, session.payments?.find((p) => p.playerId === keeper)?.team ?? null);
+        if (own !== team) {
+          x.played += 1;
+          x.of += 1;
+        }
+      }
+    }
+    for (const goal of goals) {
+      if (goal.ownGoal) continue;
+      if (out.has(goal.scorerId)) get(goal.scorerId).goals += 1;
+      if (goal.assistId && out.has(goal.assistId)) get(goal.assistId).assists += 1;
+    }
+    for (const e of events) if (e.kind === 'save' && out.has(e.playerId)) get(e.playerId).saves += 1;
     return out;
   }
 
-  /** A Player of the Match or Best on your team vote for someone who played under half their side's games counts this much. */
-  private voteWeight(inv: Map<string, { played: number; of: number }>, id: string) {
-    const x = inv.get(id);
-    return x && x.of > 0 && x.played * 2 < x.of ? VOTE_LIGHT : 1;
+  /** What a Player of the Match or Best on your team vote for them is worth: 1, or 0 if they can't be picked. */
+  private voteWeight(inv: Map<string, Involvement>, id: string) {
+    return voteWorth(inv.get(id));
   }
 
   /**
@@ -1918,8 +1976,8 @@ export class RatingsService {
       return m;
     };
     const sv = this.window(session).open ? [] : votes;
-    // Votes for someone who played under half their side's games count half (VOTE_LIGHT)
-    const inv = this.involvement(session, games);
+    // Votes for someone who played too little to be picked count nothing (vote-involvement.ts)
+    const inv = this.involvement(session, games, goals, events);
     const tally = (cats: VoteCategory[]) => {
       const m = new Map<string, number>();
       for (const v of sv) if (cats.includes(v.category)) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + this.voteWeight(inv, v.nomineeId));
@@ -2034,8 +2092,8 @@ export class RatingsService {
         const squad = this.squad(session);
         const sideOf = (id: string) => this.teamOf(session, session.payments?.find((p) => p.playerId === id)?.team ?? null);
 
-        // Votes for someone who played under half their side's games count half (VOTE_LIGHT)
-        const inv = this.involvement(session, gamesBySession.get(session.id) ?? []);
+        // Votes for someone who played too little to be picked count nothing (vote-involvement.ts)
+        const inv = this.involvement(session, gamesBySession.get(session.id) ?? [], goalsBySession.get(session.id) ?? [], eventsBySession.get(session.id) ?? []);
         const countsIn = (category: VoteCategory) => {
           const m = new Map<string, number>();
           for (const v of sv) if (v.category === category) m.set(v.nomineeId, (m.get(v.nomineeId) ?? 0) + this.voteWeight(inv, v.nomineeId));
