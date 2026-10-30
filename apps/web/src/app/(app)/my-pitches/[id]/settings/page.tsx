@@ -20,6 +20,7 @@ import { SettingsSection, SettingsSections } from '@/components/group/settings-s
 import { chip, field, label, Stepper } from '@/components/group/group-edit-sheet';
 import { prettyTime } from '@/components/player-ui';
 import { pitchFacts, hoursSummary, naira, PITCH_ICONS } from '@/components/pitch/pitch-facts';
+import { PitchPhotosEditor } from '@/components/pitch/pitch-photos-editor';
 import {
   PITCH_A_SIDE, PITCH_FACILITIES, PITCH_FACILITY_LABEL, PITCH_SURFACES, PITCH_SURFACE_LABEL,
   type IPitch, type IPitchSchedule, type IPitchSlotOverride, type PitchFacility, type PitchSurface,
@@ -38,7 +39,7 @@ const OVERRIDE_KINDS = [
   { value: 'price_override', label: 'Different price' },
 ];
 
-type Section = 'where' | 'pitch' | 'hours' | 'changes' | 'bank' | 'account';
+type Section = 'photos' | 'where' | 'pitch' | 'hours' | 'changes' | 'bank' | 'account';
 interface DayHours { open: boolean; from: string; to: string; price: string }
 
 function GroupLabel({ children }: { children: React.ReactNode }) {
@@ -267,6 +268,7 @@ export default function PitchDetailsPage() {
   // The row shows the size and surface; the facilities are inside it.
   const facts = pitchFacts(pitch, false);
   const openDays = WEEK.filter((d) => week[d].open).length;
+  const photoCount = pitch.photoKeys?.length ?? 0;
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
@@ -281,6 +283,17 @@ export default function PitchDetailsPage() {
       <GroupLabel>The pitch</GroupLabel>
       <div className={card}>
         <SettingsSections inset="card">
+          <SettingsSection
+            id="s-photos"
+            icon={PITCH_ICONS.camera}
+            title="Photos"
+            summary={photoCount ? `${photoCount} photo${photoCount === 1 ? '' : 's'} · the first is the cover` : 'Show groups what it looks like'}
+            open={open === 'photos'}
+            onToggle={() => toggle('photos')}
+          >
+            {/* Each change saves straight away: no Save button here. */}
+            <PitchPhotosEditor pitchId={id} keys={pitch.photoKeys ?? []} onChange={(photoKeys) => setPitch((p) => (p ? { ...p, photoKeys } : p))} />
+          </SettingsSection>
           <SettingsSection id="s-where" icon={PITCH_ICONS.pin} title="Where it is" summary={place || 'Add the address and a map link'} open={open === 'where'} onToggle={() => toggle('where')}>
             <form onSubmit={saveWhere} noValidate className="space-y-4">
               <div>
@@ -508,7 +521,7 @@ export default function PitchDetailsPage() {
           </SettingsSection>
 
           {pitch.accountNumber && (
-            <SettingsSection id="s-account" icon={PITCH_ICONS.wallet} title="Pitch account" summary={`${pitch.virtualBankName} · ${pitch.accountNumber}`} open={open === 'account'} onToggle={() => toggle('account')}>
+            <SettingsSection id="s-account" icon={PITCH_ICONS.wallet} title="Pitch account" summary={`${pitch.accountNumber} · ${pitch.virtualBankName}`} open={open === 'account'} onToggle={() => toggle('account')}>
               <div className="rounded-2xl bg-ink text-white px-4 py-3.5">
                 <p className="text-[12px] text-white/60">Available</p>
                 <p className="font-display text-[28px] font-extrabold leading-tight">{balance ? naira(balance.available) : '…'}</p>

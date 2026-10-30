@@ -107,6 +107,10 @@ export class Pitch {
   @Column({ name: 'width_m', type: 'smallint', nullable: true })
   widthM: number | null;
 
+  /** Its photos' keys in order; the first is the cover (pitch_photos). */
+  @Column({ name: 'photo_keys', type: 'text', array: true, default: () => "'{}'" })
+  photoKeys: string[];
+
   /** What's there besides the pitch (PITCH_FACILITIES). */
   @Column({ type: 'text', array: true, default: () => "'{}'" })
   facilities: string[];
