@@ -117,7 +117,23 @@ describe('AuthService', () => {
     });
   });
 
-  describe('login', () => {
+  describe('registerPitchOwner', () => {
+    it("doesn't trust a player's password as proof of the email: the new owner confirms it first", async () => {
+      const players = (service as any).playerAccountsRepo;
+      players.findOne.mockResolvedValue({ personKey: 'ada@example.com', passwordHash: 'player-hash', firstName: 'Ada', lastName: 'Obi', phone: null });
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      usersService.findByEmail.mockResolvedValue(null);
+      orgsService.create.mockResolvedValue(mockOrg);
+      usersService.create.mockImplementation(async (u) => ({ ...mockUser, ...u, id: 'owner-1' }));
+
+      await service.registerPitchOwner({ email: 'ada@example.com', password: 'secret123', firstName: '', lastName: '' } as any);
+
+      expect(usersService.create).toHaveBeenCalledWith(expect.objectContaining({ role: UserRole.PITCH_OWNER, emailVerified: false }));
+      expect(mailService.sendEmailVerification).toHaveBeenCalledWith('ada@example.com', 'Ada', 'verify-token');
+    });
+  });
+
+    describe('login', () => {
     it('should return token on valid credentials', async () => {
       usersService.findByEmail.mockResolvedValue(mockUser);
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);

@@ -20,6 +20,7 @@ import { CreateOverrideDto } from './dto/create-override.dto';
 import { PitchPhotoDto } from './dto/pitch-photo.dto';
 import { PitchPhotosService } from './pitch-photos.service';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { canListPitches } from './pitch-access';
 
 const PIN_RATE_LIMIT = { default: { limit: 5, ttl: 60000 } };
 
@@ -33,6 +34,7 @@ export class PitchesController {
 
   @Post()
   create(@Body() dto: CreatePitchDto, @CurrentUser() user: any) {
+    canListPitches(user);
     return this.pitchesService.create(dto, user.id);
   }
 
@@ -147,6 +149,8 @@ export class PitchesController {
     @Body() body: { bankAccountNumber: string; bankCode: string; bankName: string; accountHolderName: string },
     @CurrentUser() user: any,
   ) {
+    // Where a pitch's money goes: only a confirmed admin or owner can set it
+    canListPitches(user);
     return this.pitchesService.saveBankDetails(id, user.id, body);
   }
 
@@ -163,6 +167,7 @@ export class PitchesController {
 
   @Post(':id/account')
   createAccount(@Param('id') id: string, @CurrentUser() user: any) {
+    canListPitches(user);
     return this.pitchesService.createPitchAccount(id, user.id);
   }
 

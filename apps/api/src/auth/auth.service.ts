@@ -103,7 +103,6 @@ export class AuthService {
     });
 
     let passwordHash: string;
-    let emailVerified = false;
     let firstName = dto.firstName;
     let lastName = dto.lastName;
     let phone = dto.phone?.trim() || null;
@@ -118,7 +117,8 @@ export class AuthService {
       }
       // Reuse the existing hash; no need to re-hash the same password.
       passwordHash = playerAccount.passwordHash;
-      emailVerified = true;
+      // A player's password doesn't prove they own the email (player accounts are made from a
+      // join link without a check), so the email is confirmed like any new owner's.
       // Fall back to player account details if the dto didn't provide them.
       firstName = dto.firstName || playerAccount.firstName;
       lastName = dto.lastName || playerAccount.lastName;
@@ -139,16 +139,14 @@ export class AuthService {
       role: UserRole.PITCH_OWNER,
       organizationId: organization.id,
       phone,
-      emailVerified,
+      emailVerified: false,
     });
 
-    if (!emailVerified) {
-      // Send verification email (non-blocking)
-      const verifyToken = await this.usersService.createEmailVerificationToken(user.id);
-      this.mailService.sendEmailVerification(user.email, user.firstName, verifyToken).catch((err) => {
-        console.error('[MAIL ERROR]', err?.message || err);
-      });
-    }
+    // Send verification email (non-blocking)
+    const verifyToken = await this.usersService.createEmailVerificationToken(user.id);
+    this.mailService.sendEmailVerification(user.email, user.firstName, verifyToken).catch((err) => {
+      console.error('[MAIL ERROR]', err?.message || err);
+    });
 
     const accessToken = this.jwtService.sign({ sub: user.id });
     const refreshToken = await this.usersService.createRefreshToken(user.id, null);
