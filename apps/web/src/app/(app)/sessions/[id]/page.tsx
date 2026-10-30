@@ -99,6 +99,8 @@ export default function GamePage() {
   const [members, setMembers] = useState<NonNullable<IGroupWithMembers['memberships']>>([]);
   const [billing, setBilling] = useState<GroupBilling | null>(null);
   const [adding, setAdding] = useState(false);
+  // New players made in the add sheet whose later steps failed: a retry reuses them, never a second copy
+  const madeRef = useRef(new Map<string, Awaited<ReturnType<typeof createPlayer>>>());
   // A payment by transfer being moved to another of the player's games.
   const [movingPay, setMovingPay] = useState<IPayment | null>(null);
 
@@ -496,12 +498,21 @@ export default function GamePage() {
           onClose={() => setAdding(false)}
           onAddNew={async (p) => {
             try {
-              const player = await createPlayer(p);
-              await addMember(session.groupId, { playerId: player.id });
+              // Adding is three steps: if a later one failed, trying again reuses the player made the first time
+              const key = [p.firstName, p.lastName, p.phone ?? ''].join('|').toLowerCase();
+              const made = madeRef.current.get(key);
+              const player = made ?? (await createPlayer(p));
+              madeRef.current.set(key, player);
+              await addMember(session.groupId, { playerId: player.id }).catch((err) => {
+                // Already in the group from an earlier try: carry on
+                if (!made) throw err;
+              });
               await setRsvpForPlayer(id, player.id, 'in');
+              madeRef.current.delete(key);
               await fetchSession();
               loadUnnamed();
-              toast.success(`${player.firstName} is in the group and on this game`);
+              toast.success(before ? `${player.firstName} is in the group and on this game` : `${player.firstName} is in. Pick their side in Teams.`);
+              return { playerId: player.id, name: player.firstName, fullName: `${player.firstName} ${player.lastName}`, photoKey: null };
             } catch (err) {
               toast.error(err instanceof Error ? err.message : 'That didn’t save. Try again.');
               throw err;
@@ -511,7 +522,7 @@ export default function GamePage() {
             try {
               await setRsvpForPlayer(id, m.playerId, 'in');
               await fetchSession();
-              toast.success(`${m.name.split(' ')[0]} is in`);
+              toast.success(before ? `${m.name.split(' ')[0]} is in` : `${m.name.split(' ')[0]} is in. Pick their side in Teams.`);
             } catch (err) {
               toast.error(err instanceof Error ? err.message : 'That didn’t save. Try again.');
               throw err;
