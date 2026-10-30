@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
+import { BackButton } from '@/components/back-button';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   getPitch, updatePitch, setSchedule, getSchedule, addOverride, listOverrides, removeOverride,
@@ -38,6 +38,11 @@ const OVERRIDE_KINDS = [
   { value: 'added', label: 'Extra hours' },
   { value: 'price_override', label: 'Different price' },
 ];
+
+/** A new day off: closed all day is what owners add most. */
+const NEW_CHANGE = { date: '', type: 'blocked', allDay: true, startTime: '17:00', endTime: '22:00', price: '', reason: '' };
+/** How far ahead a change can be added from the strip: about two months. */
+const CHANGE_DAYS = 60;
 
 type Section = 'photos' | 'where' | 'pitch' | 'hours' | 'changes' | 'bank' | 'account';
 interface DayHours { open: boolean; from: string; to: string; price: string }
@@ -78,10 +83,13 @@ export default function PitchDetailsPage() {
   const [gameMinutes, setGameMinutes] = useState(60);
   const [week, setWeek] = useState<Record<number, DayHours>>(toWeek([]));
   const [dayPrices, setDayPrices] = useState(false);
+  // Most pitches keep the same hours every day they open: one pair of times, unless they say otherwise.
+  const [hours, setHours] = useState({ from: '17:00', to: '22:00' });
+  const [sameHours, setSameHours] = useState(true);
   const [splitDays, setSplitDays] = useState<string[]>([]);
   // Days off and changes
   const [overrides, setOverrides] = useState<IPitchSlotOverride[]>([]);
-  const [ovr, setOvr] = useState({ date: '', type: 'blocked', startTime: '00:00', endTime: '23:30', price: '', reason: '' });
+  const [ovr, setOvr] = useState(NEW_CHANGE);
   // Getting paid
   const [banks, setBanks] = useState<NigerianBank[]>([]);
   const [bank, setBank] = useState({ bankAccountNumber: '', bankCode: '', bankName: '', accountHolderName: '' });
@@ -108,7 +116,11 @@ export default function PitchDetailsPage() {
       });
       setPrice(Number(p.defaultPrice));
       setGameMinutes(p.slotDurationMinutes);
-      setWeek(toWeek(s));
+      const w = toWeek(s);
+      const openNow = WEEK.filter((d) => w[d].open);
+      setWeek(w);
+      if (openNow.length) setHours({ from: w[openNow[0]].from, to: w[openNow[0]].to });
+      setSameHours(openNow.every((d) => w[d].from === w[openNow[0]].from && w[d].to === w[openNow[0]].to));
       setDayPrices(s.some((r) => r.price != null));
       setSplitDays(WEEK.filter((d) => s.filter((r) => r.dayOfWeek === d).length > 1).map((d) => DAY_NAME[d]));
       setOverrides(o);
@@ -178,16 +190,19 @@ export default function PitchDetailsPage() {
     if (price < 1) return toast.error('Set a price for a game.');
     if (!gameLengthOk(gameMinutes)) return toast.error('A game lasts between 15 minutes and 4 hours.');
     const days = WEEK.filter((d) => week[d].open);
-    const short = days.find((d) => week[d].from >= week[d].to);
+    const at = (d: number) => (sameHours ? hours : week[d]);
+    if (sameHours && days.length && hours.from >= hours.to) return toast.error('Closing time is before opening time.');
+    if (sameHours && days.length && minutes(hours.to) - minutes(hours.from) < gameMinutes) return toast.error(`You’re open for less than one game (${gameLength(gameMinutes)}).`);
+    const short = days.find((d) => at(d).from >= at(d).to);
     if (short != null) return toast.error(`${DAY_NAME[short]} closes before it opens.`);
-    const tooShort = days.find((d) => minutes(week[d].to) - minutes(week[d].from) < gameMinutes);
+    const tooShort = days.find((d) => minutes(at(d).to) - minutes(at(d).from) < gameMinutes);
     if (tooShort != null) return toast.error(`${DAY_NAME[tooShort]} is open for less than one game (${gameLength(gameMinutes)}).`);
     run('hours', async () => {
       await updatePitch(id, { defaultPrice: price, slotDurationMinutes: gameMinutes });
       await setSchedule(id, days.map((d) => ({
         dayOfWeek: d,
-        openTime: week[d].from,
-        closeTime: week[d].to,
+        openTime: at(d).from,
+        closeTime: at(d).to,
         price: dayPrices && week[d].price ? Number(week[d].price) : undefined,
       })));
     }, 'Saved prices and hours');
@@ -196,16 +211,17 @@ export default function PitchDetailsPage() {
   function addChange(e: React.FormEvent) {
     e.preventDefault();
     if (!ovr.date) return toast.error('Pick the day.');
-    if (ovr.startTime >= ovr.endTime) return toast.error('The end time is before the start.');
+    const allDay = ovr.type === 'blocked' && ovr.allDay;
+    if (!allDay && ovr.startTime >= ovr.endTime) return toast.error('The end time is before the start.');
     if (ovr.type === 'price_override' && !ovr.price) return toast.error('Set the price for those hours.');
     run('changes', () => addOverride(id, {
       date: ovr.date,
       type: ovr.type,
-      startTime: ovr.startTime,
-      endTime: ovr.endTime,
+      startTime: allDay ? '00:00' : ovr.startTime,
+      endTime: allDay ? '23:59' : ovr.endTime,
       price: ovr.type !== 'blocked' && ovr.price ? Number(ovr.price) : undefined,
       reason: ovr.reason.trim() || undefined,
-    }).then(() => setOvr({ date: '', type: 'blocked', startTime: '00:00', endTime: '23:30', price: '', reason: '' })), 'Added');
+    }).then(() => setOvr(NEW_CHANGE)), 'Added');
   }
 
   async function removeChange(o: IPitchSlotOverride) {
@@ -273,12 +289,7 @@ export default function PitchDetailsPage() {
 
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
-      <Link href={`/my-pitches/${id}`} className="press inline-flex items-center gap-1 min-h-11 -ml-1 px-1 text-sm font-bold text-pitch-700">
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-        </svg>
-        Bookings
-      </Link>
+      <BackButton label="Bookings" href={`/my-pitches/${id}`} />
       <PageHeader eyebrow="Pitch details" title={pitch.name} subtitle="What groups see when you share your link." />
 
       <GroupLabel>The pitch</GroupLabel>
@@ -390,45 +401,99 @@ export default function PitchDetailsPage() {
               <GameLengthPicker value={gameMinutes} onChange={setGameMinutes} />
 
               <fieldset>
-                <legend className={label}>Open</legend>
-                <ul className="divide-y divide-gray-200 border-y border-gray-200">
-                  {WEEK.map((d) => {
-                    const h = week[d];
-                    const set = (patch: Partial<DayHours>) => setWeek((w) => ({ ...w, [d]: { ...w[d], ...patch } }));
-                    return (
-                      <li key={d} className="py-2.5">
-                        <div className="flex items-center gap-2">
-                          <button type="button" aria-pressed={h.open} onClick={() => set({ open: !h.open })} className={`${chip(h.open)} w-[4.25rem] shrink-0 px-0`}>
-                            {DAY_NAME[d].slice(0, 3)}
-                          </button>
-                          {h.open ? (
-                            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                              <TimeSelect id={`from-${d}`} label={`${DAY_NAME[d]} opens`} value={h.from} onChange={(from) => set({ from })} />
-                              <span className="text-[12px] text-gray-500" aria-hidden>to</span>
-                              <TimeSelect id={`to-${d}`} label={`${DAY_NAME[d]} closes`} value={h.to} onChange={(to) => set({ to })} />
-                            </div>
-                          ) : (
-                            <span className="text-[13px] text-gray-500">Closed</span>
-                          )}
-                        </div>
-                        {h.open && dayPrices && (
-                          <div className="mt-2 ml-[4.75rem] flex items-center gap-2">
-                            <label htmlFor={`price-${d}`} className="text-[12px] text-gray-500 whitespace-nowrap">Price</label>
-                            <input id={`price-${d}`} inputMode="numeric" value={h.price} onChange={(e) => set({ price: e.target.value.replace(/\D/g, '').slice(0, 7) })} placeholder={String(price)} className={`${field} min-h-10 text-[14px]`} />
-                          </div>
-                        )}
-                      </li>
-                    );
-                  })}
-                </ul>
-                {splitDays.length > 0 && (
-                  <p className="text-[12px] text-kit-600 mt-2">{splitDays.join(', ')} had more than one opening time. Saving keeps the times shown.</p>
-                )}
-                <label className="mt-3 flex items-center gap-2.5 min-h-11 text-[14px] text-ink cursor-pointer">
-                  <input type="checkbox" checked={dayPrices} onChange={(e) => setDayPrices(e.target.checked)} className="w-5 h-5 accent-pitch-700" />
-                  Some days cost more (or less)
-                </label>
+                <legend className={label}>Which days are you open?</legend>
+                <div className="grid grid-cols-7 gap-1">
+                  {WEEK.map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      aria-pressed={week[d].open}
+                      aria-label={DAY_NAME[d]}
+                      onClick={() => setWeek((w) => ({ ...w, [d]: { ...w[d], open: !w[d].open } }))}
+                      className={`press min-h-11 rounded-xl border-[1.5px] text-[13px] font-bold transition-colors ${
+                        week[d].open ? 'bg-pitch-700 border-pitch-700 text-white' : 'bg-white border-gray-200 text-gray-700 hover:border-pitch-600'
+                      }`}
+                    >
+                      {DAY_NAME[d].slice(0, 2)}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[12px] text-gray-500 mt-2">{openDays ? `Open ${hoursSummary(openDays)}` : 'Closed every day. Tap the days groups can book.'}</p>
               </fieldset>
+
+              {openDays > 0 && !sameHours ? (
+                <fieldset>
+                  <legend className={label}>Hours each day</legend>
+                  <ul className="divide-y divide-gray-200 border-y border-gray-200">
+                    {WEEK.filter((d) => week[d].open).map((d) => {
+                      const h = week[d];
+                      const set = (patch: Partial<DayHours>) => setWeek((w) => ({ ...w, [d]: { ...w[d], ...patch } }));
+                      return (
+                        <li key={d} className="flex items-center gap-2 py-2.5">
+                          <span className="w-9 shrink-0 text-[14px] font-bold text-ink">{DAY_NAME[d].slice(0, 3)}</span>
+                          <TimeSelect id={`from-${d}`} label={`${DAY_NAME[d]} opens`} value={h.from} onChange={(from) => set({ from })} />
+                          <span className="text-[13px] text-gray-500" aria-hidden>to</span>
+                          <TimeSelect id={`to-${d}`} label={`${DAY_NAME[d]} closes`} value={h.to} onChange={(to) => set({ to })} />
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </fieldset>
+              ) : openDays > 0 && (
+                <div>
+                  <p className={label}>Open from</p>
+                  <div className="flex items-center gap-2">
+                    <TimeSelect id="hours-from" label="Opens" value={hours.from} onChange={(from) => setHours({ ...hours, from })} />
+                    <span className="text-[13px] text-gray-500" aria-hidden>to</span>
+                    <TimeSelect id="hours-to" label="Closes" value={hours.to} onChange={(to) => setHours({ ...hours, to })} />
+                  </div>
+                </div>
+              )}
+
+              {openDays > 0 && dayPrices && (
+                <fieldset>
+                  <legend className={label}>Price each day</legend>
+                  <ul className="divide-y divide-gray-200 border-y border-gray-200">
+                    {WEEK.filter((d) => week[d].open).map((d) => (
+                      <li key={d} className="flex items-center gap-2 py-2">
+                        <label htmlFor={`price-${d}`} className="w-9 shrink-0 text-[14px] font-bold text-ink">{DAY_NAME[d].slice(0, 3)}</label>
+                        <div className="relative flex-1 min-w-0">
+                          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] text-gray-500" aria-hidden>₦</span>
+                          <input
+                            id={`price-${d}`}
+                            inputMode="numeric"
+                            aria-label={`${DAY_NAME[d]} price a game`}
+                            value={week[d].price}
+                            onChange={(e) => setWeek((w) => ({ ...w, [d]: { ...w[d], price: e.target.value.replace(/\D/g, '').slice(0, 7) } }))}
+                            placeholder={price.toLocaleString('en-NG')}
+                            className={`${field} min-h-11 pl-8`}
+                          />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[12px] text-gray-500 mt-2">Leave a day blank to charge {naira(price)}.</p>
+                </fieldset>
+              )}
+
+              {splitDays.length > 0 && (
+                <p className="text-[12px] text-kit-600">{splitDays.join(', ')} had more than one opening time. Saving keeps the times shown.</p>
+              )}
+              {openDays > 0 && (
+                <div className="-my-1">
+                  <Tick
+                    checked={!sameHours}
+                    onChange={(on) => {
+                      // Start every day from the shared times, so nothing jumps.
+                      if (on) setWeek((w) => Object.fromEntries(WEEK.map((d) => [d, { ...w[d], ...hours }])) as Record<number, DayHours>);
+                      setSameHours(!on);
+                    }}
+                  >
+                    Different hours on some days
+                  </Tick>
+                  <Tick checked={dayPrices} onChange={setDayPrices}>Some days cost more (or less)</Tick>
+                </div>
+              )}
               <button type="submit" disabled={saving === 'hours'} className={`w-full ${btnPrimary}`}>{saving === 'hours' ? 'Saving…' : 'Save'}</button>
             </form>
           </SettingsSection>
@@ -440,7 +505,7 @@ export default function PitchDetailsPage() {
                   <li key={o.id} className="flex items-center gap-3 py-2.5">
                     <span className="min-w-0 flex-1">
                       <span className="block text-[14px] font-bold text-ink truncate">{changeTitle(o)}</span>
-                      <span className="block text-[12px] text-gray-500 truncate">{[prettyDate(o.date), `${prettyTime(o.startTime)}–${prettyTime(o.endTime)}`, o.reason].filter(Boolean).join(' · ')}</span>
+                      <span className="block text-[12px] text-gray-500 truncate">{[prettyDate(o.date), allDayChange(o) ? 'All day' : `${prettyTime(o.startTime)}–${prettyTime(o.endTime)}`, o.reason].filter(Boolean).join(' · ')}</span>
                     </span>
                     <button type="button" onClick={() => removeChange(o)} className="press min-h-11 px-2 text-[13px] font-bold text-gray-600 hover:text-ink" aria-label={`Remove ${changeTitle(o)} on ${prettyDate(o.date)}`}>
                       Remove
@@ -449,34 +514,53 @@ export default function PitchDetailsPage() {
                 ))}
               </ul>
             )}
-            <form onSubmit={addChange} noValidate className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {OVERRIDE_KINDS.map((k) => (
-                  <button key={k.value} type="button" aria-pressed={ovr.type === k.value} onClick={() => setOvr({ ...ovr, type: k.value })} className={chip(ovr.type === k.value)}>
-                    {k.label}
-                  </button>
-                ))}
-              </div>
-              <div>
-                <label htmlFor="ovr-date" className={label}>Day</label>
-                <input id="ovr-date" type="date" min={localYmd(new Date())} value={ovr.date} onChange={(e) => setOvr({ ...ovr, date: e.target.value })} className={field} />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <TimeSelect id="ovr-from" label="From" value={ovr.startTime} onChange={(startTime) => setOvr({ ...ovr, startTime })} />
-                <span className="text-[12px] text-gray-500" aria-hidden>to</span>
-                <TimeSelect id="ovr-to" label="To" value={ovr.endTime} onChange={(endTime) => setOvr({ ...ovr, endTime })} />
-              </div>
+            <form onSubmit={addChange} noValidate className={`space-y-5 ${overrides.length ? 'mt-5' : ''}`}>
+              <fieldset>
+                <legend className={label}>What’s changing?</legend>
+                <div className="flex flex-wrap gap-2">
+                  {OVERRIDE_KINDS.map((k) => (
+                    <button key={k.value} type="button" aria-pressed={ovr.type === k.value} onClick={() => setOvr({ ...ovr, type: k.value })} className={chip(ovr.type === k.value)}>
+                      {k.label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+              <DayStrip value={ovr.date} onChange={(date) => setOvr({ ...ovr, date })} marked={new Set(overrides.map((o) => o.date))} />
+              {ovr.type === 'blocked' && (
+                <fieldset>
+                  <legend className={label}>For how long?</legend>
+                  <div className="flex flex-wrap gap-2">
+                    <button type="button" aria-pressed={ovr.allDay} onClick={() => setOvr({ ...ovr, allDay: true })} className={chip(ovr.allDay)}>All day</button>
+                    <button type="button" aria-pressed={!ovr.allDay} onClick={() => setOvr({ ...ovr, allDay: false })} className={chip(!ovr.allDay)}>Some hours</button>
+                  </div>
+                </fieldset>
+              )}
+              {(ovr.type !== 'blocked' || !ovr.allDay) && (
+                <div>
+                  <p className={label}>{ovr.type === 'blocked' ? 'Closed from' : ovr.type === 'added' ? 'Open from' : 'These hours'}</p>
+                  <div className="flex items-center gap-2">
+                    <TimeSelect id="ovr-from" label="From" value={ovr.startTime} onChange={(startTime) => setOvr({ ...ovr, startTime })} />
+                    <span className="text-[13px] text-gray-500" aria-hidden>to</span>
+                    <TimeSelect id="ovr-to" label="To" value={ovr.endTime} onChange={(endTime) => setOvr({ ...ovr, endTime })} />
+                  </div>
+                </div>
+              )}
               {ovr.type !== 'blocked' && (
                 <div>
                   <label htmlFor="ovr-price" className={label}>Price a game{ovr.type === 'added' && <span className="font-medium text-gray-500"> (optional)</span>}</label>
-                  <input id="ovr-price" inputMode="numeric" value={ovr.price} onChange={(e) => setOvr({ ...ovr, price: e.target.value.replace(/\D/g, '').slice(0, 7) })} placeholder={String(pitch.defaultPrice)} className={field} />
+                  <div className="relative">
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[16px] text-gray-500" aria-hidden>₦</span>
+                    <input id="ovr-price" inputMode="numeric" value={ovr.price} onChange={(e) => setOvr({ ...ovr, price: e.target.value.replace(/\D/g, '').slice(0, 7) })} placeholder={Number(pitch.defaultPrice).toLocaleString('en-NG')} className={`${field} pl-8`} />
+                  </div>
                 </div>
               )}
               <div>
                 <label htmlFor="ovr-reason" className={label}>Why <span className="font-medium text-gray-500">(optional)</span></label>
                 <input id="ovr-reason" maxLength={80} value={ovr.reason} onChange={(e) => setOvr({ ...ovr, reason: e.target.value })} placeholder="e.g. Tournament" className={field} />
               </div>
-              <button type="submit" disabled={saving === 'changes'} className={`w-full ${btnPrimary}`}>{saving === 'changes' ? 'Adding…' : 'Add'}</button>
+              <button type="submit" disabled={saving === 'changes'} className={`w-full ${btnPrimary}`}>
+                {saving === 'changes' ? 'Adding…' : ovr.date ? `Add for ${prettyDate(ovr.date)}` : 'Add'}
+              </button>
             </form>
           </SettingsSection>
         </SettingsSections>
@@ -570,25 +654,82 @@ function prettyDate(ymd: string) {
   return new Date(`${ymd}T12:00:00`).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+/** Closed from midnight to the end of the day, however it was saved. */
+function allDayChange(o: IPitchSlotOverride) {
+  return o.startTime.slice(0, 5) === '00:00' && o.endTime.slice(0, 5) >= '23:30';
+}
+
 function changeTitle(o: IPitchSlotOverride) {
   if (o.type === 'blocked') return 'Closed';
   if (o.type === 'added') return o.price != null ? `Extra hours · ${naira(o.price)}` : 'Extra hours';
   return `Price ${naira(o.price ?? 0)}`;
 }
 
+/** A time on the half hour, styled like the other boxes, with a chevron instead of the phone's own arrows. */
 function TimeSelect({ id, label: name, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
   return (
-    <select
-      id={id}
-      aria-label={name}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className="min-w-0 flex-1 min-h-11 px-2 bg-white border border-gray-200 rounded-xl text-[14px] text-ink text-center focus:outline-none focus:ring-4 focus:ring-volt-300/70 focus:border-pitch-600"
-    >
-      {(TIMES.includes(value) ? TIMES : [...TIMES, value].sort()).map((t) => (
-        <option key={t} value={t}>{prettyTime(t)}</option>
-      ))}
-    </select>
+    <div className="relative min-w-0 flex-1">
+      <select id={id} aria-label={name} value={value} onChange={(e) => onChange(e.target.value)} className={`${field} appearance-none pl-3.5 pr-9 font-bold tabular-nums`}>
+        {(TIMES.includes(value) ? TIMES : [...TIMES, value].sort()).map((t) => (
+          <option key={t} value={t}>{prettyTime(t)}</option>
+        ))}
+      </select>
+      <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" aria-hidden>
+        <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+      </svg>
+    </div>
+  );
+}
+
+/** A tick box with a 44px row to tap. */
+function Tick({ checked, onChange, children }: { checked: boolean; onChange: (on: boolean) => void; children: React.ReactNode }) {
+  return (
+    <label className="flex items-center gap-2.5 min-h-11 text-[14px] text-ink cursor-pointer">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="w-5 h-5 shrink-0 accent-pitch-700" />
+      {children}
+    </label>
+  );
+}
+
+/**
+ * The next two months as day tiles to tap, in place of the phone's date box. The month sits on
+ * the first of each month (and the first tile); a dot marks a day that already has a change.
+ */
+function DayStrip({ value, onChange, marked }: { value: string; onChange: (ymd: string) => void; marked: Set<string> }) {
+  const [today] = useState(() => new Date());
+  const days = Array.from({ length: CHANGE_DAYS }, (_, i) => {
+    const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() + i, 12);
+    return { ymd: localYmd(d), d, i };
+  });
+  return (
+    <fieldset>
+      <legend className={label}>Which day?</legend>
+      <div className="-mx-5 px-5 flex gap-2 overflow-x-auto snap-x scroll-px-5 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {days.map(({ ymd, d, i }) => {
+          const on = ymd === value;
+          const month = i === 0 || d.getDate() === 1;
+          return (
+            <button
+              key={ymd}
+              type="button"
+              aria-pressed={on}
+              aria-label={`${d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}${i === 0 ? ', today' : ''}${marked.has(ymd) ? ', already has a change' : ''}`}
+              onClick={() => onChange(ymd)}
+              className={`press relative snap-start shrink-0 w-[56px] h-[76px] rounded-2xl border-[1.5px] flex flex-col items-center justify-center transition-colors ${
+                on ? 'bg-ink border-ink text-white' : 'bg-white border-gray-200 text-ink hover:border-ink'
+              }`}
+            >
+              <span className={`text-[11px] font-bold uppercase tracking-wide ${on ? 'text-volt-300' : 'text-gray-500'}`}>
+                {i === 0 ? 'Today' : d.toLocaleDateString('en-GB', { weekday: 'short' })}
+              </span>
+              <span className="font-display text-[22px] font-extrabold leading-none mt-1 tabular-nums">{d.getDate()}</span>
+              <span className={`text-[11px] mt-0.5 h-3.5 ${on ? 'text-white/70' : 'text-gray-500'}`}>{month ? d.toLocaleDateString('en-GB', { month: 'short' }) : ''}</span>
+              {marked.has(ymd) && <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full ${on ? 'bg-volt-300' : 'bg-kit-500'}`} aria-hidden />}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
   );
 }
 

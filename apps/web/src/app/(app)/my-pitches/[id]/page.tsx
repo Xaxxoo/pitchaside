@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
+import { BackButton } from '@/components/back-button';
 import { getPitch, getSchedule, listBookings, listOverrides, confirmBooking, rejectBooking, cancelBookingOwner, markBookingPaid, listPitchTransfers, assignPitchTransfer } from '@/lib/pitch';
 import { useToast } from '@/components/toast';
 import type { IPitch, IPitchSchedule, IPitchBooking, IPitchSlotOverride } from '@pitchaside/shared';
@@ -74,7 +75,8 @@ export default function PitchDetailPage() {
     : `/p/${pitch.shareCode}`;
 
   return (
-    <div>
+    <div className="p-4 sm:p-6 max-w-2xl mx-auto">
+      <BackButton label="Your pitches" href="/my-pitches" />
       <div className="flex items-start justify-between mb-6">
         <div>
           <h1 className="text-2xl font-extrabold text-ink">{pitch.name}</h1>
