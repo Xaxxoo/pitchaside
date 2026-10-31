@@ -13,6 +13,7 @@ import { prettyTime } from '@/components/player-ui';
 import { field, label } from '@/components/group/group-edit-sheet';
 import { naira, PITCH_ICONS } from '@/components/pitch/pitch-facts';
 import { createBooking, getPublicAvailability, localYmd } from '@/lib/pitch';
+import { isPlayerSignedIn } from '@/lib/player';
 
 /** The API gives at most 14 days at a time. */
 const WINDOW = 14;
@@ -50,6 +51,11 @@ function usualPrice(slots: IPitchSlot[]) {
  */
 export function PitchBooking({ code, pitch, inApp = false }: { code: string; pitch: IPublicPitch; inApp?: boolean }) {
   const { user, loading: authLoading } = useAuth();
+  // Signed in on the player side only: booking is for organisers, so they're told so, not asked to sign in
+  const [player, setPlayer] = useState(false);
+  useEffect(() => {
+    if (!authLoading && !user) isPlayerSignedIn().then(setPlayer).catch(() => setPlayer(false));
+  }, [authLoading, user]);
   const toast = useToast();
   const sheetTitle = useId();
   const dayLabel = useId();
@@ -350,6 +356,13 @@ export function PitchBooking({ code, pitch, inApp = false }: { code: string; pit
                 <input id="bk-notes" maxLength={200} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} placeholder="e.g. Saturday Ballers, 12 players" className={field} />
               </div>
             </form>
+          ) : player ? (
+            <div className="mt-6 pt-5 border-t border-gray-200 space-y-2">
+              <h3 className="text-[15px] font-bold text-ink">Organisers book pitches</h3>
+              <p className="text-[13px] text-gray-600 -mt-1 pb-1">Send this to your organiser, or start your own group.</p>
+              <Link href="/me/start-group" className={`w-full ${btnPrimary}`}>Start a group</Link>
+              <Link href={`/signin?redirect=${encodeURIComponent(`/p/${code}`)}`} className={`w-full ${btnSecondary}`}>I’m an organiser: sign in</Link>
+            </div>
           ) : (
             <div className="mt-6 pt-5 border-t border-gray-200 space-y-2">
               <h3 className="text-[15px] font-bold text-ink">Sign in to send it</h3>
