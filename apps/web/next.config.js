@@ -26,6 +26,10 @@ const nextConfig = {
   // guess the root from whichever lockfile they find first.
   outputFileTracingRoot: path.join(__dirname, '../..'),
   transpilePackages: ['@pitchaside/shared'],
+  async redirects() {
+    // Listing a pitch is part of the one sign-up now: old links open it with "List a pitch" picked
+    return [{ source: '/pitch-owner/signup', destination: '/signup?as=pitch', permanent: false }];
+  },
   async headers() {
     return [
       {

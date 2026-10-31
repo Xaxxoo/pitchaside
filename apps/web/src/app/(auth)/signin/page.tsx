@@ -133,7 +133,7 @@ export default function SignInPage() {
       <SignInSwitch current="organiser" email={form.email} />
       <div className="text-center mt-6 mb-6">
         <h1 className="text-[28px] leading-tight font-extrabold text-ink">Welcome back</h1>
-        <p className="mt-1 text-sm text-gray-500">Sign in to run your groups, games and money</p>
+        <p className="mt-1 text-sm text-gray-500">Run your games or your pitch</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-4">
@@ -212,8 +212,8 @@ export default function SignInPage() {
       </p>
       <p className="mt-2 text-center text-sm text-gray-500">
         Own a pitch?{' '}
-        <Link href="/pitch-owner/signup" className="text-pitch-600 font-semibold hover:text-pitch-700">
-          Register as pitch owner
+        <Link href="/signup?as=pitch" className="text-pitch-600 font-semibold hover:text-pitch-700">
+          List it
         </Link>
       </p>
     </div>
