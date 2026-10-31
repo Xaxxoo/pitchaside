@@ -389,6 +389,8 @@ export function claimPayment(groupId: string, amount: number, receipt?: string) 
 export interface PlayerProfile {
   player: PlayerHome['player'];
   organiser: Organiser;
+  /** They list a pitch with this email: starting a group uses that account and its password. */
+  listsPitches?: boolean;
   ratings: PlayerRatings;
   /** Which of their player records the card's number is for; null before they've played. */
   ratingsPlayerId: string | null;
