@@ -1211,7 +1211,10 @@ export interface PlayerRatings {
   skill: number;
   /** Still settling: fewer than three scored games. */
   provisional: boolean;
+  /** The card's number; null until they've played 3 match days (ratedIn says how many more). */
   ovr: number | null;
+  /** Match days still to play before the card shows a number; 0 or missing once it does. */
+  ratedIn?: number;
   attributes: Record<Attribute, number | null>;
   goals: number;
   assists: number;

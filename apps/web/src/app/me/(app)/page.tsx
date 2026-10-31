@@ -6,7 +6,7 @@ import { levelOf } from '@/lib/rating-level';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { FaceStack } from '@/components/people-row';
-import { Avatar, VoteClock } from '@/components/ratings';
+import { Avatar, VoteClock, newLine } from '@/components/ratings';
 import { DidYouKnow } from '@/components/onboarding/did-you-know';
 import { GameCard, GameRow, LoadError, Section, niceDate } from '@/components/player-ui';
 import { CountUpNaira, LiveDot } from '@/components/motion';
@@ -224,7 +224,7 @@ export default function PlayerHomePage() {
       <div className="mt-3 grid grid-cols-2 gap-3">
         <Link
           href="/me/profile"
-          aria-label={`Your card: rating ${r.ovr ?? 'not set yet'}. Open Me`}
+          aria-label={`Your card: ${r.ovr != null ? `rating ${r.ovr}` : newLine(r.ratedIn)}. Open Me`}
           className="press relative overflow-hidden flex flex-col justify-between min-h-[120px] rounded-3xl bg-ink text-white p-4 shadow-card"
         >
           <span className="absolute inset-0 turf-stripes-soft" aria-hidden />
@@ -235,11 +235,19 @@ export default function PlayerHomePage() {
           </span>
           <span className="relative">
             <span className="flex items-baseline gap-1.5">
-              <span className="font-display text-[34px] leading-none font-extrabold text-volt-300 tabular-nums">{r.ovr ?? '–'}</span>
-              <span className="text-[11px] font-extrabold tracking-[0.12em] text-white/60">OVR</span>
+              {r.ovr != null ? (
+                <>
+                  <span className="font-display text-[34px] leading-none font-extrabold text-volt-300 tabular-nums">{r.ovr}</span>
+                  <span className="text-[11px] font-extrabold tracking-[0.12em] text-white/60">OVR</span>
+                </>
+              ) : (
+                <span className="font-display text-[34px] leading-none font-extrabold text-volt-300">New</span>
+              )}
             </span>
             <span className="mt-1 block text-[12px] text-white/70 truncate">
-              {r.games > 0 ? `W${r.record.w} D${r.record.d} L${r.record.l}${r.provisional ? ' · settling' : ''}` : 'Play to build it'}
+              {r.ovr == null
+                ? newLine(r.ratedIn).replace('New · ', '')
+                : `W${r.record.w} D${r.record.d} L${r.record.l}`}
             </span>
           </span>
         </Link>
