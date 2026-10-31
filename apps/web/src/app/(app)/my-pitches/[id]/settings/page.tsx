@@ -6,7 +6,7 @@ import { BackButton } from '@/components/back-button';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   getPitch, updatePitch, setSchedule, getSchedule, addOverride, listOverrides, removeOverride,
-  saveBankDetails, pitchNameEnquiry, deactivatePitch, createPitchAccount,
+  saveBankDetails, pitchNameEnquiry, deactivatePitch, createPitchAccount, canDeletePitch, deletePitchForGood,
   getPitchBalance, listPitchTransfers, listPitchPayouts, withdrawFromPitch, localYmd,
 } from '@/lib/pitch';
 import { useAuth } from '@/lib/auth';
@@ -91,6 +91,14 @@ export default function PitchDetailsPage() {
   // Most pitches keep the same hours every day they open: one pair of times, unless they say otherwise.
   const [hours, setHours] = useState({ from: '17:00', to: '22:00' });
   const [sameHours, setSameHours] = useState(true);
+  // Open all day and night: midnight to midnight
+  const allDay = hours.from === '00:00' && hours.to === '24:00';
+  // Can it go for good (never booked, no account of its own), or only be hidden?
+  const [deletable, setDeletable] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  useEffect(() => {
+    canDeletePitch(id).then(setDeletable).catch(() => setDeletable(false));
+  }, [id]);
   const [splitDays, setSplitDays] = useState<string[]>([]);
   // Days off and changes
   const [overrides, setOverrides] = useState<IPitchSlotOverride[]>([]);
@@ -273,6 +281,16 @@ export default function PitchDetailsPage() {
     }
   }
 
+  async function removeForGood() {
+    try {
+      await deletePitchForGood(id);
+      toast.success('Pitch deleted');
+      router.push('/my-pitches');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'That didn’t go through. Try again.');
+    }
+  }
+
   async function hide() {
     try {
       await deactivatePitch(id);
@@ -439,7 +457,7 @@ export default function PitchDetailsPage() {
                           <span className="w-9 shrink-0 text-[14px] font-bold text-ink">{DAY_NAME[d].slice(0, 3)}</span>
                           <TimeSelect id={`from-${d}`} label={`${DAY_NAME[d]} opens`} value={h.from} onChange={(from) => set({ from })} />
                           <span className="text-[13px] text-gray-500" aria-hidden>to</span>
-                          <TimeSelect id={`to-${d}`} label={`${DAY_NAME[d]} closes`} value={h.to} onChange={(to) => set({ to })} />
+                          <TimeSelect id={`to-${d}`} label={`${DAY_NAME[d]} closes`} value={h.to} onChange={(to) => set({ to })} closing />
                         </li>
                       );
                     })}
@@ -448,10 +466,19 @@ export default function PitchDetailsPage() {
               ) : openDays > 0 && (
                 <div>
                   <p className={label}>Open from</p>
-                  <div className="flex items-center gap-2">
-                    <TimeSelect id="hours-from" label="Opens" value={hours.from} onChange={(from) => setHours({ ...hours, from })} />
-                    <span className="text-[13px] text-gray-500" aria-hidden>to</span>
-                    <TimeSelect id="hours-to" label="Closes" value={hours.to} onChange={(to) => setHours({ ...hours, to })} />
+                  {allDay ? (
+                    <p className="rounded-2xl bg-chalk px-4 py-3 text-[14px] font-bold text-ink">All day and night · 12am to 12am</p>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <TimeSelect id="hours-from" label="Opens" value={hours.from} onChange={(from) => setHours({ ...hours, from })} />
+                      <span className="text-[13px] text-gray-500" aria-hidden>to</span>
+                      <TimeSelect id="hours-to" label="Closes" value={hours.to} onChange={(to) => setHours({ ...hours, to })} closing />
+                    </div>
+                  )}
+                  <div className="mt-1 -mb-1">
+                    <Tick checked={allDay} onChange={(on) => setHours(on ? { from: '00:00', to: '24:00' } : { from: '07:00', to: '22:00' })}>
+                      Open 24 hours
+                    </Tick>
                   </div>
                 </div>
               )}
@@ -655,6 +682,25 @@ export default function PitchDetailsPage() {
           <p className="text-[12px] text-gray-500 mt-1.5 text-center">Its link stops taking bookings. You can show it again.</p>
         </div>
       )}
+      {/* Gone for good only while nothing depends on it; otherwise hiding is the way */}
+      {deletable && (
+        <div className={pitch.status === 'inactive' ? 'mt-8 mb-4' : 'mb-4'}>
+          <button type="button" onClick={() => setConfirmDelete(true)} className="press w-full min-h-12 rounded-xl text-[15px] font-semibold text-kit-600 hover:bg-kit-500/10">
+            Delete pitch
+          </button>
+          <p className="text-[12px] text-gray-500 text-center">Never booked, so it can go for good.</p>
+        </div>
+      )}
+      <ConfirmSheet
+        open={confirmDelete}
+        title={`Delete ${pitch.name}?`}
+        message="It goes for good: its photos, hours and link too. This can’t be undone."
+        confirmLabel="Delete pitch"
+        cancelLabel="Keep it"
+        danger
+        onConfirm={() => { setConfirmDelete(false); removeForGood(); }}
+        onCancel={() => setConfirmDelete(false)}
+      />
       <ConfirmSheet
         open={confirmHide}
         title="Hide this pitch?"
@@ -690,12 +736,14 @@ function changeTitle(o: IPitchSlotOverride) {
 }
 
 /** A time on the half hour, styled like the other boxes, with a chevron instead of the phone's own arrows. */
-function TimeSelect({ id, label: name, value, onChange }: { id: string; label: string; value: string; onChange: (v: string) => void }) {
+function TimeSelect({ id, label: name, value, onChange, closing = false }: { id: string; label: string; value: string; onChange: (v: string) => void; closing?: boolean }) {
+  // A closing time can be the end of the day (24:00): open until midnight
+  const times = closing ? [...TIMES.slice(1), '24:00'] : TIMES;
   return (
     <div className="relative min-w-0 flex-1">
       <select id={id} aria-label={name} value={value} onChange={(e) => onChange(e.target.value)} className={`${field} appearance-none pl-3.5 pr-9 font-bold tabular-nums`}>
-        {(TIMES.includes(value) ? TIMES : [...TIMES, value].sort()).map((t) => (
-          <option key={t} value={t}>{prettyTime(t)}</option>
+        {(times.includes(value) ? times : [...times, value].sort()).map((t) => (
+          <option key={t} value={t}>{t === '24:00' ? '12am (midnight)' : prettyTime(t)}</option>
         ))}
       </select>
       <svg className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" aria-hidden>

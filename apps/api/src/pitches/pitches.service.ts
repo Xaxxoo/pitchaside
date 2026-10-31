@@ -68,6 +68,29 @@ export class PitchesService {
     return this.pitchRepo.save(pitch);
   }
 
+  /**
+   * Gone for good, only while nothing depends on it: never booked (bookings are records both
+   * sides keep) and no bank account of its own (money may still arrive in it). Otherwise it can
+   * only be hidden, and the reason is said.
+   */
+  async deleteForGood(id: string, ownerId: string) {
+    const pitch = await this.findOne(id, ownerId);
+    if (pitch.accountNumber) {
+      throw new BadRequestException('This pitch has its own bank account, so it can only be hidden. Its link stops taking bookings.');
+    }
+    if (await this.bookingRepo.count({ where: { pitchId: id } })) {
+      throw new BadRequestException('This pitch has bookings on record, so it can only be hidden. Its link stops taking bookings.');
+    }
+    await this.pitchRepo.delete({ id, ownerId });
+    return { deleted: true };
+  }
+
+  /** What the owner can do to remove it: delete it for good, or only hide it. */
+  async canDelete(id: string, ownerId: string) {
+    const pitch = await this.findOne(id, ownerId);
+    return !pitch.accountNumber && !(await this.bookingRepo.count({ where: { pitchId: id } }));
+  }
+
   async deactivate(id: string, ownerId: string) {
     const pitch = await this.findOne(id, ownerId);
     pitch.status = 'inactive';
