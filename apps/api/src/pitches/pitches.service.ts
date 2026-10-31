@@ -236,6 +236,49 @@ export class PitchesService {
     return this.sanitizePitch(await this.findByShareCode(code));
   }
 
+  /**
+   * The public list of pitches (decided 30 Oct with Matt): only ones ready to take a booking,
+   * that is live, with opening hours, and with their own bank account so groups can pay them.
+   * Each says where it is and what a game costs from; never the owner's details.
+   */
+  async directory(filter: { state?: string; city?: string }) {
+    const qb = this.pitchRepo
+      .createQueryBuilder('p')
+      .where(`p.status = 'active'`)
+      .andWhere('p.account_number IS NOT NULL')
+      .andWhere('EXISTS (SELECT 1 FROM pitch_schedules s WHERE s.pitch_id = p.id)');
+    if (filter.state) qb.andWhere('lower(p.state) = lower(:state)', { state: filter.state });
+    if (filter.city) qb.andWhere('lower(p.city) = lower(:city)', { city: filter.city });
+    const pitches = await qb.orderBy('p.name', 'ASC').getMany();
+    if (!pitches.length) return [];
+    // "From ₦X": the cheapest a game is on any day, a day's own price or the usual one
+    const prices = await this.schedRepo
+      .createQueryBuilder('s')
+      .select('s.pitch_id', 'pitchId')
+      .addSelect('MIN(s.price)', 'min')
+      .addSelect('COUNT(*) FILTER (WHERE s.price IS NULL)', 'usual')
+      .where('s.pitch_id IN (:...ids)', { ids: pitches.map((p) => p.id) })
+      .groupBy('s.pitch_id')
+      .getRawMany<{ pitchId: string; min: string | null; usual: string }>();
+    const byPitch = new Map(prices.map((r) => [r.pitchId, { day: r.min == null ? null : Number(r.min), usualDays: Number(r.usual) }]));
+    return pitches.map((p) => {
+      const usual = Number(p.defaultPrice);
+      const { day, usualDays } = byPitch.get(p.id) ?? { day: null, usualDays: 1 };
+      // The usual price counts only if some open day charges it
+      const candidates = [...(usualDays > 0 ? [usual] : []), ...(day != null ? [day] : [])];
+      return {
+        code: p.shareCode,
+        name: p.name,
+        city: p.city,
+        state: p.state,
+        aSide: p.aSide ?? null,
+        surface: p.surface ?? null,
+        priceFrom: candidates.length ? Math.min(...candidates) : usual,
+        photoKey: p.photoKeys?.[0] ?? null,
+      };
+    });
+  }
+
   async getPublicAvailability(code: string, from: string, to: string) {
     const pitch = await this.findByShareCode(code);
     const dates = this.dateRange(from, to);

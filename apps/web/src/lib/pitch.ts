@@ -216,6 +216,23 @@ export function assignPitchTransfer(pitchId: string, transferId: string, booking
 
 // ── Public ──
 
+/** A pitch in the public list: ready to book, with where it is and the least a game costs. */
+export interface DirectoryPitch {
+  code: string;
+  name: string;
+  city: string | null;
+  state: string | null;
+  aSide: number | null;
+  surface: string | null;
+  priceFrom: number;
+  photoKey: string | null;
+}
+
+/** Every pitch ready to book on PitchAside (no sign-in needed). */
+export function getPitchDirectory() {
+  return http.get<DirectoryPitch[]>('/public/pitches');
+}
+
 export function getPublicPitch(code: string) {
   return http.get<IPublicPitch>(`/public/pitches/${code}`);
 }

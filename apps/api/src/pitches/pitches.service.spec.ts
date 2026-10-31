@@ -150,6 +150,35 @@ describe('bookings, as the booker sees them', () => {
   });
 });
 
+describe('the pitch directory', () => {
+  function setup(rows: any[], prices: any[]) {
+    const where: string[] = [];
+    const qb: any = { where: (s: string) => (where.push(s), qb), andWhere: (s: string) => (where.push(s), qb), orderBy: () => qb, getMany: async () => rows };
+    const sq: any = { select: () => sq, addSelect: () => sq, where: () => sq, groupBy: () => sq, getRawMany: async () => prices };
+    const pitchRepo = { createQueryBuilder: () => qb };
+    const schedRepo = { createQueryBuilder: () => sq };
+    return { service: new PitchesService(pitchRepo as any, schedRepo as any, {} as any, {} as any, {} as any, {} as any, {} as any), where };
+  }
+  const row = (id: string, extra = {}) => ({ id, name: id, shareCode: `c-${id}`, city: 'Surulere', state: 'Lagos', defaultPrice: '30000', photoKeys: ['k1'], aSide: 5, surface: 'astro', accountNumber: '99', ...extra });
+
+  it('lists only live pitches with hours and their own account, and never the owner’s details', async () => {
+    const { service, where } = setup([row('a')], [{ pitchId: 'a', min: null, usual: '7' }]);
+    const list = await service.directory({});
+    expect(where.join(' ')).toMatch(/status = 'active'/);
+    expect(where.join(' ')).toMatch(/account_number IS NOT NULL/);
+    expect(where.join(' ')).toMatch(/pitch_schedules/);
+    expect(list).toEqual([{ code: 'c-a', name: 'a', city: 'Surulere', state: 'Lagos', aSide: 5, surface: 'astro', priceFrom: 30000, photoKey: 'k1' }]);
+  });
+
+  it('says the cheapest a game really costs', async () => {
+    const cheaperDay = setup([row('a')], [{ pitchId: 'a', min: '25000', usual: '5' }]);
+    expect((await cheaperDay.service.directory({}))[0].priceFrom).toBe(25000);
+    // Every open day has its own (dearer) price: the usual one never applies
+    const allDear = setup([row('a')], [{ pitchId: 'a', min: '35000', usual: '0' }]);
+    expect((await allDear.service.directory({}))[0].priceFrom).toBe(35000);
+  });
+});
+
 describe('open all day and night', () => {
   const availability = new PitchAvailabilityService({} as any, {} as any, {} as any, {} as any);
   const slots = (open: string, close: string, minutes: number) => (availability as any).generateSlots(open, close, minutes, 30000);
