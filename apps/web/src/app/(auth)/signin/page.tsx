@@ -8,12 +8,14 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/toast';
 import { loginWithPassword } from '@/lib/player';
 import { SignInSwitch } from '@/components/signin-switch';
+import { homeFor, nextPath, useCarryRedirect } from '@/lib/after-sign-in';
 
 export default function SignInPage() {
   const router = useRouter();
   const { login, validate2FA } = useAuth();
   const toast = useToast();
   const [form, setForm] = useState({ email: '', password: '' });
+  const carry = useCarryRedirect();
 
   // Pre-fill when arriving from the player app's "Switch to organising".
   useEffect(() => {
@@ -37,7 +39,7 @@ export default function SignInPage() {
       if (result.requires2FA) {
         setTwoFA({ required: true, challenge: result.challenge });
       } else {
-        router.push('/dashboard');
+        router.push(nextPath() ?? homeFor(result.user));
       }
     } catch (err: any) {
       // Players sign in with the same email and password on the player side: if that's who this
@@ -63,8 +65,8 @@ export default function SignInPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await validate2FA(twoFA.challenge, code);
-      router.push('/dashboard');
+      const user = await validate2FA(twoFA.challenge, code);
+      router.push(nextPath() ?? homeFor(user));
     } catch (err: any) {
       toast.error(err.message || 'Invalid 2FA code');
     } finally {
@@ -204,7 +206,7 @@ export default function SignInPage() {
 
       <p className="mt-6 text-center text-sm text-gray-500">
         Don&apos;t have an account?{' '}
-        <Link href="/signup" className="text-pitch-600 font-semibold hover:text-pitch-700">
+        <Link href={`/signup${carry}`} className="text-pitch-600 font-semibold hover:text-pitch-700">
           Sign up
         </Link>
       </p>

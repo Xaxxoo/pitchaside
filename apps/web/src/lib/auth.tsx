@@ -10,13 +10,13 @@ interface TwoFactorRequired {
   challenge: string;
 }
 
-type LoginResult = { requires2FA: false } | TwoFactorRequired;
+type LoginResult = { requires2FA: false; user: IAuthResponse['user'] } | TwoFactorRequired;
 
 interface AuthContextValue {
   user: IUser | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
-  validate2FA: (challenge: string, code: string) => Promise<void>;
+  validate2FA: (challenge: string, code: string) => Promise<IAuthResponse['user']>;
   register: (data: {
     organizationName: string;
     firstName: string;
@@ -93,12 +93,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const authRes = res as IAuthResponse;
     storeRefreshToken((authRes as any).refreshToken);
     setUser(authRes.user);
-    return { requires2FA: false };
+    return { requires2FA: false, user: authRes.user };
   }, []);
 
   const validate2FA = useCallback(async (challenge: string, code: string) => {
     const res = await http.post<IAuthResponse>('/auth/2fa/validate', { challenge, code });
     setUser(res.user);
+    return res.user;
   }, []);
 
   const register = useCallback(
