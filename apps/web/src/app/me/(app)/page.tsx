@@ -1,5 +1,6 @@
 'use client';
 
+import { PitchHomeRow } from '@/components/home/pitch-row';
 import { NotifyPrompt } from '@/components/notify';
 import { levelOf } from '@/lib/rating-level';
 import { useCallback, useEffect, useState } from 'react';
@@ -212,6 +213,9 @@ export default function PlayerHomePage() {
           ))}
         </div>
       )}
+
+      {/* Pitches ready to book, for the one who rings the pitch for the boys */}
+      <PitchHomeRow className="mt-4" />
 
       {/* Now and then: a "Did you know?" that fits what's going on */}
       <DidYouKnow side="player" className="mt-4" context={{ owes: totalOwed > 0, voteOpen: pendingVotes.length > 0, noPhoto: !home.player.photoKey }} />

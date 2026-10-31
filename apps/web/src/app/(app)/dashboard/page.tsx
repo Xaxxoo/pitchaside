@@ -1,5 +1,6 @@
 'use client';
 
+import { PitchHomeRow } from '@/components/home/pitch-row';
 import { NotifyPrompt } from '@/components/notify';
 import { Avatar } from '@/components/ratings';
 import { useEffect, useMemo, useState } from 'react';
@@ -458,6 +459,9 @@ export default function Dashboard() {
 
       {/* Only what the two cards above don't already show; the bell keeps the full list */}
       <NeedsYou items={needs.filter((n) => !['unmatched', 'owing'].includes(n.key)).slice(0, 2)} />
+
+      {/* Pitches: their own if they list any, else the ones ready to book */}
+      <PitchHomeRow owner className="mt-4" />
 
       {/* Now and then: a "Did you know?" that fits what's going on today */}
       {group && canManage && (
