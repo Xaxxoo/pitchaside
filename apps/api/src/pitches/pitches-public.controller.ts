@@ -8,6 +8,13 @@ import { PitchPhotosService } from './pitch-photos.service';
 export class PitchesPublicController {
   constructor(private readonly pitchesService: PitchesService) {}
 
+  /** Pitches ready to book, for anyone browsing; by state and city. */
+  @SkipCsrf()
+  @Get()
+  directory(@Query('state') state?: string, @Query('city') city?: string) {
+    return this.pitchesService.directory({ state: state?.trim() || undefined, city: city?.trim() || undefined });
+  }
+
   @SkipCsrf()
   @Get(':code')
   findByShareCode(@Param('code') code: string) {
