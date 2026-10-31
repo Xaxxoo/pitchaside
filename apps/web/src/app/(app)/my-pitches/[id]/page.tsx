@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { BackButton } from '@/components/back-button';
 import { getPitch, getSchedule, listBookings, listOverrides, confirmBooking, rejectBooking, cancelBookingOwner, markBookingPaid, listPitchTransfers, assignPitchTransfer } from '@/lib/pitch';
 import { useToast } from '@/components/toast';
+import { HiddenPitchBanner } from '@/components/pitch/hidden-pitch-banner';
 import type { IPitch, IPitchSchedule, IPitchBooking, IPitchSlotOverride } from '@pitchaside/shared';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -93,6 +94,8 @@ export default function PitchDetailPage() {
           Pitch details
         </Link>
       </div>
+
+      {pitch.status === 'inactive' && <HiddenPitchBanner pitchId={id} onShown={load} />}
 
       {/* Share link */}
       <div className="bg-white rounded-xl border border-gray-100 px-4 py-3 mb-6 flex items-center justify-between">

@@ -21,6 +21,7 @@ import { chip, field, label, Stepper } from '@/components/group/group-edit-sheet
 import { prettyTime } from '@/components/player-ui';
 import { pitchFacts, hoursSummary, naira, PITCH_ICONS } from '@/components/pitch/pitch-facts';
 import { PitchPhotosEditor } from '@/components/pitch/pitch-photos-editor';
+import { HiddenPitchBanner } from '@/components/pitch/hidden-pitch-banner';
 import { GameLengthPicker, gameLength, gameLengthOk } from '@/components/pitch/game-length-picker';
 import {
   PITCH_A_SIDE, PITCH_FACILITIES, PITCH_FACILITY_LABEL, PITCH_SURFACES, PITCH_SURFACE_LABEL,
@@ -291,6 +292,7 @@ export default function PitchDetailsPage() {
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <BackButton label="Bookings" href={`/my-pitches/${id}`} />
       <PageHeader eyebrow="Pitch details" title={pitch.name} subtitle="What groups see when you share your link." />
+      {pitch.status === 'inactive' && <HiddenPitchBanner pitchId={id} onShown={() => setPitch({ ...pitch, status: 'active' })} />}
 
       <GroupLabel>The pitch</GroupLabel>
       <div className={card}>
@@ -627,14 +629,17 @@ export default function PitchDetailsPage() {
         </SettingsSections>
       </div>
 
-      <div className="mt-8 mb-4">
-        <button type="button" onClick={() => setConfirmHide(true)} className={`w-full ${btnDanger}`}>Hide this pitch</button>
-        <p className="text-[12px] text-gray-500 mt-1.5 text-center">Its link stops working and no one can book it.</p>
-      </div>
+      {/* A hidden pitch is shown again from the note at the top */}
+      {pitch.status !== 'inactive' && (
+        <div className="mt-8 mb-4">
+          <button type="button" onClick={() => setConfirmHide(true)} className={`w-full ${btnDanger}`}>Hide this pitch</button>
+          <p className="text-[12px] text-gray-500 mt-1.5 text-center">Its link stops taking bookings. You can show it again.</p>
+        </div>
+      )}
       <ConfirmSheet
         open={confirmHide}
         title="Hide this pitch?"
-        message="Its link stops working and groups can’t book it. Bookings already made stay as they are."
+        message="Its link says it isn’t taking bookings, and groups can’t book it. Bookings already made stay as they are. You can show it again any time."
         confirmLabel="Hide pitch"
         cancelLabel="Keep it"
         danger
