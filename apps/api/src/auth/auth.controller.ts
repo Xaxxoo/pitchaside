@@ -1,3 +1,4 @@
+import { UserRole } from '../users/entities/user.entity';
 import { Controller, Post, Get, Patch, Put, Body, UseGuards, Req, Res, Query, BadRequestException } from '@nestjs/common';
 import { ThrottlerGuard, Throttle, SkipThrottle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
@@ -77,11 +78,14 @@ export class AuthController {
     return this.authService.updateProfile(user.id, dto);
   }
 
-  /** The club admin's BVN and/or NIN: either one unlocks a group collection account. */
+  /**
+   * The BVN and/or NIN of whoever holds money: the club admin (either one unlocks a group
+   * collection account) or a pitch owner (it unlocks the pitch's own account).
+   */
   @UseGuards(JwtAuthGuard)
   @Put('identity')
   setIdentity(@Body() dto: IdentityDto, @CurrentUser() user: any) {
-    assertClubAdmin(user);
+    if (user.role !== UserRole.PITCH_OWNER) assertClubAdmin(user);
     return this.authService.setIdentity(user.id, dto);
   }
 

@@ -62,6 +62,7 @@ export default function SettingsPage() {
   const [pinData, setPinData] = useState({ currentPin: '', newPin: '', confirmPin: '' });
   const [savingPin, setSavingPin] = useState(false);
 
+  const holdsMoney = !!user && [UserRole.ORG_ADMIN, UserRole.SUPER_ADMIN, UserRole.PITCH_OWNER].includes(user.role);
   // Which setting is open: one at a time. A link to #identity (the home banner) opens BVN and NIN.
   const [open, setOpen] = useState<string | null>(null);
   const toggle = (k: string) => setOpen((o) => (o === k ? null : k));
@@ -268,12 +269,13 @@ export default function SettingsPage() {
         </SettingsSections>
       </div>
 
-      {((user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) || hasPin !== null) && (
+      {/* Who holds money: admins, and pitch owners (their pitch account needs BVN or NIN too) */}
+      {(holdsMoney || hasPin !== null) && (
         <>
           <GroupLabel>Money</GroupLabel>
           <div className={card}>
             <SettingsSections inset="card">
-              {(user.role === UserRole.ORG_ADMIN || user.role === UserRole.SUPER_ADMIN) && (
+              {holdsMoney && (
                 <SettingsSection
                   id="identity"
                   icon={ICONS.id}

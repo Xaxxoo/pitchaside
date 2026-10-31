@@ -96,6 +96,8 @@ export default function Dashboard() {
   // The PitchAside team doesn't run a club — their home is HQ.
   useEffect(() => {
     if (user?.role === UserRole.SUPER_ADMIN) router.replace('/admin');
+    // Someone who only lists pitches has no groups to show here: their home is their pitches
+    if (user?.role === UserRole.PITCH_OWNER) router.replace('/my-pitches');
   }, [user, router]);
 
   const loadAll = () => {

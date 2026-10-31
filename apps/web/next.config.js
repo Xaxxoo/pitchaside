@@ -28,7 +28,15 @@ const nextConfig = {
   transpilePackages: ['@pitchaside/shared'],
   async redirects() {
     // Listing a pitch is part of the one sign-up now: old links open it with "List a pitch" picked
-    return [{ source: '/pitch-owner/signup', destination: '/signup?as=pitch', permanent: false }];
+    return [
+      { source: '/pitch-owner/signup', destination: '/signup?as=pitch', permanent: false },
+      // One place for pitch owners: their pitches in the app, where every pitch page now lives
+      { source: '/pitch-owner/pitches/:id/settings', destination: '/my-pitches/:id/settings', permanent: false },
+      { source: '/pitch-owner/pitches/new', destination: '/my-pitches/new', permanent: false },
+      { source: '/pitch-owner/pitches/:id', destination: '/my-pitches/:id', permanent: false },
+      { source: '/pitch-owner/settings', destination: '/settings', permanent: false },
+      { source: '/pitch-owner/:path*', destination: '/my-pitches', permanent: false },
+    ];
   },
   async headers() {
     return [

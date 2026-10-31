@@ -54,7 +54,7 @@ export default function SignUpPage() {
       try {
         await registerPitchOwner({ firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim(), password: form.password });
         // Their pitches: adding the first one waits for the email link (a pitch takes money)
-        router.push(nextPath() ?? '/pitch-owner/dashboard');
+        router.push(nextPath() ?? '/my-pitches/new');
       } catch (err: any) {
         toast.error(err.message || 'Sign up failed');
         setSubmitting(false);
