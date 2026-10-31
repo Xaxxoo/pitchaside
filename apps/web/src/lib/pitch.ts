@@ -65,6 +65,16 @@ export function updatePitch(id: string, data: Partial<{
   return http.patch<IPitch>(`/pitches/${id}`, data);
 }
 
+/** Whether the pitch can go for good (never booked, no bank account of its own), or only be hidden. */
+export function canDeletePitch(id: string) {
+  return http.get<{ canDelete: boolean }>(`/pitches/${id}/can-delete`).then((r) => r.canDelete);
+}
+
+/** Gone for good; the server refuses, saying why, once it has bookings or its own account. */
+export function deletePitchForGood(id: string) {
+  return http.delete<{ deleted: boolean }>(`/pitches/${id}/forever`);
+}
+
 export function deactivatePitch(id: string) {
   return http.delete<IPitch>(`/pitches/${id}`);
 }

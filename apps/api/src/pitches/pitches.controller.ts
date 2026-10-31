@@ -53,6 +53,16 @@ export class PitchesController {
     return this.pitchesService.update(id, dto, user.id);
   }
 
+  @Get(':id/can-delete')
+  async canDelete(@Param('id') id: string, @CurrentUser() user: any) {
+    return { canDelete: await this.pitchesService.canDelete(id, user.id) };
+  }
+
+  @Delete(':id/forever')
+  deleteForGood(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.pitchesService.deleteForGood(id, user.id);
+  }
+
   @Delete(':id')
   deactivate(@Param('id') id: string, @CurrentUser() user: any) {
     return this.pitchesService.deactivate(id, user.id);
