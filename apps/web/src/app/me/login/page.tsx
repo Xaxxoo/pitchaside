@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Logo } from '@/components/brand';
@@ -135,6 +136,13 @@ function JoinWithLink() {
           {problem}
         </Callout>
       )}
+      {/* The same account can run games or list a pitch too */}
+      <p className="mt-3 text-[13px] text-gray-600">
+        Run games or own a pitch?{' '}
+        <Link href="/signup" className="font-semibold text-pitch-700 hover:text-pitch-800">
+          Sign up
+        </Link>
+      </p>
     </section>
   );
 }
