@@ -44,7 +44,17 @@ export default function BookPitchEntryPage() {
   return (
     <div className="p-4 sm:p-6 max-w-2xl mx-auto">
       <BackButton label="Home" href="/dashboard" />
-      <PageHeader eyebrow="Pitches" title="Book a pitch" subtitle="Four steps, in this order." />
+      <PageHeader eyebrow="Pitches" title="Book a pitch" subtitle="Find one on PitchAside, or open one from its link." />
+
+      {/* The pitches ready to book, first: most people don't have a link yet */}
+      <Link href="/pitches" className="press mb-4 flex items-center gap-3 rounded-3xl bg-ink turf-stripes text-white shadow-card px-5 py-4">
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-[18px] font-extrabold">Find a pitch</span>
+          <span className="block text-[13px] text-white/70 truncate">Pitches on PitchAside, by state</span>
+        </span>
+        <span className="shrink-0 min-h-11 px-4 rounded-full bg-white text-ink text-[14px] font-bold flex items-center">Browse</span>
+      </Link>
+      <p className="mb-2 text-[13px] font-bold text-ink">Got a pitch’s link?</p>
 
       {/* The steps are the page: the link box sits in the step it belongs to */}
       <form onSubmit={open} noValidate className="rounded-3xl bg-white border border-gray-100 shadow-card px-5 py-6">
