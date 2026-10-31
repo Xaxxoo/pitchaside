@@ -14,7 +14,7 @@ export function nextPath(search: string | URLSearchParams = typeof window === 'u
 
 /** Someone's home after signing in: a pitch owner's is their pitches, everyone else's the dashboard. */
 export function homeFor(user: { role?: UserRole | string } | null | undefined) {
-  return user?.role === UserRole.PITCH_OWNER ? '/pitch-owner/dashboard' : '/dashboard';
+  return user?.role === UserRole.PITCH_OWNER ? '/my-pitches' : '/dashboard';
 }
 
 /** The `?redirect=` to carry between sign in and sign up, so switching pages keeps where they were going. */

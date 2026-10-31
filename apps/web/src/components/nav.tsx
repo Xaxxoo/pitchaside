@@ -204,11 +204,15 @@ export function Nav() {
     }
   }, [mobileMenuOpen]);
 
-  const allTabs = [...tabs, ...clubTabs, ...(isAdmin ? [adminTab] : [])];
+  // Someone who only lists pitches has no groups, games or squad: their bar is their pitches
+  const pitchOnly = user?.role === UserRole.PITCH_OWNER;
+  const barTabs = pitchOnly ? clubTabs.filter((t) => t.href === '/my-pitches').map((t) => ({ ...t, label: 'Pitches' })) : tabs;
+  const moreTabs = pitchOnly ? clubTabs.filter((t) => t.href === '/book-pitch') : clubTabs;
+  const allTabs = [...barTabs, ...moreTabs, ...(isAdmin ? [adminTab] : [])];
 
   const settingsActive = pathname.startsWith('/settings');
   // On phones the bar keeps four tabs plus More; Admin lives in More (the sidebar has room for it).
-  const moreActive = settingsActive || pathname.startsWith('/office') || clubTabs.some((t) => pathname.startsWith(t.href));
+  const moreActive = settingsActive || pathname.startsWith('/office') || moreTabs.some((t) => pathname.startsWith(t.href));
 
   return (
     <>
@@ -216,7 +220,7 @@ export function Nav() {
       {/* Mobile bottom nav — floating pill */}
       <nav className="hide-while-typing fixed bottom-0 left-0 right-0 md:hidden z-50 px-3 pb-[max(env(safe-area-inset-bottom),0.75rem)] pointer-events-none">
         <div className="pointer-events-auto flex justify-around items-center bg-ink/95 backdrop-blur-xl rounded-[22px] px-1.5 py-1.5 shadow-lift">
-          {tabs.map((tab) => {
+          {barTabs.map((tab) => {
             const isActive = pathname.startsWith(tab.href);
             return (
               <Link
@@ -269,7 +273,7 @@ export function Nav() {
                     <span aria-hidden>⚽</span>
                     Switch to Playing
                   </button>
-                  {[...clubTabs, ...(isAdmin ? [adminTab] : [])].map((t) => (
+                  {[...moreTabs, ...(isAdmin ? [adminTab] : [])].map((t) => (
                     <Link
                       key={t.href}
                       href={t.href}

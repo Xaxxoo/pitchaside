@@ -1,13 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState, useCallback } from 'react';
 import { BackButton } from '@/components/back-button';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   getPitch, updatePitch, setSchedule, getSchedule, addOverride, listOverrides, removeOverride,
-  saveBankDetails, pitchNameEnquiry, deactivatePitch, canDeletePitch, deletePitchForGood,
+  saveBankDetails, pitchNameEnquiry, deactivatePitch, createPitchAccount, canDeletePitch, deletePitchForGood,
   getPitchBalance, listPitchTransfers, listPitchPayouts, withdrawFromPitch, localYmd,
 } from '@/lib/pitch';
+import { useAuth } from '@/lib/auth';
+import { Callout } from '@/components/callout';
 import { getNigerianBanks, type NigerianBank } from '@/lib/api';
 import { useToast } from '@/components/toast';
 import { PageHeader } from '@/components/brand';
@@ -67,6 +70,7 @@ function toWeek(rows: IPitchSchedule[]): Record<number, DayHours> {
 export default function PitchDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const toast = useToast();
   const searchParams = useSearchParams();
   const [pitch, setPitch] = useState<IPitch | null>(null);
@@ -625,6 +629,21 @@ export default function PitchDetailsPage() {
             </form>
           </SettingsSection>
 
+          {/* Its own account, so groups pay the pitch and payments match bookings (Payrep opens it) */}
+          {!pitch.accountNumber && (
+            <SettingsSection id="s-account" icon={PITCH_ICONS.wallet} title="Pitch account" summary="Not opened yet" open={open === 'account'} onToggle={() => toggle('account')}>
+              <p className="text-[13px] text-gray-600">Its own account number: groups pay into it, and each payment is matched to its booking.</p>
+              {user?.bvn || user?.nin ? (
+                <button type="button" disabled={saving === 'account'} onClick={() => run('account', async () => setPitch(await createPitchAccount(id)), 'Pitch account opened')} className={`w-full ${btnPrimary}`}>
+                  {saving === 'account' ? 'Opening…' : 'Open the pitch account'}
+                </button>
+              ) : (
+                <Callout tone="note" title="Add your BVN or NIN first" action={<Link href="/settings#identity" className="text-[14px] font-bold text-pitch-700">Add it in Settings ›</Link>}>
+                  The bank checks who owns it.
+                </Callout>
+              )}
+            </SettingsSection>
+          )}
           {pitch.accountNumber && (
             <SettingsSection id="s-account" icon={PITCH_ICONS.wallet} title="Pitch account" summary={`${pitch.accountNumber} · ${pitch.virtualBankName}`} open={open === 'account'} onToggle={() => toggle('account')}>
               <div className="rounded-2xl bg-ink text-white px-4 py-3.5">
