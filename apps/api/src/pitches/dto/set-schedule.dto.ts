@@ -10,7 +10,8 @@ export class ScheduleSlotDto {
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'openTime must be HH:mm' })
   openTime: string;
 
-  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, { message: 'closeTime must be HH:mm' })
+  // 24:00 is the end of the day, so a pitch can be open all day and night
+  @Matches(/^(([01]\d|2[0-3]):[0-5]\d|24:00)$/, { message: 'closeTime must be HH:mm' })
   closeTime: string;
 
   @IsOptional()

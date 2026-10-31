@@ -38,7 +38,9 @@ export function daysUntil(iso: string) {
 
 export function prettyTime(hhmm?: string | null) {
   if (!hhmm) return null;
-  const [h, m] = hhmm.split(':').map(Number);
+  const [hh, m] = hhmm.split(':').map(Number);
+  // 24:00 is the end of the day: midnight, 12am
+  const h = hh % 24;
   const suffix = h >= 12 ? 'pm' : 'am';
   const hour = h % 12 === 0 ? 12 : h % 12;
   return m ? `${hour}:${String(m).padStart(2, '0')}${suffix}` : `${hour}${suffix}`;
