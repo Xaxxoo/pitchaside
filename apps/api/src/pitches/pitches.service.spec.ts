@@ -178,3 +178,45 @@ describe('the pitch directory', () => {
     expect((await allDear.service.directory({}))[0].priceFrom).toBe(35000);
   });
 });
+
+describe('open all day and night', () => {
+  const availability = new PitchAvailabilityService({} as any, {} as any, {} as any, {} as any);
+  const slots = (open: string, close: string, minutes: number) => (availability as any).generateSlots(open, close, minutes, 30000);
+
+  it('a day that closes at 24:00 has its last game end at midnight', () => {
+    const day = slots('00:00', '24:00', 60);
+    expect(day).toHaveLength(24);
+    expect(day[0]).toMatchObject({ startTime: '00:00', endTime: '01:00' });
+    expect(day[23]).toMatchObject({ startTime: '23:00', endTime: '24:00' });
+  });
+
+  it('90-minute games fit the day without running past midnight', () => {
+    const day = slots('00:00', '24:00', 90);
+    expect(day).toHaveLength(16);
+    expect(day[15].endTime).toBe('24:00');
+  });
+});
+
+describe('deleting a pitch', () => {
+  function setup(p: Record<string, unknown>, bookings: number) {
+    const pitchRepo = { findOne: jest.fn().mockResolvedValue({ ...pitch, ...p }), delete: jest.fn() };
+    const bookingRepo = { count: jest.fn().mockResolvedValue(bookings) };
+    return { service: new PitchesService(pitchRepo as any, {} as any, {} as any, bookingRepo as any, {} as any, {} as any, {} as any), pitchRepo };
+  }
+
+  it('goes for good when it was never booked and has no account', async () => {
+    const { service, pitchRepo } = setup({ accountNumber: null }, 0);
+    expect(await service.canDelete('pitch-1', 'owner-1')).toBe(true);
+    await service.deleteForGood('pitch-1', 'owner-1');
+    expect(pitchRepo.delete).toHaveBeenCalledWith({ id: 'pitch-1', ownerId: 'owner-1' });
+  });
+
+  it('only hides once it has bookings or its own bank account, and says why', async () => {
+    const booked = setup({ accountNumber: null }, 2);
+    await expect(booked.service.deleteForGood('pitch-1', 'owner-1')).rejects.toThrow(/bookings on record/);
+    expect(booked.pitchRepo.delete).not.toHaveBeenCalled();
+    const banked = setup({ accountNumber: '9900000123' }, 0);
+    expect(await banked.service.canDelete('pitch-1', 'owner-1')).toBe(false);
+    await expect(banked.service.deleteForGood('pitch-1', 'owner-1')).rejects.toThrow(/own bank account/);
+  });
+});
