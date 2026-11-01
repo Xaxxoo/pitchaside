@@ -1286,8 +1286,8 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
    * and their one next game, never games further ahead. What's left:
    * - while one of those dues is still unpaid, it's a part payment towards it and stays as
    *   credit (₦198 toward ₦1,000 waits; a later ₦802 completes it);
-   * - otherwise the new money is more than they owed (for a friend, a wrong amount, or ahead)
-   *   and goes to `extra`, which is never used until the organiser sorts it.
+   * - otherwise the surplus stays as `credit`, which `applyCredits` automatically applies
+   *   when the player RSVPs or a new session is created.
    *
    * The member's row is locked for the duration, so two transfers arriving together can't
    * spend the same money twice.
@@ -1346,13 +1346,9 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       p.markedBy = ahead.has(p) ? 'credit' : paidBy;
     }
     if (settled.length) await tx.save(settled);
-    // Nothing left that this money can pay now: the new money left over is extra, to sort.
-    const owesNow = settled.length < payable.length;
-    const extra = owesNow ? 0 : Math.min(amount, Math.max(0, pool));
-    membership.credit = (pool - extra).toFixed(2);
-    if (extra > 0.001) membership.extra = (Number(membership.extra ?? 0) + extra).toFixed(2);
+    membership.credit = Math.max(0, pool).toFixed(2);
     await tx.save(membership);
-    return { settled, credit: Number(membership.credit), extra };
+    return { settled, credit: Number(membership.credit), extra: 0 };
   }
 
   /**
