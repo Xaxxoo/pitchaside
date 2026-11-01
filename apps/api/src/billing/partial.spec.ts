@@ -127,8 +127,8 @@ describe('partial payments', () => {
     const results = await Promise.allSettled([service.giveTransfer('t1', 'p1', 'org1'), service.giveTransfer('t1', 'p1', 'org1')]);
 
     expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
-    // Owed nothing: it's extra to sort, counted once.
-    expect(membership.extra).toBe('1500.00');
+    // Owed nothing: it's credit for future dues, counted once.
+    expect(membership.credit).toBe('1500.00');
   });
 
   it("won't set aside a transfer someone has already given to a player", async () => {
@@ -138,7 +138,7 @@ describe('partial payments', () => {
     await expect(service.ignoreTransfer('t1', 'org1')).rejects.toThrow('Someone else already sorted this payment.');
   });
 
-  it('gives a transfer to a member who owes nothing: all of it is extra, for the organiser to sort', async () => {
+  it('gives a transfer to a member who owes nothing: all of it stays as credit for future dues', async () => {
     const { service, membership } = setup([]);
     const transfer: any = { id: 't1', groupId: 'g1', amount: '1525.00', status: TransferStatus.UNMATCHED, receivedAt: new Date() };
     jest.spyOn(service as any, 'findTransfer').mockResolvedValue(transfer);
@@ -146,8 +146,8 @@ describe('partial payments', () => {
     const saved: any = await service.giveTransfer('t1', 'p1', 'org1');
 
     expect(saved).toMatchObject({ status: TransferStatus.ASSIGNED, playerId: 'p1' });
-    expect(membership.credit).toBe('0.00');
-    expect(membership.extra).toBe('1525.00');
+    expect(membership.credit).toBe('1525.00');
+    expect(membership.extra).toBe('0.00');
   });
 
   it('gives a transfer to a member who owes: it pays their oldest game and keeps the rest', async () => {
@@ -198,15 +198,15 @@ describe('extra money', () => {
     const { service, membership, payments } = setup([1500, 1500, 1500], 0, ['2026-01-01', future(5), future(12)]);
     await service.applyCredit('g1', 'p1', 4500);
     expect(payments.map((p) => p.status)).toEqual([PaymentStatus.PAID, PaymentStatus.PAID, PaymentStatus.PENDING]);
-    expect(membership.extra).toBe('1500.00');
-    expect(membership.credit).toBe('0.00');
+    expect(membership.extra).toBe('0.00');
+    expect(membership.credit).toBe('1500.00');
   });
 
-  it('sending double for this week: one game paid, the rest waits as extra', async () => {
+  it('sending double for this week: one game paid, the rest stays as credit', async () => {
     const { service, membership, payments } = setup([1500], 0, [future(3)]);
     await service.applyCredit('g1', 'p1', 3000);
     expect(payments[0].status).toBe(PaymentStatus.PAID);
-    expect(membership.extra).toBe('1500.00');
+    expect(membership.credit).toBe('1500.00');
   });
 
   it('a part payment still waits towards the game it is for, not as extra', async () => {
