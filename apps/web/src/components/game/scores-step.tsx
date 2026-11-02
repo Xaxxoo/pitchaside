@@ -405,16 +405,19 @@ export function ScoresStep({
         <button
           onClick={() => teams.length > 2 && setChoosing(side)}
           disabled={teams.length <= 2}
-          className="press max-w-full min-h-11 inline-flex items-center gap-1.5 px-3 rounded-full bg-white/10 text-[13px] font-bold text-white disabled:cursor-default"
+          className="press w-full min-h-11 flex flex-col items-center justify-center gap-1 px-2.5 py-2 rounded-2xl bg-white/10 text-[13px] leading-tight font-bold text-white disabled:cursor-default"
           aria-label={teams.length > 2 ? `${name(t)}: change team` : undefined}
         >
-          <Swatch team={t} bibs={lineup.bibs} className="w-3.5 h-3.5 rounded" />
-          <span className="truncate">{name(t)}</span>
-          {teams.length > 2 && (
-            <svg className="w-3.5 h-3.5 shrink-0 text-white/60" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
-              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-            </svg>
-          )}
+          {/* The bib colour sits above the name, so a long name gets the whole width (two even lines at most) */}
+          <span className="flex items-center gap-1">
+            <Swatch team={t} bibs={lineup.bibs} className="w-6 h-1.5 rounded-full" />
+            {teams.length > 2 && (
+              <svg className="w-3.5 h-3.5 shrink-0 text-white/60" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+              </svg>
+            )}
+          </span>
+          <span className="max-w-full line-clamp-2 break-words text-balance text-center">{name(t)}</span>
         </button>
         <span className="font-display text-[56px] leading-none font-extrabold text-white tabular-nums" aria-live="polite" aria-label={`${name(t)} ${value}`}>
           {value}
@@ -565,7 +568,7 @@ export function ScoresStep({
         <>
           <h3 className="mt-5 px-1 text-[13px] font-extrabold text-ink">Today’s table</h3>
           <div className="mt-1.5 bg-white rounded-3xl border border-gray-100 shadow-card overflow-hidden">
-            <div className="grid grid-cols-[1fr_repeat(4,26px)_34px_36px] gap-1 px-3.5 py-2 bg-gray-50 text-[11px] font-extrabold text-gray-500">
+            <div className="grid grid-cols-[1fr_repeat(4,22px)_30px_32px] gap-1 px-3.5 py-2 bg-gray-50 text-[11px] font-extrabold text-gray-500">
               <span>Team</span>
               <span className="text-center">P</span>
               <span className="text-center">W</span>
@@ -577,13 +580,13 @@ export function ScoresStep({
             {lineup.standings.map((r) => (
               <div
                 key={r.team}
-                className={`grid grid-cols-[1fr_repeat(4,26px)_34px_36px] gap-1 items-center px-3.5 min-h-11 border-t border-gray-100 text-[14px] ${
+                className={`grid grid-cols-[1fr_repeat(4,22px)_30px_32px] gap-1 items-center px-3.5 min-h-11 border-t border-gray-100 text-[14px] ${
                   lineup.teamOfTheDay === r.team ? 'bg-volt-100' : ''
                 }`}
               >
-                <span className="min-w-0 flex items-center gap-2 font-bold text-ink">
+                <span className="min-w-0 flex items-center gap-2 py-1 leading-tight font-bold text-ink">
                   <Swatch team={r.team} bibs={lineup.bibs} />
-                  <span className="truncate">{name(r.team)}</span>
+                  <span className="min-w-0 line-clamp-2 break-words text-balance">{name(r.team)}</span>
                 </span>
                 {[r.p, r.w, r.d, r.l].map((v, i) => (
                   <span key={i} className="text-center text-gray-600 tabular-nums">
@@ -615,18 +618,18 @@ export function ScoresStep({
                   className="press w-full min-h-12 pl-4 pr-12 py-3 rounded-3xl text-left hover:bg-chalk/60"
                 >
                   <span className="block text-[11px] font-extrabold text-gray-500">GAME {i + 1} · FULL TIME</span>
-                  <span className="mt-1 grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
-                    <span className="min-w-0 flex items-center gap-1.5 text-[15px] font-bold text-ink">
-                      <Swatch team={g.teamA} bibs={lineup.bibs} />
-                      <span className="truncate">{name(g.teamA)}</span>
-                    </span>
-                    <span className="font-display text-[26px] leading-none font-extrabold text-ink tabular-nums">
-                      {g.scoreA}–{g.scoreB}
-                    </span>
-                    <span className="min-w-0 flex items-center justify-end gap-1.5 text-[15px] font-bold text-ink">
-                      <span className="truncate">{name(g.teamB)}</span>
-                      <Swatch team={g.teamB} bibs={lineup.bibs} />
-                    </span>
+                  {/* One line per side, score on the right, so a full 20-letter name fits */}
+                  <span className="mt-1.5 block space-y-1">
+                    {([['teamA', 'scoreA'], ['teamB', 'scoreB']] as const).map(([side, score]) => {
+                      const lost = g[score] < g[score === 'scoreA' ? 'scoreB' : 'scoreA']; // a draw keeps both bold
+                      return (
+                        <span key={side} className="flex items-center gap-2">
+                          <Swatch team={g[side]} bibs={lineup.bibs} />
+                          <span className={`flex-1 min-w-0 truncate text-[15px] ${lost ? 'font-semibold text-gray-600' : 'font-extrabold text-ink'}`}>{name(g[side])}</span>
+                          <span className={`font-display text-[20px] leading-none font-extrabold tabular-nums ${lost ? 'text-gray-500' : 'text-ink'}`}>{g[score]}</span>
+                        </span>
+                      );
+                    })}
                   </span>
                   <span className={`mt-1.5 flex items-center gap-1.5 text-[12px] leading-snug ${g.goals.length || !(g.scoreA + g.scoreB) ? 'text-gray-600' : 'font-bold text-pitch-700'}`}>
                     {g.goals.length > 0 && (
