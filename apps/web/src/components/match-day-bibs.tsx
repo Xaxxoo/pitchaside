@@ -105,6 +105,9 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
   const byTeam = (t: TeamKey | null) =>
     lineup.squad.filter((p) => p.team === t).sort((a, b) => Number(b.me) - Number(a.me) || positionOrder(a.position) - positionOrder(b.position));
   const sidesNow = teams.filter((t) => byTeam(t).length);
+  // "Team Ada 7 · Team Bayo 7", or the counts when the names wouldn't fit on one line
+  const namedLine = sidesNow.map((t) => `${teamName(t, lineup.captains, lineup.bibs)} ${byTeam(t).length}`).join(' · ');
+  const teamsLine = sidesNow.length <= 2 && namedLine.length <= 26 ? namedLine : `${sidesNow.length} teams · ${lineup.squad.filter((p) => p.team).length} players`;
   const noBib = byTeam(null);
 
   /*
@@ -207,9 +210,7 @@ export function MatchDayBibs({ sessionId, live = false }: { sessionId: string; l
           <span className="flex-1 min-w-0">
             <span className="block text-[13px] font-bold text-white">{teamsOpen ? 'Hide the teams' : 'See the teams'}</span>
             <span className="block text-[12px] font-semibold text-white/65 truncate tabular-nums">
-              {sidesNow.length <= 2
-                ? sidesNow.map((t) => `${teamName(t, lineup.captains, lineup.bibs)} ${byTeam(t).length}`).join(' · ')
-                : `${sidesNow.length} teams · ${lineup.squad.filter((p) => p.team).length} players`}
+              {teamsLine}
             </span>
           </span>
           <span className="shrink-0 flex -space-x-1" aria-hidden>
@@ -361,16 +362,16 @@ function Live({
         The day so far · {live.games.length} game{live.games.length === 1 ? '' : 's'}
       </p>
 
-      <table className="w-full text-[13px] tabular-nums">
+      <table className="w-full table-fixed text-[13px] tabular-nums">
         <caption className="sr-only">Today’s table</caption>
         <thead>
           <tr className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/50">
             <th className="text-left font-extrabold pb-1">Team</th>
-            <th className="w-7 text-center font-extrabold pb-1">P</th>
-            <th className="w-6 text-center font-extrabold pb-1">W</th>
-            <th className="w-6 text-center font-extrabold pb-1">D</th>
-            <th className="w-6 text-center font-extrabold pb-1">L</th>
-            <th className="w-10 text-right font-extrabold pb-1">{live.table.perGame ? 'Pts/G' : 'Pts'}</th>
+            <th className="w-5 text-center font-extrabold pb-1">P</th>
+            <th className="w-5 text-center font-extrabold pb-1">W</th>
+            <th className="w-5 text-center font-extrabold pb-1">D</th>
+            <th className="w-5 text-center font-extrabold pb-1">L</th>
+            <th className="w-9 text-right font-extrabold pb-1">{live.table.perGame ? 'Pts/G' : 'Pts'}</th>
           </tr>
         </thead>
         <tbody>
@@ -379,9 +380,12 @@ function Live({
               <td className="py-1">
                 <span className="flex items-center gap-1.5 min-w-0 font-bold">
                   <span className="w-2.5 h-2.5 shrink-0 rounded-sm" style={bibFill(r.team, bibs)} aria-hidden />
-                  <span className="truncate">{teamName(r.team, captains, bibs)}</span>
-                  {r.team === myTeam && <span className="text-[10px] font-extrabold">· you</span>}
-                  {live.table.teamOfTheDay === r.team && <span aria-label="leading">🏆</span>}
+                  {/* Name, "you" and the cup flow as one line of text, so a long name wraps instead of being cut */}
+                  <span className="min-w-0 break-words text-balance leading-tight">
+                    {teamName(r.team, captains, bibs)}
+                    {r.team === myTeam && <span className="whitespace-nowrap text-[10px] font-extrabold"> · you</span>}
+                    {live.table.teamOfTheDay === r.team && <span className="whitespace-nowrap" aria-label="leading"> 🏆</span>}
+                  </span>
                 </span>
               </td>
               <td className="text-center">{r.p}</td>
@@ -397,12 +401,12 @@ function Live({
       <ol className="space-y-1.5">
         {[...live.games].reverse().map((g, i) => {
           // Each goal with the scorer's face: "Ada (Tobi)", the one who set it up in brackets.
-          const scorers = (team: TeamKey, right: boolean) => (
-            <span className={`flex flex-col gap-1 ${right ? 'items-end' : 'items-start'}`}>
+          const scorers = (team: TeamKey) => (
+            <span className="flex flex-col items-start gap-1">
               {g.goals
                 .filter((x) => x.team === team && x.scorer)
                 .map((x, n) => (
-                  <span key={n} className={`flex items-center gap-1 max-w-full ${right ? 'flex-row-reverse text-right' : ''}`}>
+                  <span key={n} className="flex items-center gap-1 max-w-full">
                     <Avatar name={x.scorer!} photoKey={x.scorerPhoto} className="w-5 h-5 text-[8px]" />
                     <span className="min-w-0 truncate">
                       {x.mine ? 'You' : x.scorer}
@@ -415,19 +419,17 @@ function Live({
           return (
             <li key={g.id} className="rounded-xl bg-white/[0.06] px-3 py-2">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.1em] text-white/50">Game {live.games.length - i}</p>
-              <p className="mt-0.5 flex items-center gap-2 text-[14px] font-bold text-white">
-                <span className="flex-1 min-w-0 truncate text-right">{teamName(g.teamA, captains, bibs)}</span>
-                <span className="shrink-0 font-display text-[18px] font-extrabold tabular-nums">
-                  {g.scoreA} – {g.scoreB}
-                </span>
-                <span className="flex-1 min-w-0 truncate">{teamName(g.teamB, captains, bibs)}</span>
-              </p>
-              {g.goals.some((x) => x.scorer) && (
-                <div className="mt-1.5 grid grid-cols-2 gap-3 text-[11px] text-white/75">
-                  {scorers(g.teamA, true)}
-                  {scorers(g.teamB, false)}
+              {/* One line per side with its score, scorers under it, so long names stay whole */}
+              {([['teamA', 'scoreA', 'scoreB'], ['teamB', 'scoreB', 'scoreA']] as const).map(([side, mine, theirs]) => (
+                <div key={side} className="mt-1">
+                  <p className={`flex items-center gap-2 text-[14px] font-bold ${g[mine] >= g[theirs] ? 'text-white' : 'text-white/60'}`}>
+                    <span className="w-2.5 h-2.5 shrink-0 rounded-sm" style={bibFill(g[side], bibs)} aria-hidden />
+                    <span className="flex-1 min-w-0 truncate">{teamName(g[side], captains, bibs)}</span>
+                    <span className="shrink-0 font-display text-[18px] leading-none font-extrabold tabular-nums">{g[mine]}</span>
+                  </p>
+                  {g.goals.some((x) => x.team === g[side] && x.scorer) && <div className="mt-1 pl-[18px] text-[11px] text-white/75">{scorers(g[side])}</div>}
                 </div>
-              )}
+              ))}
             </li>
           );
         })}

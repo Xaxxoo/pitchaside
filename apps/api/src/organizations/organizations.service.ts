@@ -16,6 +16,11 @@ export class OrganizationsService {
     return this.orgsRepo.save(org);
   }
 
+  /** A club's new name (a pitch owner's hidden "X's Pitches" becomes their club when they start a group). */
+  async rename(id: string, name: string) {
+    await this.orgsRepo.update(id, { name });
+  }
+
   findAll() {
     return this.orgsRepo.find();
   }

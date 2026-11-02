@@ -64,6 +64,11 @@ export default function StartGroupPage() {
           />
         </div>
         <p className="-mt-2 text-xs text-gray-500">Players see it on your invites. You’ll name your first group next.</p>
+        {profile?.listsPitches ? (
+          <p className="text-xs text-gray-500">
+            You list a pitch with <span className="font-bold text-ink">{profile.player.email}</span>. Your group runs from that account, so use its password.
+          </p>
+        ) : (
         <p className="text-xs text-gray-500">
           Organising involves money, so your organiser side gets its own password.
           {profile ? (
@@ -73,9 +78,10 @@ export default function StartGroupPage() {
             </>
           ) : null}
         </p>
+        )}
         <div>
           <label htmlFor="password" className="block text-xs font-bold text-gray-700 mb-1.5">
-            Organiser password
+            {profile?.listsPitches ? 'Pitch account password' : 'Organiser password'}
           </label>
           <input
             id="password"

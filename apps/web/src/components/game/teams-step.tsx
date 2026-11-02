@@ -329,17 +329,20 @@ export function TeamsStep({
           return (
             <div key={t} className="min-w-0 rounded-3xl p-1.5" style={bibTint(t, lineup.bibs)}>
               <h3 className="px-2 pt-1.5 pb-1">
-                <span className="flex items-center gap-1.5 text-[13px] font-extrabold text-ink">
+                <span className="flex items-center gap-1.5 text-[13px] leading-tight font-extrabold text-ink">
                   <Swatch team={t} bibs={lineup.bibs} className="w-3.5 h-3.5 rounded" />
-                  <span className="truncate">{teamName(t, lineup.captains, lineup.bibs)}</span>
+                  <span className="min-w-0 line-clamp-2 break-words text-balance">{teamName(t, lineup.captains, lineup.bibs)}</span>
                   {best && (
                     <span className="shrink-0" title="Team of the Day">
                       🏆<span className="sr-only">, Team of the Day</span>
                     </span>
                   )}
                 </span>
+                {/* The bib colour gets its own line when the side has a name, so "Sky blue · 14 players · avg 48" never wraps */}
+                {(lineup.captains[t] || bibOf(t, lineup.bibs).name) && (
+                  <span className="block mt-0.5 text-[11px] font-semibold text-gray-600">{bibOf(t, lineup.bibs).label}</span>
+                )}
                 <span className="block text-[11px] font-semibold text-gray-600 tabular-nums">
-                  {lineup.captains[t] || bibOf(t, lineup.bibs).name ? `${bibOf(t, lineup.bibs).label} · ` : ''}
                   {members.length} player{members.length === 1 ? '' : 's'}
                   {a != null ? ` · avg ${a}` : ''}
                 </span>
