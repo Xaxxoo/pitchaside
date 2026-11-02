@@ -11,7 +11,7 @@ export interface TableCard {
   to?: string | null;
   lastDate: string | null;
   /** 'rating': ranked by the card's rating, points beside it. Missing: by points (older servers). */
-  rankedBy?: 'rating';
+  rankedBy?: 'rating' | 'points';
   points: { win: number; draw: number; teamOfDay: number; potm: number };
   /** Everyone in the table; `rows` is the top ten. */
   total: number;

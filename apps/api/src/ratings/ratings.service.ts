@@ -185,6 +185,8 @@ export interface PlayerRatings {
   ovr: number | null;
   /** Match days still to play before the card shows a number; 0 once it does. */
   ratedIn?: number;
+  /** Their last 5 match ratings (out of 10), oldest first: the form strip under the card's number. */
+  matchForm?: { date: string; rating: number }[];
   attributes: Record<Ability, number | null>;
   goals: number;
   assists: number;
@@ -1921,7 +1923,7 @@ export class RatingsService {
       const left = ratedIn(days.get(id) ?? 0);
       return { ovr: left ? null : (card.get(id) ?? null), ratedIn: left };
     };
-    return { skills, everyone, trial, card, classic, mode, steady, shown };
+    return { skills, everyone, trial, card, classic, mode, steady, shown, history: replay.history };
   }
 
   /** How the club's cards are worked out. Old databases without the column count as classic. */
@@ -1966,7 +1968,7 @@ export class RatingsService {
     const starts = new Map(players.map((p) => [p.id, cardRating(p.level ? LEVEL_START[p.level] : DEFAULT_START)]));
     const usual = new Map(players.filter((p) => p.position).map((p) => [p.id, p.position as Position]));
     const sessions = without ? all.filter((x) => x.id !== without) : all;
-    const history = new Map<string, { date: string; rating: MatchRating; games: number; before: number; after: number }[]>();
+    const history = new Map<string, { sessionId: string; date: string; rating: MatchRating; games: number; before: number; after: number }[]>();
     if (!sessions.length) return { steady: replaySteady([], starts, usual), history };
 
     const ids = sessions.map((x) => x.id);
@@ -1989,7 +1991,7 @@ export class RatingsService {
       for (const [id, rating] of ratings) {
         const before = last.get(id) ?? cardRating(DEFAULT_START);
         const now = after.get(id)!.ovr;
-        history.set(id, [...(history.get(id) ?? []), { date: String(sessions[i].date).slice(0, 10), rating, games: lines.get(id)!.games, before, after: now }]);
+        history.set(id, [...(history.get(id) ?? []), { sessionId: sessions[i].id, date: String(sessions[i].date).slice(0, 10), rating, games: lines.get(id)!.games, before, after: now }]);
         last.set(id, now);
       }
       // Missed days that took something off: the next day's move starts from there, not before it
@@ -2290,10 +2292,20 @@ export class RatingsService {
     if (!sessions.length) return [];
 
     const ids = sessions.map((s) => s.id);
-    const [games, votes] = await Promise.all([
+    const [games, votes, { history }] = await Promise.all([
       this.gamesRepo.find({ where: { sessionId: In(ids) }, order: { createdAt: 'ASC' } }),
       this.votesRepo.find({ where: { sessionId: In(ids) } }),
+      this.clubCard(organizationId),
     ]);
+    // Their match rating each day, and the card either side of it once the card shows a number
+    // (from their RATED_AFTER-th match day; before that there's no number to move)
+    const myDays = history.get(playerId) ?? [];
+    const ratingOn = new Map(
+      myDays.map((d, i) => [
+        d.sessionId,
+        { rating: d.rating.rating, cardBefore: i >= RATED_AFTER ? Math.round(d.before) : null, cardAfter: i >= RATED_AFTER - 1 ? Math.round(d.after) : null },
+      ]),
+    );
 
     return Promise.all(
       sessions.map(async (s) => {
@@ -2331,6 +2343,8 @@ export class RatingsService {
           record,
           games: dayGames.length,
           potm: potmPlayer ? { name: sheetName(potmPlayer), votes: potmVotes, isMe: potmId === playerId, photoKey: potmPlayer.photoKey ?? null } : null,
+          /** Their match rating that day (out of 10) and the card before and after; votes add to it once the vote closes. */
+          myRating: ratingOn.get(s.id) ? { ...ratingOn.get(s.id)!, final: !w.open } : null,
           vote:
             w.open && this.cameTo(s, playerId)
               ? { token: await this.ensureVotingToken(s.id), voted: votes.some((v) => v.sessionId === s.id && v.voterId === playerId) }
@@ -2359,24 +2373,15 @@ export class RatingsService {
     const inRange = all.filter((x) => (!from || String(x.date).slice(0, 10) >= from) && (!to || String(x.date).slice(0, 10) <= to));
     const sessions = lastDays ? inRange.slice(-lastDays) : inRange;
     const skills = await this.skills(organizationId);
-    // Ranked by the card's rating (Matt, 24 Oct): 40% goals and assists, 40% votes, 20% results,
-    // so a player isn't top just for being on the winning side. The card's number is the club's,
-    // all time, whatever period the table covers; level on rating, points decide.
+    // Ranked by points (council, approved by Matt 30 Oct): one main number per screen. The table is
+    // who's winning the season; the card's rating says how good they are, and lives on the card.
     const { shown, mode } = await this.clubCard(organizationId);
-    const latest = sessions[sessions.length - 1];
-    const shownBefore = sessions.length > 1 ? (await this.clubCard(organizationId, latest.id)).shown : null;
-    // Players with a number first, by it; players still to be rated after them, by points
-    const ranked = async (list: Session[], show: typeof shown) =>
+    const ranked = async (list: Session[]) =>
       [...(await this.aggregate(list, skills)).values()].sort(
-        (a, b) =>
-          (show(b.player.id).ovr ?? -1) - (show(a.player.id).ovr ?? -1) ||
-          b.points - a.points ||
-          b.potmWins - a.potmWins ||
-          b.record.w - a.record.w ||
-          b.games - a.games,
+        (a, b) => b.points - a.points || b.potmWins - a.potmWins || b.record.w - a.record.w || b.games - a.games,
       );
-    const rows = await ranked(sessions, shown);
-    const before = shownBefore ? await ranked(sessions.slice(0, -1), shownBefore) : [];
+    const rows = await ranked(sessions);
+    const before = sessions.length > 1 ? await ranked(sessions.slice(0, -1)) : [];
     const placeBefore = new Map(before.map((r, i) => [r.player.id, i]));
     // Each of the latest six match days on its own, oldest first: form is a player's last three of them.
     const days = await Promise.all(sessions.slice(-6).map((s) => this.aggregate([s], skills)));
@@ -2388,8 +2393,8 @@ export class RatingsService {
       statsFrom: group.statsFrom ? String(group.statsFrom).slice(0, 10) : null,
       /** The group's join link code: the table's share link is built on it. */
       shareCode: group.inviteCode ?? null,
-      /** What the table is ranked by: the card's rating (points still shown, and break a tie). */
-      rankedBy: 'rating' as const,
+      /** What the table is ranked by: points (the card's rating is on the card). */
+      rankedBy: 'points' as const,
       /** How the club's cards are worked out, so every screen explains the same number. */
       ratingMode: mode,
       /** When the club was moved from Classic to Steady: both apps say so once. */
@@ -2620,9 +2625,10 @@ export class RatingsService {
 
   async getPlayerRatings(playerId: string, organizationId: string): Promise<PlayerRatings & { compare: StatCompare; season: PlayerRatings & { compare: StatCompare } }> {
     const sessions = await this.gamesQuery(organizationId).getMany();
-    const { skills, shown } = await this.clubCard(organizationId);
+    const { skills, shown, history } = await this.clubCard(organizationId);
     const year = String(new Date().getFullYear());
     const { ovr, ratedIn: left } = shown(playerId);
+    const matchForm = (history.get(playerId) ?? []).slice(-5).map((d) => ({ date: d.date, rating: d.rating.rating }));
     const of = async (list: Session[]): Promise<PlayerRatings & { compare: StatCompare }> => {
       const everyone = await this.aggregate(list, skills);
       const rows = [...everyone.values()];
@@ -2638,7 +2644,7 @@ export class RatingsService {
       const blank = { ...blankRatings(), ...playerCard(skills.get(playerId), noEvidence(), 0, 0) };
       return { ...blank, ovr: null, ratedIn: left, provisional: true, attributes: blankRatings().attributes, compare };
     };
-    return { ...(await of(sessions)), season: await of(sessions.filter((s) => String(s.date).startsWith(year))) };
+    return { ...(await of(sessions)), matchForm, season: await of(sessions.filter((s) => String(s.date).startsWith(year))) };
   }
 
 

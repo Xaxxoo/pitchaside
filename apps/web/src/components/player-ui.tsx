@@ -7,7 +7,7 @@ import { Ticket } from '@/components/ticket';
 import { photoUrl } from '@/lib/http';
 import { Ball, Player, kitFor, skins } from '@/components/illustrations';
 import { BallSpinner } from '@/components/skeleton';
-import { Avatar, AttributeRow, newLine } from '@/components/ratings';
+import { Avatar, AttributeRow, MatchFormStrip, RatingChip, newLine } from '@/components/ratings';
 import { PeopleRow, namesLine } from '@/components/people-row';
 import { TEAMS, bibFill, bibOf, bibTint, teamName } from '@/lib/teams';
 import { MatchDayBibs } from '@/components/match-day-bibs';
@@ -193,6 +193,12 @@ export function PlayerCardHero({
           {caption && <p className="text-[11px] text-white/50 mt-2">{caption}</p>}
         </div>
       </div>
+      {/* Under the one big number, how their last few match days went */}
+      {!!ratings.matchForm?.length && (
+        <div className="relative mx-5 mb-4 -mt-1 pt-3 border-t border-white/10">
+          <MatchFormStrip form={ratings.matchForm} dark />
+        </div>
+      )}
     </div>
   );
 }
@@ -463,6 +469,38 @@ export function GameCard({
 }
 
 /**
+ * Their match rating for the day, the one number that matters after it, and what it did to the
+ * card: "7.4 · Rating 49 → 50". While the vote is open it says votes are still to come.
+ */
+function MyRatingRow({ r, date }: { r: NonNullable<RecentMatchDay['myRating']>; date: Date }) {
+  const today = date.toDateString() === new Date().toDateString();
+  const moved = r.cardBefore != null && r.cardAfter != null ? r.cardAfter - r.cardBefore : null;
+  const line = !r.final
+    ? 'Votes still to come'
+    : moved != null
+      ? moved === 0
+        ? `Rating stays ${r.cardAfter}`
+        : `Rating ${r.cardBefore} → ${r.cardAfter}`
+      : r.cardAfter != null
+        ? `First rating: ${r.cardAfter}`
+        : 'Your rating shows after 3 match days';
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-2xl bg-chalk px-3 py-2.5">
+      <RatingChip value={r.rating} big />
+      <span className="flex-1 min-w-0">
+        <span className="block text-[14px] font-bold text-ink truncate">
+          {r.final ? (today ? 'Your rating today' : 'Your match rating') : 'Your rating so far'}
+        </span>
+        <span className={`block text-[12px] truncate tabular-nums ${moved != null && moved !== 0 && r.final ? (moved > 0 ? 'font-bold text-pitch-700' : 'font-bold text-kit-600') : 'text-gray-600'}`}>
+          {line}
+          {r.final && moved != null && moved !== 0 && <span aria-hidden>{moved > 0 ? ' ▲' : ' ▼'}</span>}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
  * A finished match day from the player's point of view, in the organiser's games-list card: the
  * date block, their team, then two numbers kept apart (their results, and Player of the Match),
  * then the vote and sharing.
@@ -499,6 +537,8 @@ export function MatchDayCard({ day, index = 0 }: { day: RecentMatchDay; index?: 
           <path strokeLinecap="round" strokeLinejoin="round" d="m8.25 4.5 7.5 7.5-7.5 7.5" />
         </svg>
       </Link>
+
+      {day.myRating && <MyRatingRow r={day.myRating} date={date} />}
 
       <div className="mt-3 pt-3 border-t border-gray-100 grid grid-cols-2 gap-4">
         <Stat

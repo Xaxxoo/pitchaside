@@ -1215,6 +1215,8 @@ export interface PlayerRatings {
   ovr: number | null;
   /** Match days still to play before the card shows a number; 0 or missing once it does. */
   ratedIn?: number;
+  /** Their last 5 match ratings (out of 10), oldest first: the form strip on the card. Missing on older servers. */
+  matchForm?: { date: string; rating: number }[];
   attributes: Record<Attribute, number | null>;
   goals: number;
   assists: number;
@@ -1269,8 +1271,8 @@ export interface LeagueTable {
   statsFrom?: string | null;
   /** The group's join-link code: the table's share link is built on it. Null: can't be shared. */
   shareCode?: string | null;
-  /** 'rating': ranked by the card's rating, points shown beside it. Missing: by points (older servers). */
-  rankedBy?: 'rating';
+  /** 'points' (now) or 'rating' (older servers: ranked by the card's rating, points beside it). */
+  rankedBy?: 'rating' | 'points';
   /** How the club's cards are worked out, so every screen explains the same number. Missing: classic. */
   ratingMode?: RatingMode;
   /** When the club was moved from Classic to Steady (null: always Steady): both apps say so once. */

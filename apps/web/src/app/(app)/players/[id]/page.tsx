@@ -33,7 +33,7 @@ import { photoUrl } from '@/lib/http';
 import { CardPhotoButton } from '@/components/photo-picker';
 import { Collapse } from '@/components/collapse';
 import { niceDate } from '@/components/player-ui';
-import { AttributeRow, newLine } from '@/components/ratings';
+import { AttributeRow, MatchFormStrip, newLine } from '@/components/ratings';
 import { ShareCardButton, ShareIcon, shareIconDark } from '@/components/share-card';
 import { PlayerStats } from '@/components/player-stats';
 import { Player, Ball, JerseyBadge, kitFor, skins } from '@/components/illustrations';
@@ -346,6 +346,11 @@ export default function PlayerDetailPage() {
 
           {ratings && (
             <div className="mt-4 pt-4 border-t border-white/10">
+              {!!ratings.matchForm?.length && (
+                <div className="mb-3">
+                  <MatchFormStrip form={ratings.matchForm} dark />
+                </div>
+              )}
               <AttributeRow ratings={ratings} dark />
               {/* Only under numbers: with none, the box above already says how they fill in */}
               {Object.values(ratings.attributes).some((v) => v != null) && <p className="mt-2 text-[11px] text-white/50">From goals, assists, saves and award votes.</p>}

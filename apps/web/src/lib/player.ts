@@ -330,6 +330,11 @@ export interface RecentMatchDay {
   record: { w: number; d: number; l: number };
   games: number;
   potm: { name: string; votes: number; isMe: boolean; photoKey?: string | null } | null;
+  /**
+   * Their match rating that day (out of 10) and the card's number before and after it (null until
+   * the card shows one). Not final while the vote is open: votes add to it when it closes.
+   */
+  myRating?: { rating: number; cardBefore: number | null; cardAfter: number | null; final: boolean } | null;
   vote: { token: string; voted: boolean } | null;
   /** For the match-day share card; null before kick-off. */
   shareToken: string | null;

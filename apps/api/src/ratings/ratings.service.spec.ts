@@ -137,7 +137,7 @@ function rated<T extends object>(service: T) {
   return service;
 }
 /** A mocked club card: these numbers, shown. */
-const cardOf = (card: Map<string, number>) => ({ skills: new Map(), everyone: [], trial: new Map(), card, shown: (id: string) => ({ ovr: card.get(id) ?? null, ratedIn: 0 }) });
+const cardOf = (card: Map<string, number>) => ({ skills: new Map(), everyone: [], trial: new Map(), card, history: new Map(), shown: (id: string) => ({ ovr: card.get(id) ?? null, ratedIn: 0 }) });
 
 describe('the table', () => {
   // Ada (orange) beat Bisi (blue) 2–1, then they drew 1–1; Lanre didn't come.
@@ -169,43 +169,68 @@ describe('the table', () => {
     expect(open.rows.find((r) => r.player.id === 'bisi')).toMatchObject({ potmWins: 0, points: 1 });
   });
 
-  it('ranks by rating, not points: winning on the day isn’t enough to top it', async () => {
+  it('ranks by points: the card’s rating stays on the card and moves no one', async () => {
     const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: day });
-    // Ada's side won (more points); Bisi's card is higher (goals and votes over time).
-    const clubCard = jest.spyOn(service as never as { clubCard: () => Promise<unknown> }, 'clubCard');
-    clubCard.mockResolvedValue(cardOf(new Map([['ada', 64], ['bisi', 81]])));
+    // Ada's side won (more points); Bisi's card is higher
+    jest.spyOn(service as never as { clubCard: () => Promise<unknown> }, 'clubCard').mockResolvedValue(cardOf(new Map([['ada', 64], ['bisi', 81]])));
     const t = await service.getGroupTable('grp', 'org');
     const ada = t.rows.find((r) => r.player.id === 'ada')!;
     const bisi = t.rows.find((r) => r.player.id === 'bisi')!;
     expect(ada.points).toBeGreaterThan(bisi.points);
-    expect(t.rows.map((r) => r.player.id)).toEqual(['bisi', 'ada']);
-    expect([bisi.ovr, ada.ovr]).toEqual([81, 64]);
-    expect(t.rankedBy).toBe('rating');
+    expect(t.rows.map((r) => r.player.id)).toEqual(['ada', 'bisi']);
+    expect([ada.ovr, bisi.ovr]).toEqual([64, 81]);
+    expect(t.rankedBy).toBe('points');
   });
 
-  it('level on rating, points decide', async () => {
+  it('still says a new player’s card is on its way, without moving them down', async () => {
     const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: day });
-    jest.spyOn(service as never as { clubCard: () => Promise<unknown> }, 'clubCard').mockResolvedValue(cardOf(new Map([['ada', 70], ['bisi', 70]])));
-    expect((await service.getGroupTable('grp', 'org')).rows.map((r) => r.player.id)).toEqual(['ada', 'bisi']);
-  });
-
-  it('shows no number until 3 match days, says how many to go, and ranks them below rated players', async () => {
-    const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: day });
-    // Ada has won more, but only Bisi has played 3 match days
     jest.spyOn(service as any, 'clubCard').mockResolvedValue({
       ...cardOf(new Map([['ada', 90], ['bisi', 60]])),
       shown: (id: string) => (id === 'bisi' ? { ovr: 60, ratedIn: 0 } : { ovr: null, ratedIn: 2 }),
     });
     const t = await service.getGroupTable('grp', 'org');
     expect(t.rows.map((r) => [r.player.id, r.ovr, r.ratedIn])).toEqual([
-      ['bisi', 60, 0],
       ['ada', null, 2],
+      ['bisi', 60, 0],
     ]);
   });
 
   it("leaves out players who didn't come", async () => {
     const { rows } = await setup(game(), { games: day }).service.getGroupTable('grp', 'org');
     expect(rows.some((r) => r.player.id === 'lanre')).toBe(false);
+  });
+});
+
+describe('match ratings beside the card', () => {
+  // Ada's match days, oldest first: the card moves from her third one
+  const day = (sessionId: string, rating: number, before: number, after: number) => ({ sessionId, date: '2026-10-01', rating: { rating, parts: {} }, games: 3, before, after });
+  const ada = [day('d1', 6.1, 50, 50.4), day('d2', 6.8, 50.4, 51.2), day('d3', 7, 51.2, 52.4), day('d4', 5.5, 52.4, 51.6), day('d5', 8.2, 51.6, 53.1), day('g1', 7.4, 53.1, 54.4)];
+  const withHistory = (service: object) =>
+    jest.spyOn(service as any, 'clubCard').mockResolvedValue({ ...cardOf(new Map([['ada', 54]])), history: new Map([['ada', ada]]) });
+
+  it('a match day says their rating and the card before and after', async () => {
+    const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: [{ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0 }] });
+    withHistory(service);
+    const [d] = await service.recentForPlayer('ada', 'org');
+    expect(d.myRating).toEqual({ rating: 7.4, cardBefore: 53, cardAfter: 54, final: true });
+  });
+
+  it('says the rating is not final while the vote is still open', async () => {
+    const { service } = setup(game(), { games: [{ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0 }] });
+    withHistory(service);
+    expect((await service.recentForPlayer('ada', 'org'))[0].myRating?.final).toBe(false);
+  });
+
+  it('shows no card move before the card has a number', async () => {
+    const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: [{ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0 }] });
+    jest.spyOn(service as any, 'clubCard').mockResolvedValue({ ...cardOf(new Map()), history: new Map([['ada', [day('d1', 6.1, 50, 50.4), day('g1', 6.8, 50.4, 51.2)]]]) });
+    expect((await service.recentForPlayer('ada', 'org'))[0].myRating).toMatchObject({ rating: 6.8, cardBefore: null, cardAfter: null });
+  });
+
+  it('the card carries the last 5 match ratings, oldest first', async () => {
+    const { service } = setup(game({ voteOpensAt: new Date(Date.now() - 49 * HOUR) }), { games: [{ teamA: 'A', teamB: 'B', scoreA: 1, scoreB: 0 }] });
+    withHistory(service);
+    expect((await service.getPlayerRatings('ada', 'org')).matchForm?.map((f) => f.rating)).toEqual([6.8, 7, 5.5, 8.2, 7.4]);
   });
 });
 
@@ -599,7 +624,8 @@ describe('trialRatings (40 stats / 40 votes / 20 results)', () => {
 describe('balanceTeams (half results, half the 40/40/20 card)', () => {
   it('counts the card as well as results when picking the best first', async () => {
     const service = new RatingsService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any);
-    const p = (id: string, skill: number, ovr: number | null) => ({ id, firstName: id, skill, ovr, captain: false, team: null });
+    // Fair teams reads the card's hidden number (strength), which is there even before the card shows one
+    const p = (id: string, skill: number, ovr: number | null) => ({ id, firstName: id, skill, ovr, strength: ovr, captain: false, team: null });
     // Same results rating; the scorers' cards are higher. Sorted strongest first, then snake: A, B, B, A.
     jest.spyOn(service, 'getLineup').mockResolvedValue({
       teamCount: 2,

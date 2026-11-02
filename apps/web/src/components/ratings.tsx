@@ -167,6 +167,45 @@ function FormDots({ form }: { form: TableRow['form'] }) {
   );
 }
 
+/** A match rating's band: 7.5+ a big day, under 6 a hard one (6.9 is an average day). The number is always written too. */
+function ratingTone(value: number, dark: boolean) {
+  if (value >= 7.5) return 'bg-volt-300 text-ink';
+  if (value < 6) return 'bg-kit-400 text-ink';
+  return dark ? 'bg-white/15 text-white' : 'bg-white text-ink border border-gray-200';
+}
+
+/** One match rating as a small tile, e.g. 7.4. */
+export function RatingChip({ value, dark = false, big = false }: { value: number; dark?: boolean; big?: boolean }) {
+  return (
+    <span
+      className={`shrink-0 inline-flex items-center justify-center rounded-lg font-display font-extrabold tabular-nums ${
+        big ? 'min-w-11 h-9 px-1.5 text-[17px]' : 'w-9 h-7 text-[13px]'
+      } ${ratingTone(value, dark)}`}
+    >
+      {value.toFixed(1)}
+    </span>
+  );
+}
+
+/** The form strip on the card: their last 5 match ratings, oldest first, newest on the right. */
+export function MatchFormStrip({ form, dark = false }: { form?: { date: string; rating: number }[]; dark?: boolean }) {
+  if (!form?.length) return null;
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className={`text-[10px] font-extrabold uppercase tracking-[0.12em] whitespace-nowrap ${dark ? 'text-white/60' : 'text-gray-500'}`}>
+        Form · last {form.length}
+      </span>
+      <span className="flex gap-1" role="img" aria-label={`Last ${form.length} match ratings, newest last: ${form.map((f) => f.rating.toFixed(1)).join(', ')}`}>
+        {form.map((f, i) => (
+          <span key={`${f.date}-${i}`} aria-hidden>
+            <RatingChip value={f.rating} dark={dark} />
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
 /** ▲2, ▼1 or – : places moved since before the latest match day. */
 function Move({ move }: { move: number | null }) {
   if (move === null) return <span className="text-[10px] font-bold text-gray-400">new</span>;
@@ -295,8 +334,13 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
                   </span>
                   <span className="flex items-center gap-1 text-[11px] font-semibold text-gray-500 tabular-nums whitespace-nowrap">
                     {/* Ranked by rating, the points stand in for the record: one short line that fits */}
-                    {byRating ? `${row.points} pts` : `${row.record.w}W ${row.record.d}D ${row.record.l}L`}
-                    {row.potmWins > 0 && <span aria-label={`Player of the Match ${row.potmWins}`}>· ★ {row.potmWins}</span>}
+                    {/* Won-drawn-lost as on the match-day card, short enough to sit beside the awards */}
+                    {byRating ? (
+                      `${row.points} pts`
+                    ) : (
+                      <span aria-label={`Won ${row.record.w}, drew ${row.record.d}, lost ${row.record.l}`}>{`${row.record.w}-${row.record.d}-${row.record.l}`}</span>
+                    )}
+                    {row.potmWins > 0 && <span aria-label={`Player of the Match ${row.potmWins}`}>· ★{row.potmWins}</span>}
                     {row.teamOfDay > 0 && (
                       <span className="inline-flex items-center gap-0.5 text-amber-700" aria-label={`Team of the Day ${row.teamOfDay} time${row.teamOfDay === 1 ? '' : 's'}`}>
                         <span aria-hidden>·</span>
@@ -330,7 +374,7 @@ export function LeagueTableView({ table }: { table: LeagueTable }) {
           <TrophyMark />
         </span>{' '}
         · +{table.points.potm} for
-        Player of the Match (★). ▲▼ places moved since the last match day. Form: their last 3 match days, W more games won than lost, D level, L fewer.
+        Player of the Match (★). Under each name, games won-drawn-lost. ▲▼ places moved since the last match day. Form: their last 3 match days, W more games won than lost, D level, L fewer.
       </p>
     </div>
   );

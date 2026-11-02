@@ -113,14 +113,12 @@ export function GroupTable({
         )}
         </div>
         <p className="-mt-1 text-xs text-gray-500">
-          {/* Before anyone has played 3 match days there's no rating to rank by: points do it */}
-          {table?.rankedBy === 'rating' && table.rows.length > 0 && table.rows.every((r) => r.ovr == null)
-            ? 'Ranked by points. Ratings show after 3 match days.'
+          {/* Older servers rank by rating; now the table is points, and the rating lives on the card */}
+          {table?.rankedBy === 'rating' && table.rows.some((r) => r.ovr != null)
+            ? `Ranked by rating${table.statsFrom ? `. Counting from ${matchDay(table.statsFrom)}` : '. Points break a tie'}.`
             : table?.statsFrom
-            ? `Ranked by rating. Counting from ${matchDay(table.statsFrom)}.`
-            : table?.rankedBy === 'rating'
-              ? 'Ranked by rating. Points break a tie.'
-              : 'Points from results, Team of the Day and Player of the Match'}
+              ? `Ranked by points. Counting from ${matchDay(table.statsFrom)}.`
+              : 'Ranked by points from results and awards'}
         </p>
         {/* The table as an image for WhatsApp: the season, or the last few match days, as shown */}
       </div>
