@@ -107,7 +107,7 @@ export default function PitchDetailsPage() {
   const [banks, setBanks] = useState<NigerianBank[]>([]);
   const [bank, setBank] = useState({ bankAccountNumber: '', bankCode: '', bankName: '', accountHolderName: '' });
   // Pitch account (only pitches that already have one)
-  const [balance, setBalance] = useState<{ totalIn: number; totalOut: number; available: number } | null>(null);
+  const [balance, setBalance] = useState<{ totalIn: number; totalOut: number; available: number; bankBalance: number | null } | null>(null);
   const [transfers, setTransfers] = useState<any[]>([]);
   const [payouts, setPayouts] = useState<any[]>([]);
   const [withdrawForm, setWithdrawForm] = useState({ amount: '', pin: '', narration: '' });
