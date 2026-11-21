@@ -334,7 +334,7 @@ export function PayoutsPanel({
           <div className="absolute inset-0 turf-stripes" aria-hidden />
           <div className="relative">
             <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-volt-300">Available to withdraw</p>
-            <p className="mt-1.5 font-display text-[38px] leading-none font-extrabold tabular-nums">{formatCurrency(balance.available)}</p>
+            <p className="mt-1.5 font-display text-[38px] leading-none font-extrabold tabular-nums">{formatCurrency(balance.bankBalance ?? balance.available)}</p>
             <p className="mt-2 text-[12px] text-white/65 tabular-nums">
               {formatCurrency(balance.totalIn)} received · {formatCurrency(balance.totalOut)} sent out
             </p>
@@ -380,7 +380,7 @@ export function PayoutsPanel({
                 groupId={groupId}
                 groupName={groupName}
                 banks={banks}
-                available={balance.available}
+                available={balance.bankBalance ?? balance.available}
                 onPaid={async () => {
                   await load();
                   await onRefresh();
@@ -410,7 +410,7 @@ export function PayoutsPanel({
           groupId={groupId}
           groupName={groupName}
           banks={banks}
-          available={balance.available}
+          available={balance.bankBalance ?? balance.available}
           refundable={refundable}
           refundTo={refundTo}
           onClose={() => {
