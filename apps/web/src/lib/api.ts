@@ -732,6 +732,8 @@ export interface GroupBalance {
   manualIn: number;
   totalOut: number;
   available: number;
+  /** What Pulse MFB actually holds in the account; null when the bank couldn't be reached. */
+  bankBalance: number | null;
 }
 
 export interface OutgoingTransfer {
