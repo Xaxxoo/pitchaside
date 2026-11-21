@@ -648,7 +648,7 @@ export default function PitchDetailsPage() {
             <SettingsSection id="s-account" icon={PITCH_ICONS.wallet} title="Pitch account" summary={`${pitch.accountNumber} · ${pitch.virtualBankName}`} open={open === 'account'} onToggle={() => toggle('account')}>
               <div className="rounded-2xl bg-ink text-white px-4 py-3.5">
                 <p className="text-[12px] text-white/60">Available</p>
-                <p className="font-display text-[28px] font-extrabold leading-tight">{balance ? naira(balance.available) : '…'}</p>
+                <p className="font-display text-[28px] font-extrabold leading-tight">{balance ? naira(balance.bankBalance ?? balance.available) : '…'}</p>
                 <p className="text-[12px] text-white/60 truncate">{pitch.accountName} · {pitch.accountNumber}</p>
               </div>
               {!pitch.bankAccountNumber ? (
