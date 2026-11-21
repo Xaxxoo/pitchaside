@@ -357,7 +357,7 @@ export function MoneyCard({
         {hasAccount && !accountOpen && (
           <FoldedSummary
             onExpand={toggleAccount}
-            value={balance == null ? '₦…' : hidden ? '₦••••••' : formatCurrency(balance.bankBalance ?? Number(balance.available))}
+            value={balance == null ? '₦…' : hidden ? '₦••••••' : balance.bankBalance != null ? formatCurrency(balance.bankBalance) : '₦…'}
             valueTone="text-volt-300"
             caption={todayIn > 0 && !hidden ? `Account balance · ${formatCurrency(todayIn)} received today` : 'Account balance'}
             action={
@@ -399,7 +399,9 @@ export function MoneyCard({
             ) : hidden ? (
               <span className="tracking-[0.08em]">₦••••••</span>
             ) : (
-              <CountUpNaira value={balance.bankBalance ?? Number(balance.available)} />
+              balance.bankBalance != null
+                ? <CountUpNaira value={balance.bankBalance} />
+                : <span className="text-white/40">₦…</span>
             )}
           </p>
         )}
@@ -411,7 +413,9 @@ export function MoneyCard({
               ? 'Loading balance'
               : hidden
                 ? 'Balance hidden'
-                : `${formatCurrency(balance.bankBalance ?? Number(balance.available))} in the account`}
+                : balance.bankBalance != null
+                  ? `${formatCurrency(balance.bankBalance)} in the account`
+                  : 'Balance unavailable'}
         </p>
         {balanceFailed && balance != null ? (
           <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-sun-400">
@@ -593,7 +597,9 @@ export function AccountStrip({
                 ) : hidden ? (
                   <span className="tracking-[0.08em]">₦••••••</span>
                 ) : (
-                  <CountUpNaira value={balance.bankBalance ?? Number(balance.available)} />
+                  balance.bankBalance != null
+                    ? <CountUpNaira value={balance.bankBalance} />
+                    : <span className="text-white/40">₦…</span>
                 )}
                 {/* Says the card opens Money, without another button */}
                 <span className="shrink-0 w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white/80 group-hover:bg-white/15" aria-hidden>
@@ -604,7 +610,7 @@ export function AccountStrip({
               </Link>
             )}
             <p className="sr-only" aria-live="polite" aria-atomic="true">
-              {balance == null ? (balanceFailed ? '' : 'Loading balance') : hidden ? 'Balance hidden' : `${formatCurrency(balance.bankBalance ?? Number(balance.available))} in the account`}
+              {balance == null ? (balanceFailed ? '' : 'Loading balance') : hidden ? 'Balance hidden' : balance.bankBalance != null ? `${formatCurrency(balance.bankBalance)} in the account` : 'Balance unavailable'}
             </p>
             <div className="mt-2 flex items-center justify-between gap-3">
               <p className={`flex items-center gap-1.5 text-[13px] font-semibold tabular-nums ${todayIn > 0 ? 'text-volt-300' : 'text-white/70'}`}>
