@@ -90,7 +90,7 @@ export function GroupMoney({
               groupName={group.name}
               fee={Number(group.feePerPlayer)}
               billing={billing}
-              balance={money.balance?.available ?? null}
+              balance={money.balance?.bankBalance ?? money.balance?.available ?? null}
               onChange={money.setBilling}
               onMatchTransfer={onFocusTransfer}
               showLink={false}
