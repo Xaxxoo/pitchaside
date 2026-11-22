@@ -2011,18 +2011,11 @@ export class BillingService implements OnModuleInit, OnModuleDestroy {
       .getRawOne();
 
     const available = Number(totalIn) - Number(manualIn) - Number(totalOut);
-
-    // Also check with Payrep for the real balance.
-    const held = group.accountNumber
-      ? await this.pulse.getBalance(group.accountNumber).catch(() => null)
-      : null;
-
     return {
       totalIn: Number(totalIn),
       manualIn: Number(manualIn),
       totalOut: Number(totalOut),
       available,
-      bankBalance: held,
     };
   }
 
